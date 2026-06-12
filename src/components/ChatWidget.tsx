@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Bot } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { sendSupportChat } from "@/services/chat";
 
 interface Message {
   id: number;
@@ -12,7 +13,7 @@ interface Message {
 const initialMessages: Message[] = [
   {
     id: 1,
-    text: "Xin chào! 👋 Tôi là trợ lý AI của EduConnect. Tôi có thể giúp bạn tìm gia sư, giải đáp thắc mắc về khóa học, hoặc hỗ trợ đăng ký. Bạn cần giúp gì?",
+    text: "Xin chào! 👋 Tôi là trợ lý AI của UNI EDU. Tôi có thể giúp bạn tìm gia sư, giải đáp thắc mắc về khóa học, hoặc hỗ trợ đăng ký. Bạn cần giúp gì?",
     sender: "bot",
     time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
   },
@@ -24,51 +25,37 @@ const quickReplies = [
   "Bảng giá",
 ];
 
-const botResponses: Record<string, string> = {
-  "tìm gia sư": "Bạn muốn tìm gia sư môn gì? Chúng tôi có hơn 1,200 gia sư đã được xác thực ở 12 môn học. Bạn có thể truy cập trang Tìm gia sư để xem chi tiết!",
-  "đăng ký": "Để đăng ký, bạn chỉ cần nhấn nút 'Đăng ký' ở góc phải trên. Quy trình rất đơn giản: điền thông tin → xác thực email → bắt đầu sử dụng!",
-  "giá": "EduConnect có mức giá từ 170.000đ - 250.000đ/buổi tùy môn và gia sư. Thi thử online chỉ 10.000đ/lần. Thanh toán qua MoMo/VNPay rất tiện lợi!",
-  "default": "Cảm ơn bạn! Tôi sẽ chuyển câu hỏi này đến đội ngũ hỗ trợ. Bạn cũng có thể liên hệ qua email support@educonnect.vn hoặc hotline 1900 1234.",
-};
-
 const ChatWidget = () => {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Monotonic id source — Date.now() collides when two messages land in the same ms (duplicate React keys).
+  const nextId = useRef(initialMessages.length + 1);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const getBotResponse = (text: string): string => {
-    const lower = text.toLowerCase();
-    for (const [key, response] of Object.entries(botResponses)) {
-      if (key !== "default" && lower.includes(key)) return response;
-    }
-    return botResponses.default;
-  };
+  const nowTime = () => new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return;
-    const now = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 
-    const userMsg: Message = { id: Date.now(), text: text.trim(), sender: "user", time: now };
+    const userMsg: Message = { id: nextId.current++, text: text.trim(), sender: "user", time: nowTime() };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsTyping(true);
 
-    setTimeout(() => {
-      const botMsg: Message = {
-        id: Date.now() + 1,
-        text: getBotResponse(text),
-        sender: "bot",
-        time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-      };
-      setMessages((prev) => [...prev, botMsg]);
+    try {
+      const res = await sendSupportChat(text.trim());
+      setMessages((prev) => [...prev, { id: nextId.current++, text: res.reply, sender: "bot", time: nowTime() }]);
+    } catch {
+      setMessages((prev) => [...prev, { id: nextId.current++, text: "Xin lỗi, mình chưa kết nối được lúc này. Bạn thử lại sau nhé!", sender: "bot", time: nowTime() }]);
+    } finally {
       setIsTyping(false);
-    }, 1200);
+    }
   };
 
   return (
@@ -109,7 +96,7 @@ const ChatWidget = () => {
                 <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-deep-blue" />
               </div>
               <div className="flex-1">
-                <div className="text-white font-semibold text-sm">EduConnect AI</div>
+                <div className="text-white font-semibold text-sm">UNI EDU AI</div>
                 <div className="text-white/50 text-xs">Online · Phản hồi ngay</div>
               </div>
               <button onClick={() => setOpen(false)} className="text-white/60 hover:text-white transition-colors p-1">

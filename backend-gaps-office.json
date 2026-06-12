@@ -1,0 +1,61 @@
+{
+  "title": "Office portal — backend endpoints/fields the frontend still needs",
+  "generatedFor": "UNI-EDU backend team",
+  "context": "The Office portal pages were migrated from mock (OfficeContext + inline seeds, all removed) to real API calls. Office maps to the backend Admin role. Reused endpoints: GET /Office/dashboard, /Office/attendance (+/{id}/confirm), /Office/incidents (+investigate/resolve/create), /Office/appointments (+update/cancel/complete), /Office/registrations (+approve/reject), POST /Office/ai-schedule, GET /Office/reports, /Classes, /Reviews (+hide/unhide), /Notifications, /Users/me.",
+  "gaps": [
+    {
+      "id": "O-GAP-1",
+      "priority": "high",
+      "title": "Review moderation DTO is minimal",
+      "affectedPages": ["OfficeReviews"],
+      "currentState": "GET /Reviews returns bare ReviewResponse { id, classId, tutorId, reviewerId, rating, comment, date }. The moderation UI needs tutorName, reviewerName, reviewerRole, studentName, className, subject, a per-row `hidden` boolean, and moderationLogs[] — none exist. Names show as GUIDs; hidden state is inferred from a Status filter; moderation history + hide-reason are dropped.",
+      "proposedChanges": [
+        "Enrich /Reviews moderation response with tutorName, reviewerName, reviewerRole, className, subject, hidden (bool).",
+        "Accept a reason payload on PATCH /Reviews/{id}/hide and return moderationLogs[] (action, reason, moderator, timestamp)."
+      ]
+    },
+    {
+      "id": "O-GAP-2",
+      "priority": "medium",
+      "title": "Registration application has no documents/verification detail",
+      "affectedPages": ["OfficeRegistrations"],
+      "currentState": "GET /Office/registrations returns PagedResult<AdminUserResponse> (the bare user row). The mock had uploaded documents, degree details, a verification checklist, and a stored reject reason — none modeled. The reject note is write-only (not returned).",
+      "proposedChanges": ["Add an application detail (documents[], degree/credential fields, verification status) and return the reject reason on rejected rows."]
+    },
+    {
+      "id": "O-GAP-3",
+      "priority": "medium",
+      "title": "Appointment model lacks type + multi-participant",
+      "affectedPages": ["OfficeAppointments"],
+      "currentState": "AppointmentItem has a single withName/withUserId + free-text title/description/notes/scheduledAt/status. The mock had an appointment `type` (complaint/dispute/consultation/matching) and a participants[] array. Type filter + multi-participant were dropped; resolution is stored in `notes`.",
+      "proposedChanges": ["Add type (enum) and participants[] (userId + role) to the appointment model if those are needed."]
+    },
+    {
+      "id": "O-GAP-4",
+      "priority": "medium",
+      "title": "AI-schedule response is untyped; no tutor/room availability",
+      "affectedPages": ["OfficeAISchedule"],
+      "currentState": "POST /Office/ai-schedule returns an untyped body (rendered as raw JSON). 'Constraints' are local form state only (no store). The 'tutors available'/'rooms free'/utilization stats are static placeholders with no endpoint.",
+      "proposedChanges": [
+        "Type the /Office/ai-schedule response as a suggested-sessions list (class, tutor, slot).",
+        "Add endpoints for tutor/room availability + schedule utilization stats if those panels are needed."
+      ]
+    },
+    {
+      "id": "O-GAP-5",
+      "priority": "low",
+      "title": "Office report exposes only 5 aggregate counts (no time-series)",
+      "affectedPages": ["OfficeReports", "OfficeDashboard"],
+      "currentState": "GET /Office/reports returns only { totalSessions, completedSessions, missedSessions, openIncidents, resolvedIncidents }. Daily/weekly time-series charts, KPI targets, and the dashboard's monthSessions/frequentAbsent/newRegistrations cards have no source and render empty/repurposed.",
+      "proposedChanges": ["Add time-series (daily/weekly sessions + incidents) and KPI fields to /Office/reports and /Office/dashboard if those charts are needed."]
+    },
+    {
+      "id": "O-GAP-6",
+      "priority": "low",
+      "title": "Office add-class needs real ID pickers",
+      "affectedPages": ["OfficeClasses"],
+      "currentState": "The add-class form collects free-text tutor/student/subject names, but POST /Classes (CreateClassRequest) requires GUID studentId/tutorId/subjectId + structured weeklySlots[]. Without pickers backed by real IDs the create will be rejected.",
+      "proposedChanges": ["Provide searchable student/tutor/subject pickers (the listing endpoints exist: /Tutors, and student/subject lookups) so the office can build a valid CreateClassRequest."]
+    }
+  ]
+}

@@ -1,26 +1,87 @@
-import { useTutor } from "@/contexts/TutorContext";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronLeft, BookOpen, Clock, CheckCircle2, Play, Square, Users, Wallet, Upload, FileText, Plus, Trash2, AlertTriangle, Monitor, MapPin, ExternalLink, Video } from "lucide-react";
+import { ChevronLeft, BookOpen, Clock, CheckCircle2, Play, Square, Users, Wallet, Upload, Plus, Trash2, AlertTriangle, Monitor, MapPin, ExternalLink, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GenerateExamWithAiDialog } from "@/components/exams/GenerateExamWithAiDialog";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { useClass } from "@/hooks/useClasses";
+import { useClassSessions, useStartSession, useEndSession, useConfirmSession, useCompleteSession, useCreateSession, useRequestAbsence } from "@/hooks/useSessions";
+import { useClassMaterials, useAddClassMaterial, useDeleteClassMaterial } from "@/hooks/useMaterials";
+import type { SessionResponse, WeeklySlotDto } from "@/types/api";
+
+const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+const buildSchedule = (slots: WeeklySlotDto[]): string =>
+  slots
+    .map(s => `${DAY_LABELS[s.dayOfWeek] ?? `?${s.dayOfWeek}`} ${s.startTime.slice(0, 5)}-${s.endTime.slice(0, 5)}`)
+    .join(", ");
+
+const sessionDate = (s: SessionResponse): string => (s.startAt ? s.startAt.slice(0, 10) : "");
+const sessionTime = (s: SessionResponse): string => {
+  const hm = (iso?: string | null) => (iso ? iso.slice(11, 16) : "");
+  return `${hm(s.startAt)}-${hm(s.endAt)}`;
+};
 
 const TutorClassDetail = () => {
   const { classId } = useParams();
   const navigate = useNavigate();
-  const { classes, startSession, endSession, confirmSessionByParent, requestAbsence, addMaterial, removeMaterial } = useTutor();
-  const cls = classes.find(c => c.id === classId);
+
+  const { data: cls, isLoading } = useClass(classId);
+  const { sessions } = useClassSessions(classId);
+  const { materials } = useClassMaterials(classId);
+
+  const startSession = useStartSession();
+  const endSession = useEndSession();
+  const completeSession = useCompleteSession();
+  const createSessionM = useCreateSession();
+  const [addSessionOpen, setAddSessionOpen] = useState(false);
+  const [newSession, setNewSession] = useState({ date: "", start: "19:00", end: "21:00", format: "online" });
+
+  const handleAddSession = () => {
+    if (!classId || !newSession.date) return;
+    createSessionM.mutate(
+      {
+        classId,
+        payload: {
+          startAt: `${newSession.date}T${newSession.start}:00`,
+          endAt: `${newSession.date}T${newSession.end}:00`,
+          format: newSession.format,
+        },
+      },
+      {
+        onSuccess: () => { toast.success("Đã thêm buổi dạy!"); setAddSessionOpen(false); },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Không thể thêm buổi dạy"),
+      }
+    );
+  };
+
+  const handleComplete = (id: string) =>
+    completeSession.mutate(id, {
+      onSuccess: () => toast.success("Đã hoàn thành buổi học!"),
+      onError: (e) => toast.error(e instanceof Error ? e.message : "Không thể hoàn thành buổi học"),
+    });
+  const confirmSession = useConfirmSession();
+  const requestAbsence = useRequestAbsence();
+  const addMaterial = useAddClassMaterial(classId ?? "");
+  const deleteMaterial = useDeleteClassMaterial(classId ?? "");
 
   const [sessionDialog, setSessionDialog] = useState<{ sessionId: string; mode: "start" | "end" | "absence" } | null>(null);
   const [endForm, setEndForm] = useState({ content: "", notes: "", homework: "" });
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [newHomeworkUrl, setNewHomeworkUrl] = useState("");
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [absenceReason, setAbsenceReason] = useState("");
   const [materialDialog, setMaterialDialog] = useState(false);
   const [newMaterial, setNewMaterial] = useState({ name: "", type: "pdf" as "pdf" | "doc" | "image" | "video" | "link", url: "" });
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-20 text-muted-foreground">
+      <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải lớp học...
+    </div>
+  );
 
   if (!cls) return (
     <div className="p-6 text-center">
@@ -29,62 +90,86 @@ const TutorClassDetail = () => {
     </div>
   );
 
-  const completedSessions = cls.sessions.filter(s => s.status === "completed");
-  const scheduledSessions = cls.sessions.filter(s => s.status === "scheduled");
-  const inProgressSessions = cls.sessions.filter(s => s.status === "in_progress");
-  const pendingConfirmSessions = cls.sessions.filter(s => s.status === "pending_confirm");
-  const attendanceRate = cls.sessions.length > 0 ? Math.round((completedSessions.length / Math.max(1, completedSessions.length + cls.sessions.filter(s => s.status === "missed").length)) * 100) : 0;
-  const sessionDetail = selectedSession ? cls.sessions.find(s => s.id === selectedSession) : null;
+  const schedule = buildSchedule(cls.weeklySlots);
+  const completedSessions = sessions.filter(s => s.status === "completed");
+  const scheduledSessions = sessions.filter(s => s.status === "scheduled");
+  const pendingConfirmSessions = sessions.filter(s => s.status === "pending_confirm");
+  const missedCount = sessions.filter(s => s.status === "missed").length;
+  const attendanceRate = sessions.length > 0 ? Math.round((completedSessions.length / Math.max(1, completedSessions.length + missedCount)) * 100) : 0;
+  const sessionDetail = selectedSession ? sessions.find(s => s.id === selectedSession) ?? null : null;
   const escrowPct = cls.escrowAmount > 0 ? Math.round((cls.escrowReleased / cls.escrowAmount) * 100) : 0;
 
   const handleStart = () => {
     if (!sessionDialog) return;
-    startSession(sessionDialog.sessionId, cls.id);
-    toast.success("Đã bắt đầu buổi học!");
+    startSession.mutate(sessionDialog.sessionId, {
+      onSuccess: () => toast.success("Đã bắt đầu buổi học!"),
+      onError: () => toast.error("Không thể bắt đầu buổi học"),
+    });
     setSessionDialog(null);
   };
 
   const handleEnd = () => {
     if (!sessionDialog) return;
-    endSession(sessionDialog.sessionId, cls.id, endForm.content, endForm.notes, endForm.homework, uploadedFiles);
-    toast.success("Đã gửi yêu cầu xác nhận hoàn thành đến phụ huynh!");
+    endSession.mutate(
+      { id: sessionDialog.sessionId, payload: { content: endForm.content, notes: endForm.notes, homework: endForm.homework, homeworkFiles: uploadedFiles } },
+      {
+        onSuccess: () => toast.success("Đã gửi yêu cầu xác nhận hoàn thành đến phụ huynh!"),
+        onError: () => toast.error("Không thể gửi xác nhận"),
+      }
+    );
     setSessionDialog(null);
     setEndForm({ content: "", notes: "", homework: "" });
     setUploadedFiles([]);
   };
 
   const handleConfirm = (sessionId: string) => {
-    confirmSessionByParent(sessionId, cls.id);
-    toast.success("Phụ huynh đã xác nhận! Buổi học hoàn thành.");
+    confirmSession.mutate(sessionId, {
+      onSuccess: () => toast.success("Phụ huynh đã xác nhận! Buổi học hoàn thành."),
+      onError: () => toast.error("Không thể xác nhận buổi học"),
+    });
   };
 
   const handleAbsence = () => {
     if (!sessionDialog || !absenceReason) return;
-    requestAbsence(sessionDialog.sessionId, cls.id, absenceReason, "tutor");
-    toast.info("Đã gửi yêu cầu báo vắng, chờ phụ huynh xác nhận.");
+    requestAbsence.mutate(
+      { id: sessionDialog.sessionId, payload: { reason: absenceReason, requestedBy: "tutor" } },
+      {
+        onSuccess: () => toast.info("Đã gửi yêu cầu báo vắng, chờ phụ huynh xác nhận."),
+        onError: () => toast.error("Không thể gửi yêu cầu báo vắng"),
+      }
+    );
     setSessionDialog(null);
     setAbsenceReason("");
   };
 
-  const handleFileUpload = () => {
-    const fakeFile = `baitap_${Date.now()}.pdf`;
-    setUploadedFiles(prev => [...prev, fakeFile]);
-    toast.success(`Đã tải lên: ${fakeFile}`);
+  // No file-upload endpoint yet (backend-gaps GAP-10) — the tutor pastes a real link
+  // (Google Drive, etc.) to the homework file instead of uploading bytes.
+  const handleAddHomeworkLink = () => {
+    const url = newHomeworkUrl.trim();
+    if (!url) return;
+    setUploadedFiles(prev => [...prev, url]);
+    setNewHomeworkUrl("");
   };
 
   const handleAddMaterial = () => {
-    if (!newMaterial.name) return;
-    addMaterial(cls.id, {
-      id: `mat_${Date.now()}`,
-      name: newMaterial.name,
-      type: newMaterial.type,
-      url: newMaterial.url || "#",
-      uploadedAt: new Date().toISOString().slice(0, 10),
-      size: "1.2 MB",
-    });
+    if (!newMaterial.name || !newMaterial.url.trim()) return;
+    addMaterial.mutate(
+      // size is unknown without an upload endpoint (GAP-10) — omit it rather than fabricate.
+      { name: newMaterial.name, type: newMaterial.type, url: newMaterial.url.trim() },
+      {
+        onSuccess: () => toast.success("Đã thêm tài liệu!"),
+        onError: () => toast.error("Không thể thêm tài liệu"),
+      }
+    );
     setNewMaterial({ name: "", type: "pdf", url: "" });
     setMaterialDialog(false);
-    toast.success("Đã thêm tài liệu!");
+  };
+
+  const handleRemoveMaterial = (matId: string) => {
+    deleteMaterial.mutate(matId, {
+      onSuccess: () => toast.info("Đã xóa tài liệu"),
+      onError: () => toast.error("Không thể xóa tài liệu"),
+    });
   };
 
   const typeIcons: Record<string, string> = { pdf: "📄", doc: "📝", image: "🖼️", video: "🎬", link: "🔗" };
@@ -98,7 +183,7 @@ const TutorClassDetail = () => {
         </button>
         <div className="flex-1">
           <h2 className="text-xl font-bold text-foreground">{cls.name}</h2>
-          <p className="text-sm text-muted-foreground">{cls.subject} • {cls.format === "online" ? "Online" : cls.format === "offline" ? "Offline" : "Kết hợp"} • {cls.schedule}</p>
+          <p className="text-sm text-muted-foreground">{cls.subject} • {cls.format === "online" ? "Online" : cls.format === "offline" ? "Offline" : "Kết hợp"}{schedule ? ` • ${schedule}` : ""}</p>
         </div>
         <span className={cn("text-xs font-medium px-3 py-1.5 rounded-lg",
           cls.escrowStatus === "completed" ? "bg-emerald-100 text-success dark:bg-emerald-900/30 dark:text-emerald-400" :
@@ -132,8 +217,8 @@ const TutorClassDetail = () => {
         </div>
         <div className="bg-card border border-border rounded-2xl p-4 text-center">
           <Wallet className="w-5 h-5 text-warning mx-auto mb-1" />
-          <p className="text-lg font-bold text-foreground">{(cls.monthlyFee || cls.fee).toLocaleString("vi-VN")}đ</p>
-          <p className="text-xs text-muted-foreground">Học phí/tháng</p>
+          <p className="text-lg font-bold text-foreground">{cls.fee.toLocaleString("vi-VN")}đ</p>
+          <p className="text-xs text-muted-foreground">Học phí</p>
         </div>
       </div>
 
@@ -141,9 +226,9 @@ const TutorClassDetail = () => {
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground">Tiến độ</h3>
-          <span className="text-xs text-muted-foreground">{Math.round((cls.completedSessions / cls.totalSessions) * 100)}%</span>
+          <span className="text-xs text-muted-foreground">{cls.totalSessions > 0 ? Math.round((cls.completedSessions / cls.totalSessions) * 100) : 0}%</span>
         </div>
-        <Progress value={(cls.completedSessions / cls.totalSessions) * 100} className="h-3 mb-3" />
+        <Progress value={cls.totalSessions > 0 ? (cls.completedSessions / cls.totalSessions) * 100 : 0} className="h-3 mb-3" />
         <div className="grid grid-cols-3 gap-3 text-center text-xs">
           <div className="p-2 bg-muted/50 rounded-lg">
             <p className="font-semibold text-foreground">{cls.escrowAmount.toLocaleString("vi-VN")}đ</p>
@@ -162,17 +247,22 @@ const TutorClassDetail = () => {
 
       {/* Sessions & Materials Tabs */}
       <Tabs defaultValue="all">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
         <TabsList className="bg-muted/50 p-1 rounded-xl">
-          <TabsTrigger value="all" className="rounded-lg">Tất cả ({cls.sessions.length})</TabsTrigger>
+          <TabsTrigger value="all" className="rounded-lg">Tất cả ({sessions.length})</TabsTrigger>
           <TabsTrigger value="scheduled" className="rounded-lg">Sắp tới ({scheduledSessions.length})</TabsTrigger>
           <TabsTrigger value="pending" className="rounded-lg">Chờ XN ({pendingConfirmSessions.length})</TabsTrigger>
           <TabsTrigger value="completed" className="rounded-lg">Đã xong ({completedSessions.length})</TabsTrigger>
-          <TabsTrigger value="materials" className="rounded-lg">Tài liệu ({cls.materials.length})</TabsTrigger>
+          <TabsTrigger value="materials" className="rounded-lg">Tài liệu ({materials.length})</TabsTrigger>
         </TabsList>
+        <button onClick={() => setAddSessionOpen(true)} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium shrink-0">
+          <Plus className="w-3 h-3" /> Thêm buổi dạy
+        </button>
+        </div>
 
         {["all", "scheduled", "pending", "completed"].map(tab => (
           <TabsContent key={tab} value={tab} className="mt-4 space-y-3">
-            {cls.sessions
+            {sessions
               .filter(s => tab === "all" ? true : tab === "pending" ? s.status === "pending_confirm" || s.status === "in_progress" : s.status === tab)
               .map(s => (
               <div key={s.id} className={cn("p-4 rounded-xl border cursor-pointer hover:shadow-sm transition-all",
@@ -189,11 +279,11 @@ const TutorClassDetail = () => {
                       s.status === "pending_confirm" ? "bg-amber-100 text-warning" :
                       "bg-primary/10 text-primary"
                     )}>
-                      {cls.sessions.indexOf(s) + 1}
+                      {sessions.indexOf(s) + 1}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-foreground">{s.date} • {s.time}</p>
+                        <p className="text-sm font-medium text-foreground">{sessionDate(s)} • {sessionTime(s)}</p>
                         {s.format && (
                           <span className={cn("text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5",
                             s.format === "online" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
@@ -216,20 +306,23 @@ const TutorClassDetail = () => {
                     {s.status === "scheduled" && (
                       <>
                         <button onClick={e => { e.stopPropagation(); setSessionDialog({ sessionId: s.id, mode: "absence" }); }} className="text-xs text-warning hover:underline">Báo vắng</button>
-                        {s.format === "online" && s.meetingLink && (
-                          <button onClick={e => { e.stopPropagation(); navigate(s.meetingLink!); }} className="flex items-center gap-1 px-2 py-1.5 bg-success text-white rounded-lg text-xs font-medium">
-                            <Video className="w-3 h-3" /> Meet
-                          </button>
-                        )}
                         <button onClick={e => { e.stopPropagation(); setSessionDialog({ sessionId: s.id, mode: "start" }); }} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium">
                           <Play className="w-3 h-3" /> Bắt đầu
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); handleComplete(s.id); }} disabled={completeSession.isPending} className="flex items-center gap-1 px-3 py-1.5 bg-success text-white rounded-lg text-xs font-medium disabled:opacity-50">
+                          <CheckCircle2 className="w-3 h-3" /> Hoàn thành
                         </button>
                       </>
                     )}
                     {s.status === "in_progress" && (
-                      <button onClick={e => { e.stopPropagation(); setSessionDialog({ sessionId: s.id, mode: "end" }); }} className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium">
-                        <Square className="w-3 h-3" /> Hoàn thành
-                      </button>
+                      <>
+                        <button onClick={e => { e.stopPropagation(); setSessionDialog({ sessionId: s.id, mode: "end" }); }} className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium">
+                          <Square className="w-3 h-3" /> Kết thúc & ghi chú
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); handleComplete(s.id); }} disabled={completeSession.isPending} className="flex items-center gap-1 px-3 py-1.5 bg-success text-white rounded-lg text-xs font-medium disabled:opacity-50">
+                          <CheckCircle2 className="w-3 h-3" /> Hoàn thành
+                        </button>
+                      </>
                     )}
                     {s.status === "completed" && <CheckCircle2 className="w-4 h-4 text-success" />}
                     {s.status === "pending_confirm" && <Clock className="w-4 h-4 text-warning" />}
@@ -242,23 +335,26 @@ const TutorClassDetail = () => {
 
         {/* Materials Tab */}
         <TabsContent value="materials" className="mt-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">Tài liệu môn học</h3>
-            <button onClick={() => setMaterialDialog(true)} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium">
-              <Plus className="w-3 h-3" /> Thêm tài liệu
-            </button>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-foreground">Tài liệu & bài tập</h3>
+            <div className="flex items-center gap-2">
+              <GenerateExamWithAiDialog buttonVariant="outline" triggerLabel="Tạo bài tập AI" />
+              <button onClick={() => setMaterialDialog(true)} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium">
+                <Plus className="w-3 h-3" /> Thêm tài liệu
+              </button>
+            </div>
           </div>
-          {cls.materials.length === 0 ? (
+          {materials.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Chưa có tài liệu nào</p>
-          ) : cls.materials.map(m => (
+          ) : materials.map(m => (
             <div key={m.id} className="flex items-center gap-3 p-3 bg-card border border-border rounded-xl">
               <span className="text-xl">{typeIcons[m.type]}</span>
               <div className="flex-1">
                 <p className="text-sm font-medium text-foreground">{m.name}</p>
-                <p className="text-[11px] text-muted-foreground">{m.type.toUpperCase()} • {m.size || "N/A"} • {m.uploadedAt}</p>
+                <p className="text-[11px] text-muted-foreground">{m.type.toUpperCase()} • {m.size || "N/A"} • {m.uploadedAt.slice(0, 10)}</p>
               </div>
-              <button className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground"><ExternalLink className="w-3.5 h-3.5" /></button>
-              <button onClick={() => { removeMaterial(cls.id, m.id); toast.info("Đã xóa tài liệu"); }} className="p-1.5 hover:bg-destructive/10 rounded-lg text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+              <a href={m.url} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground"><ExternalLink className="w-3.5 h-3.5" /></a>
+              <button onClick={() => handleRemoveMaterial(m.id)} className="p-1.5 hover:bg-destructive/10 rounded-lg text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           ))}
         </TabsContent>
@@ -269,17 +365,16 @@ const TutorClassDetail = () => {
         <DialogContent className="max-w-md">
           {sessionDetail && (
             <>
-              <DialogHeader><DialogTitle>Buổi {cls.sessions.indexOf(sessionDetail) + 1} - {sessionDetail.date}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Buổi {sessions.indexOf(sessionDetail) + 1} - {sessionDate(sessionDetail)}</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Thời gian</span><span className="font-medium">{sessionDetail.time}</span></div>
+                  <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Thời gian</span><span className="font-medium">{sessionTime(sessionDetail)}</span></div>
                   <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Trạng thái</span><span className="font-medium">
-                    {sessionDetail.status === "completed" ? "Hoàn thành" : sessionDetail.status === "pending_confirm" ? "Chờ PH xác nhận" : sessionDetail.status === "in_progress" ? "Đang diễn ra" : "Đã lên lịch"}
+                    {sessionDetail.status === "completed" ? "Hoàn thành" : sessionDetail.status === "pending_confirm" ? "Chờ PH xác nhận" : sessionDetail.status === "in_progress" ? "Đang diễn ra" : sessionDetail.status === "missed" ? "Vắng" : sessionDetail.status === "cancelled" ? "Đã hủy" : "Đã lên lịch"}
                   </span></div>
                   {sessionDetail.format && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Hình thức</span><span className="font-medium">{sessionDetail.format === "online" ? "Online" : "Offline"}</span></div>}
-                  {sessionDetail.startedAt && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Bắt đầu</span><span className="font-medium">{sessionDetail.startedAt}</span></div>}
-                  {sessionDetail.endedAt && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Kết thúc</span><span className="font-medium">{sessionDetail.endedAt}</span></div>}
-                  {sessionDetail.parentConfirmed !== undefined && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">PH xác nhận</span><span className={cn("font-medium", sessionDetail.parentConfirmed ? "text-success" : "text-warning")}>{sessionDetail.parentConfirmed ? "✓ Đã xác nhận" : "⏳ Chưa xác nhận"}</span></div>}
+                  {sessionDetail.startedAt && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Bắt đầu</span><span className="font-medium">{sessionDetail.startedAt.slice(11, 16)}</span></div>}
+                  {sessionDetail.endedAt && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Kết thúc</span><span className="font-medium">{sessionDetail.endedAt.slice(11, 16)}</span></div>}
                 </div>
                 {sessionDetail.content && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block mb-1">Nội dung</span><p className="text-sm">{sessionDetail.content}</p></div>}
                 {sessionDetail.notes && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block mb-1">Nhận xét</span><p className="text-sm">{sessionDetail.notes}</p></div>}
@@ -318,7 +413,7 @@ const TutorClassDetail = () => {
           {sessionDialog?.mode === "start" ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Hệ thống sẽ ghi nhận thời gian bắt đầu.</p>
-              <button onClick={handleStart} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium">Xác nhận bắt đầu</button>
+              <button onClick={handleStart} disabled={startSession.isPending} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50">Xác nhận bắt đầu</button>
             </div>
           ) : sessionDialog?.mode === "end" ? (
             <div className="space-y-3">
@@ -331,25 +426,39 @@ const TutorClassDetail = () => {
               <div><label className="text-xs font-medium text-foreground">Bài tập về nhà</label><input value={endForm.homework} onChange={e => setEndForm(p => ({ ...p, homework: e.target.value }))} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" /></div>
               <div>
                 <label className="text-xs font-medium text-foreground">File bài tập (tùy chọn)</label>
-                <div className="mt-1 flex items-center gap-2 flex-wrap">
-                  <button onClick={handleFileUpload} className="flex items-center gap-1 px-3 py-2 bg-muted border border-border rounded-xl text-xs hover:bg-primary/5">
-                    <Upload className="w-3 h-3" /> Tải file lên
-                  </button>
-                  {uploadedFiles.map((f, i) => (
-                    <span key={i} className="text-xs text-primary bg-primary/5 px-2 py-1 rounded-lg flex items-center gap-1">
-                      📎 {f}
-                      <button onClick={() => setUploadedFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-destructive">×</button>
-                    </span>
-                  ))}
+                <div className="mt-1 space-y-2">
+                  {/* No upload endpoint yet (GAP-10) — paste a link to the homework file (Google Drive, etc.) */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={newHomeworkUrl}
+                      onChange={e => setNewHomeworkUrl(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddHomeworkLink(); } }}
+                      placeholder="Dán link file bài tập (https://...)"
+                      className="flex-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm"
+                    />
+                    <button onClick={handleAddHomeworkLink} disabled={!newHomeworkUrl.trim()} className="flex items-center gap-1 px-3 py-2 bg-muted border border-border rounded-xl text-xs hover:bg-primary/5 disabled:opacity-50">
+                      <Upload className="w-3 h-3" /> Thêm
+                    </button>
+                  </div>
+                  {uploadedFiles.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {uploadedFiles.map((f, i) => (
+                        <a key={i} href={f} target="_blank" rel="noopener noreferrer" className="text-xs text-primary bg-primary/5 px-2 py-1 rounded-lg flex items-center gap-1 hover:underline">
+                          📎 {f.length > 32 ? f.slice(0, 32) + "…" : f}
+                          <button onClick={(e) => { e.preventDefault(); setUploadedFiles(prev => prev.filter((_, idx) => idx !== i)); }} className="text-destructive">×</button>
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-              <button onClick={handleEnd} disabled={!endForm.content} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50">Gửi xác nhận hoàn thành</button>
+              <button onClick={handleEnd} disabled={!endForm.content || endSession.isPending} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50">Gửi xác nhận hoàn thành</button>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Yêu cầu báo vắng sẽ cần phụ huynh xác nhận.</p>
               <div><label className="text-xs font-medium text-foreground">Lý do *</label><textarea value={absenceReason} onChange={e => setAbsenceReason(e.target.value)} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm h-20 resize-none" placeholder="Nhập lý do vắng..." /></div>
-              <button onClick={handleAbsence} disabled={!absenceReason} className="w-full py-2.5 bg-amber-600 text-white rounded-xl font-medium disabled:opacity-50">Gửi yêu cầu báo vắng</button>
+              <button onClick={handleAbsence} disabled={!absenceReason || requestAbsence.isPending} className="w-full py-2.5 bg-amber-600 text-white rounded-xl font-medium disabled:opacity-50">Gửi yêu cầu báo vắng</button>
             </div>
           )}
         </DialogContent>
@@ -362,17 +471,49 @@ const TutorClassDetail = () => {
           <div className="space-y-3">
             <div><label className="text-xs font-medium text-foreground">Tên tài liệu *</label><input value={newMaterial.name} onChange={e => setNewMaterial(p => ({ ...p, name: e.target.value }))} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" /></div>
             <div><label className="text-xs font-medium text-foreground">Loại</label>
-              <select value={newMaterial.type} onChange={e => setNewMaterial(p => ({ ...p, type: e.target.value as any }))} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm">
+              <select value={newMaterial.type} onChange={e => setNewMaterial(p => ({ ...p, type: e.target.value as typeof newMaterial.type }))} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm">
                 <option value="pdf">PDF</option><option value="doc">Document</option><option value="image">Hình ảnh</option><option value="video">Video</option><option value="link">Link</option>
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-foreground">File</label>
-              <button onClick={() => setNewMaterial(p => ({ ...p, url: `uploaded_${Date.now()}.pdf` }))} className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-3 bg-muted/50 border border-dashed border-border rounded-xl text-xs text-muted-foreground hover:bg-primary/5">
-                <Upload className="w-4 h-4" /> {newMaterial.url ? `✓ ${newMaterial.url}` : "Chọn file để tải lên"}
-              </button>
+              {/* TODO(BE): file-upload endpoint for class materials (currently URL only) */}
+              <label className="text-xs font-medium text-foreground">Đường dẫn (URL)</label>
+              <input value={newMaterial.url} onChange={e => setNewMaterial(p => ({ ...p, url: e.target.value }))} placeholder="https://..." className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" />
             </div>
-            <button onClick={handleAddMaterial} disabled={!newMaterial.name} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50">Thêm tài liệu</button>
+            <button onClick={handleAddMaterial} disabled={!newMaterial.name || !newMaterial.url.trim() || addMaterial.isPending} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50">Thêm tài liệu</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add teaching session */}
+      <Dialog open={addSessionOpen} onOpenChange={setAddSessionOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Thêm buổi dạy</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-foreground">Ngày *</label>
+              <input type="date" value={newSession.date} onChange={e => setNewSession(p => ({ ...p, date: e.target.value }))} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-foreground">Giờ bắt đầu</label>
+                <input type="time" value={newSession.start} onChange={e => setNewSession(p => ({ ...p, start: e.target.value }))} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground">Giờ kết thúc</label>
+                <input type="time" value={newSession.end} onChange={e => setNewSession(p => ({ ...p, end: e.target.value }))} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-foreground">Hình thức</label>
+              <select value={newSession.format} onChange={e => setNewSession(p => ({ ...p, format: e.target.value }))} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm">
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+              </select>
+            </div>
+            <button onClick={handleAddSession} disabled={!newSession.date || newSession.end <= newSession.start || createSessionM.isPending} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50">
+              {createSessionM.isPending ? "Đang thêm..." : "Thêm buổi dạy"}
+            </button>
           </div>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,4 @@
-import { useFinance } from "@/contexts/FinanceContext";
+import { useWithdrawals, useApproveWithdrawal, useRejectWithdrawal } from "@/hooks/useFinance";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Banknote,
+  Loader2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +40,10 @@ const statusConfig: Record<
 };
 
 const FinancePayouts = () => {
-  const { withdrawals, approveWithdrawal, rejectWithdrawal } = useFinance();
+  // Live withdrawals from /api/Finance/withdrawals — sole source of truth.
+  const { withdrawals, isLoading } = useWithdrawals();
+  const approveMutation = useApproveWithdrawal();
+  const rejectMutation = useRejectWithdrawal();
   const { toast } = useToast();
 
   const [rejectDialog, setRejectDialog] = useState<string | null>(null);
@@ -79,7 +83,7 @@ const FinancePayouts = () => {
 
   const detail = withdrawals.find(w => w.id === detailId);
 
-  const totalEscrow = withdrawals.reduce((s, w) => s + (w.totalEarned - w.totalWithdrawn), 0);
+  const totalWithdrawnAll = withdrawals.reduce((s, w) => s + w.totalWithdrawn, 0);
   const totalPending = withdrawals
     .filter(w => w.status === "pending")
     .reduce((s, w) => s + w.amount, 0);
@@ -95,15 +99,22 @@ const FinancePayouts = () => {
 
   const handleReject = () => {
     if (rejectDialog && rejectNote.trim()) {
-      rejectWithdrawal(rejectDialog, rejectNote);
-      toast({
-        title: "Đã từ chối yêu cầu",
-        variant: "destructive",
+      rejectMutation.mutate({ id: rejectDialog, payload: { note: rejectNote } }, {
+        onSuccess: () => toast({ title: "Đã từ chối yêu cầu", variant: "destructive" }),
+        onError: (e) => toast({ title: e instanceof Error ? e.message : "Từ chối thất bại", variant: "destructive" }),
       });
       setRejectDialog(null);
       setRejectNote("");
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải yêu cầu rút tiền...
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 pt-2 pb-6 space-y-4">
@@ -137,9 +148,10 @@ const FinancePayouts = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {[
           {
-            label: "Escrow Balance",
-            value: `${totalEscrow.toLocaleString("vi-VN")}đ`,
-            sub: "Số dư tạm giữ",
+            // TODO(BE): no per-tutor escrow/total-earned field on WithdrawalAdminResponse; showing total already-withdrawn instead.
+            label: "Tổng đã rút",
+            value: `${totalWithdrawnAll.toLocaleString("vi-VN")}đ`,
+            sub: "Lũy kế đã giải ngân",
             color: "from-blue-500 to-indigo-500",
             icon: Shield,
           },
@@ -233,7 +245,7 @@ const FinancePayouts = () => {
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
                     <img
-                      src={w.tutorAvatar}
+                      src={w.tutorAvatar ?? undefined}
                       alt={w.tutorName}
                       className="h-10 w-10 rounded-full object-cover ring-2 ring-border"
                     />
@@ -258,15 +270,13 @@ const FinancePayouts = () => {
                     <span className="text-sm font-medium text-foreground">{w.bankAccount}</span>
                   </div>
                   <div className="rounded-xl border border-border bg-card p-3">
-                    <span className="block text-[10px] text-muted-foreground">Tổng thu nhập</span>
-                    <span className="text-sm font-medium text-primary">
-                      {w.totalEarned.toLocaleString("vi-VN")}đ
-                    </span>
+                    <span className="block text-[10px] text-muted-foreground">Hình thức</span>
+                    <span className="text-sm font-medium text-foreground">{w.method}</span>
                   </div>
                   <div className="rounded-xl border border-border bg-card p-3">
-                    <span className="block text-[10px] text-muted-foreground">Số dư khả dụng</span>
+                    <span className="block text-[10px] text-muted-foreground">Đã rút lũy kế</span>
                     <span className="text-sm font-medium text-foreground">
-                      {(w.totalEarned - w.totalWithdrawn).toLocaleString("vi-VN")}đ
+                      {w.totalWithdrawn.toLocaleString("vi-VN")}đ
                     </span>
                   </div>
                 </div>
@@ -286,8 +296,10 @@ const FinancePayouts = () => {
                     size="sm"
                     className="rounded-xl"
                     onClick={() => {
-                      approveWithdrawal(w.id);
-                      toast({ title: "Đã duyệt yêu cầu rút tiền" });
+                      approveMutation.mutate({ id: w.id }, {
+                        onSuccess: () => toast({ title: "Đã duyệt yêu cầu rút tiền" }),
+                        onError: (e) => toast({ title: e instanceof Error ? e.message : "Duyệt thất bại", variant: "destructive" }),
+                      });
                     }}
                   >
                     <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
@@ -368,7 +380,7 @@ const FinancePayouts = () => {
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex items-center gap-3">
                       <img
-                        src={w.tutorAvatar}
+                        src={w.tutorAvatar ?? undefined}
                         alt={w.tutorName}
                         className="h-9 w-9 rounded-full object-cover"
                       />
@@ -396,12 +408,12 @@ const FinancePayouts = () => {
                     </div>
                   </div>
 
-                  {w.note && w.status === "rejected" && (
+                  {w.reviewNote && w.status === "rejected" && (
                     <div className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 p-3">
                       <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                       <div>
                         <p className="text-xs font-semibold text-destructive">Lý do từ chối</p>
-                        <p className="mt-0.5 text-xs text-destructive/80">{w.note}</p>
+                        <p className="mt-0.5 text-xs text-destructive/80">{w.reviewNote}</p>
                       </div>
                     </div>
                   )}
@@ -478,7 +490,7 @@ const FinancePayouts = () => {
               <div className="rounded-2xl bg-muted/40 p-4">
                 <div className="flex items-center gap-3">
                   <img
-                    src={detail.tutorAvatar}
+                    src={detail.tutorAvatar ?? undefined}
                     alt={detail.tutorName}
                     className="h-14 w-14 rounded-full object-cover"
                   />
@@ -516,36 +528,24 @@ const FinancePayouts = () => {
                 </div>
 
                 <div className="rounded-xl bg-muted/40 p-3">
-                  <Label className="text-[10px] text-muted-foreground">Tổng thu nhập</Label>
-                  <p className="text-sm font-medium text-primary">
-                    {detail.totalEarned.toLocaleString("vi-VN")}đ
-                  </p>
+                  <Label className="text-[10px] text-muted-foreground">Hình thức</Label>
+                  <p className="text-sm font-medium text-foreground">{detail.method}</p>
                 </div>
 
                 <div className="rounded-xl bg-muted/40 p-3">
-                  <Label className="text-[10px] text-muted-foreground">Đã rút</Label>
+                  <Label className="text-[10px] text-muted-foreground">Đã rút lũy kế</Label>
                   <p className="text-sm font-medium text-foreground">
                     {detail.totalWithdrawn.toLocaleString("vi-VN")}đ
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-3">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-foreground" />
-                  <span className="text-sm text-muted-foreground">Escrow khả dụng</span>
-                </div>
-                <p className="text-sm font-bold text-primary">
-                  {(detail.totalEarned - detail.totalWithdrawn).toLocaleString("vi-VN")}đ
-                </p>
-              </div>
-
-              {detail.note && (
+              {detail.reviewNote && (
                 <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 p-3">
                   <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                   <div>
                     <p className="text-xs font-semibold text-destructive">Lý do từ chối</p>
-                    <p className="mt-0.5 text-xs text-destructive/80">{detail.note}</p>
+                    <p className="mt-0.5 text-xs text-destructive/80">{detail.reviewNote}</p>
                   </div>
                 </div>
               )}

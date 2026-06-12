@@ -1,0 +1,185 @@
+{
+  "title": "Tutor portal — backend endpoints/fields the frontend still needs",
+  "generatedFor": "UNI-EDU backend team",
+  "context": "The Tutor portal pages were migrated from mock data to real API calls. Everything below is data the UI renders but the backend does NOT currently expose. Each gap lists the affected page(s), what is missing, the proposed endpoint, and an example JSON shape (camelCase, to be wrapped in the usual ApiResponse<T> envelope). Until these ship, the affected UI shows an empty 'Chưa có dữ liệu' state.",
+  "swaggerBase": "http://localhost:5115 — all routes under /api",
+  "gaps": [
+    {
+      "id": "GAP-1",
+      "priority": "high",
+      "title": "Tutor's students + per-student progress",
+      "affectedPages": ["TutorStudents", "TutorDashboard (student-progress panel)", "TutorProfile (totalStudents stat)"],
+      "currentState": "No endpoint. TutorStudents now derives a basic roster from GET /Classes (studentId, studentName, className, subject, completedSessions/totalSessions). All analytics (skills, weekly reports, score history, attendance %, average score, goal/homework completion, contact info) have no source.",
+      "proposedEndpoint": "GET /api/Tutors/me/students  ->  PagedResult<TutorStudentProgress>",
+      "exampleItem": {
+        "studentId": "guid",
+        "studentName": "Lê Minh Châu",
+        "studentAvatar": "https://.../avatar.jpg",
+        "studentPhone": "0901234567",
+        "studentEmail": "chau@example.com",
+        "studentGrade": "Lớp 12",
+        "parentName": "Phạm Hồng Đào",
+        "parentPhone": "0907654321",
+        "classId": "guid",
+        "className": "Toán 12 - Ôn thi ĐH",
+        "subject": "Toán",
+        "totalSessions": 24,
+        "completedSessions": 12,
+        "missedSessions": 0,
+        "averageScore": 7.8,
+        "attendanceRate": 100,
+        "goalCompletion": 65,
+        "homeworkCompletion": 92,
+        "startDate": "2026-01-15",
+        "lastSessionDate": "2026-02-28",
+        "notes": "Tiến bộ tốt ở phần đạo hàm.",
+        "skills": [{ "name": "Đại số", "score": 8.5, "prevScore": 6.0 }],
+        "weeklyReports": [{ "week": "T1/2026", "sessions": 6, "avgScore": 6.5, "notes": "..." }],
+        "scoreHistory": [{ "date": "2026-01-20", "score": 5.5 }]
+      }
+    },
+    {
+      "id": "GAP-2",
+      "priority": "medium",
+      "title": "\"Seeking tutors\" job board (open class requests a tutor can apply to)",
+      "affectedPages": ["TutorClasses (tab 'Đang tìm gia sư')"],
+      "currentState": "No endpoint. Tab renders an empty placeholder.",
+      "proposedEndpoint": "GET /api/Tutors/me/seeking-requests -> PagedResult<SeekingRequest>  +  POST /api/ClassRequests/{id}/apply",
+      "exampleItem": {
+        "id": "guid",
+        "studentName": "Ngô Văn Khoa",
+        "parentName": "Ngô Thị Lan",
+        "subject": "Toán",
+        "grade": "Lớp 11",
+        "format": "online",
+        "budgetMin": 200000,
+        "budgetMax": 300000,
+        "schedule": "T3, T5 19:00-21:00",
+        "location": "TP.HCM",
+        "note": "Cần ôn gấp giữa kỳ.",
+        "postedDate": "2026-02-28",
+        "applicationStatus": "none | applied | accepted | rejected"
+      }
+    },
+    {
+      "id": "GAP-3",
+      "priority": "medium",
+      "title": "Tutor qualification test — pass flag, monthly gating, per-question explanations",
+      "affectedPages": ["TutorClasses (tab 'Bài test')"],
+      "currentState": "Wired to the existing Exams API (GET /Exams?Status=open filtered to type=tutor-test, GET /Exams/{id}, POST /Exams/{id}/submit, GET /Exams/me/submissions). SubmissionResponse has score/scoreScale/correctCount but no 'passed' flag, no per-question explanation for review, and no monthly attempt limit. Pass is currently computed client-side as score/scoreScale*100 >= 70.",
+      "proposedChanges": [
+        "Add 'passed' (bool) and 'passThreshold' (number) to SubmissionResponse.",
+        "Add per-question result to the submission review (questionId, selectedOption, correctOption, explanation).",
+        "Add GET /api/Exams/tutor-test/eligibility -> { canTakeThisMonth: bool, lastAttempt: '2026-02-01T...' } for the 1-test/month rule."
+      ],
+      "exampleSubmissionResponse": {
+        "id": 12,
+        "examId": 3,
+        "score": 8.0,
+        "scoreScale": 10,
+        "totalQuestions": 10,
+        "correctCount": 8,
+        "passed": true,
+        "passThreshold": 70,
+        "submissionDate": "2026-03-01T10:00:00Z",
+        "questionResults": [
+          { "questionId": 101, "selectedOption": 2, "correctOption": 2, "explanation": "Đạo hàm của x^2 là 2x." }
+        ]
+      }
+    },
+    {
+      "id": "GAP-4",
+      "priority": "medium",
+      "title": "Monthly earnings / sessions time-series for charts",
+      "affectedPages": ["TutorDashboard (income line chart)", "TutorProfile (monthly sessions bar chart)"],
+      "currentState": "GET /Tutors/me/dashboard returns only a single aggregate 'monthlyEarnings'. The dashboard chart is currently derived client-side from wallet transactions (escrow_release by month); the profile chart from completed sessions in GET /me/sessions. A dedicated series endpoint would be cleaner/cheaper.",
+      "proposedEndpoint": "GET /api/Tutors/me/earnings-series?months=6 -> EarningsPoint[]",
+      "exampleItem": { "month": "2026-02", "income": 2640000, "sessions": 28 }
+    },
+    {
+      "id": "GAP-5",
+      "priority": "high",
+      "title": "Escrow fields (and studentAvatar) missing on the class LIST DTO",
+      "affectedPages": ["TutorDashboard", "TutorClasses", "TutorWallet (escrow-per-class)"],
+      "currentState": "GET /Classes (ClassListItemResponse) has no escrowAmount/escrowReleased/escrowStatus and no studentAvatar/parentName. List views can only show session-based progress and a placeholder avatar; per-class escrow bars were dropped. The detail DTO (GET /Classes/{id}) does have escrow fields, but fetching detail per class is wasteful.",
+      "proposedChanges": [
+        "Add escrowAmount (number), escrowReleased (number), escrowStatus (string) to ClassListItemResponse.",
+        "Add studentAvatar (string) and optionally parentName (string) to ClassListItemResponse."
+      ]
+    },
+    {
+      "id": "GAP-6",
+      "priority": "medium",
+      "title": "Tutor-scoped refund history",
+      "affectedPages": ["TutorWallet (refund history list)"],
+      "currentState": "Creating a refund works (POST /Classes/{classId}/refund-request). But the only refund LIST is GET /Finance/refunds, which is Admin/Finance-scoped. A tutor cannot list their own refund requests, so the history section is empty for tutors.",
+      "proposedEndpoint": "GET /api/me/refunds -> PagedResult<RefundItem>  (same RefundItem shape as /Finance/refunds, filtered to the caller)",
+      "exampleItem": {
+        "id": "guid",
+        "classId": "guid",
+        "className": "Toán 12 - Ôn thi ĐH",
+        "amount": 400000,
+        "maxAmount": 2000000,
+        "reason": "Học sinh chuyển trường.",
+        "status": "pending | approved | rejected",
+        "createdAt": "2026-02-20T09:00:00Z",
+        "reviewNote": null
+      }
+    },
+    {
+      "id": "GAP-7",
+      "priority": "low",
+      "title": "Review tags for the keyword cloud",
+      "affectedPages": ["TutorReviews (Từ khóa nổi bật card — removed)", "TutorProfile (subject ratings)"],
+      "currentState": "TutorReviewResponse (GET /Tutors/{id}/reviews) has no 'tags' field. The keyword-cloud card and per-review tag chips were removed.",
+      "proposedChanges": ["Add tags: string[] to the tutor review DTO."],
+      "exampleSnippet": { "tags": ["Tận tâm", "Dễ hiểu", "Kiên nhẫn"] }
+    },
+    {
+      "id": "GAP-8",
+      "priority": "medium",
+      "title": "Enrich GET /me/sessions with class/student info",
+      "affectedPages": ["TutorSchedule"],
+      "currentState": "SessionResponse from GET /me/sessions only carries classId. The schedule page joins client-side against GET /Classes to display className/studentName/subject, and has no studentAvatar.",
+      "proposedChanges": ["Add className, studentName, subject (and studentAvatar) to the SessionResponse returned by GET /me/sessions."]
+    },
+    {
+      "id": "GAP-9",
+      "priority": "medium",
+      "title": "Tutor credentials with verification status + file upload; return certificates on profile GET",
+      "affectedPages": ["TutorProfile (credentials section)"],
+      "currentState": "TutorProfileResponse now returns certificates: string[], type ('tutor'|'teacher') and isVerified (added for the teacher professional badges). Remaining gap: certificates are plain names with no PER-DOCUMENT verification status and there is no file-upload for them. UpdateTutorProfileRequest still only accepts certificates: string[].",
+      "proposedChanges": [
+        "DONE: certificates + type + isVerified are now on TutorProfileResponse.",
+        "Add GET/POST /api/Tutors/me/credentials with per-document verification status + file upload."
+      ],
+      "exampleCredential": {
+        "id": "guid",
+        "name": "Bằng Cử nhân Sư phạm Toán",
+        "fileUrl": "https://.../degree.pdf",
+        "uploadedAt": "2026-01-03",
+        "status": "verified | pending | rejected"
+      }
+    },
+    {
+      "id": "GAP-10",
+      "priority": "low",
+      "title": "File-upload endpoint for class materials / homework",
+      "affectedPages": ["TutorClassDetail (add material, end-session homework files)"],
+      "currentState": "FIXED the fabricated data: the add-material dialog and the end-session homework-files field now take a REAL pasted URL (Google Drive/link); no more fake 'baitap_<timestamp>.pdf' filename and no fabricated '1.2 MB' size (size is omitted). Remaining gap: there is still no way to upload actual file BYTES from the browser — only links.",
+      "proposedEndpoint": "POST /api/uploads (multipart/form-data) -> { url, size, name } so the material/homework forms can upload a real file and submit the returned url+size.",
+      "note": "Until this ships, tutors paste a shareable link. CreateMaterialRequest.size is left empty when added via link."
+    },
+    {
+      "id": "GAP-11",
+      "priority": "low",
+      "title": "Online meeting link on sessions",
+      "affectedPages": ["TutorClassDetail", "TutorSchedule", "OnlineMeeting"],
+      "currentState": "SessionResponse has no meetingLink. The 'Mở lớp học online' / join-meeting buttons were hidden because there is no URL to open. The OnlineMeeting room (/tutor/meeting/:sessionId) now shows the real student name + a real in-meeting chat (reuses the class message thread), but the audio/video tiles are a UI simulation — there is no WebRTC/meeting provider backend.",
+      "proposedChanges": [
+        "Add meetingLink: string|null to SessionResponse for online/hybrid sessions.",
+        "Add a real video provider integration (e.g. Jitsi/Agora/LiveKit room per session) if live in-app video is required; otherwise meetingLink to an external room (Google Meet/Zoom) is enough."
+      ]
+    }
+  ]
+}

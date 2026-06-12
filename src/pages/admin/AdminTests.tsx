@@ -1,5 +1,4 @@
-import { useAdmin } from "@/contexts/AdminContext";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,52 +6,194 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, Edit, Eye, Search, CheckCircle, XCircle } from "lucide-react";
-import type { AdminTest, TestType, TestStatus, TestQuestion } from "@/contexts/AdminContext";
+import { Plus, Trash2, Edit, Eye, Search, Loader2 } from "lucide-react";
+import { useExams, useCreateExam, useUpdateExam, useDeleteExam } from "@/hooks/useExams";
+import { useSubjects } from "@/hooks/useSubjects";
+import type { ExamListItemResponse } from "@/types/api";
 import { useToast } from "@/hooks/use-toast";
 
 const statusColor: Record<string, string> = {
-  active: "bg-primary/10 text-primary",
+  open: "bg-primary/10 text-primary",
   draft: "bg-muted text-muted-foreground",
-  archived: "bg-muted text-muted-foreground",
+  closed: "bg-muted text-muted-foreground",
+  hidden: "bg-muted text-muted-foreground",
 };
-const statusLabel: Record<string, string> = { active: "Hoạt động", draft: "Bản nháp", archived: "Đã lưu trữ" };
+const statusLabel: Record<string, string> = {
+  open: "Mở",
+  draft: "Bản nháp",
+  closed: "Đã đóng",
+  hidden: "Đã ẩn",
+};
+const typeLabel: Record<string, string> = {
+  "tutor-test": "Bài của gia sư",
+  "student-test": "Bài cho học sinh",
+};
 
-const emptyForm = { code: "", name: "", subject: "", level: "", type: "multiple-choice" as TestType, status: "draft" as TestStatus };
+interface ExamForm {
+  title: string;
+  subjectId: string;
+  description: string;
+  duration: number;
+  fee: number;
+  year: number;
+  type: string;
+  status: string;
+  difficulty: string;
+  aiProctoring: boolean;
+}
+
+const emptyForm: ExamForm = {
+  title: "",
+  subjectId: "",
+  description: "",
+  duration: 60,
+  fee: 0,
+  year: new Date().getFullYear(),
+  type: "student-test",
+  status: "draft",
+  difficulty: "medium",
+  aiProctoring: false,
+};
 
 const AdminTests = () => {
-  const { tests, addTest, updateTest, deleteTest } = useAdmin();
-  const [showForm, setShowForm] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [viewingTest, setViewingTest] = useState<AdminTest | null>(null);
+
+  const examsQuery = useMemo(
+    () => ({
+      Search: search || undefined,
+      Status: filterStatus !== "all" ? filterStatus : undefined,
+    }),
+    [search, filterStatus]
+  );
+
+  const { exams, isLoading, isError } = useExams(examsQuery);
+  const { subjects } = useSubjects();
+  const createExam = useCreateExam();
+  const updateExam = useUpdateExam();
+  const deleteExam = useDeleteExam();
   const { toast } = useToast();
 
-  const filtered = tests.filter(t => {
-    if (filterStatus !== "all" && t.status !== filterStatus) return false;
-    if (search && !t.name.toLowerCase().includes(search.toLowerCase()) && !t.code.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [form, setForm] = useState<ExamForm>(emptyForm);
+  const [viewingExam, setViewingExam] = useState<ExamListItemResponse | null>(null);
 
-  const openCreate = () => { setForm({ ...emptyForm, code: `T${String(tests.length + 1).padStart(3, "0")}` }); setEditId(null); setShowForm(true); };
-  const openEdit = (t: AdminTest) => { setForm({ code: t.code, name: t.name, subject: t.subject, level: t.level, type: t.type, status: t.status }); setEditId(t.id); setShowForm(true); };
-
-  const handleSave = () => {
-    if (!form.name || !form.code || !form.subject) { toast({ title: "Vui lòng điền đầy đủ thông tin", variant: "destructive" }); return; }
-    if (editId) {
-      updateTest(editId, form);
-      toast({ title: "Đã cập nhật bài test" });
-    } else {
-      addTest(form);
-      toast({ title: `Đã tạo bài test "${form.name}" với 10 câu hỏi tự động` });
-    }
-    setShowForm(false);
+  const openCreate = () => {
+    setForm(emptyForm);
+    setEditId(null);
+    setShowForm(true);
   };
 
-  const handleDelete = (t: AdminTest) => { deleteTest(t.id); toast({ title: `Đã xóa ${t.code}`, variant: "destructive" }); };
-  const handleStatusChange = (id: string, status: string) => { updateTest(id, { status: status as TestStatus }); };
+  const openEdit = (t: ExamListItemResponse) => {
+    setForm({
+      title: t.title,
+      subjectId: t.subjectId,
+      // ExamListItemResponse has no description; preserved on update only if re-entered.
+      description: "",
+      duration: t.duration,
+      fee: t.fee,
+      year: t.year,
+      type: t.type,
+      status: t.status,
+      difficulty: t.difficulty,
+      aiProctoring: t.aiProctoring,
+    });
+    setEditId(t.id);
+    setShowForm(true);
+  };
+
+  const handleSave = () => {
+    if (!form.title || !form.subjectId) {
+      toast({ title: "Vui lòng điền đầy đủ thông tin", variant: "destructive" });
+      return;
+    }
+    if (editId) {
+      updateExam.mutate(
+        {
+          id: editId,
+          payload: {
+            subjectId: form.subjectId,
+            title: form.title,
+            description: form.description,
+            duration: form.duration,
+            type: form.type,
+            status: form.status,
+            difficulty: form.difficulty,
+            fee: form.fee,
+            year: form.year,
+            aiProctoring: form.aiProctoring,
+            maxAttemptsPerUser: 1,
+            scoreScale: 10,
+          },
+        },
+        {
+          onSuccess: () => {
+            toast({ title: "Đã cập nhật bài test" });
+            setShowForm(false);
+          },
+          onError: () => toast({ title: "Cập nhật bài test thất bại", variant: "destructive" }),
+        }
+      );
+    } else {
+      createExam.mutate(
+        {
+          subjectId: form.subjectId,
+          title: form.title,
+          description: form.description,
+          duration: form.duration,
+          type: form.type,
+          status: form.status,
+          difficulty: form.difficulty,
+          fee: form.fee,
+          year: form.year,
+          aiProctoring: form.aiProctoring,
+        },
+        {
+          onSuccess: () => {
+            toast({ title: `Đã tạo bài test "${form.title}"` });
+            setShowForm(false);
+          },
+          onError: () => toast({ title: "Tạo bài test thất bại", variant: "destructive" }),
+        }
+      );
+    }
+  };
+
+  const handleDelete = (t: ExamListItemResponse) => {
+    deleteExam.mutate(t.id, {
+      onSuccess: () => toast({ title: `Đã xóa ${t.title}`, variant: "destructive" }),
+      onError: () => toast({ title: "Xóa bài test thất bại", variant: "destructive" }),
+    });
+  };
+
+  const handleStatusChange = (t: ExamListItemResponse, status: string) => {
+    updateExam.mutate(
+      {
+        id: t.id,
+        payload: {
+          subjectId: t.subjectId,
+          title: t.title,
+          // ExamListItemResponse carries no description; send empty on inline status change.
+          description: "",
+          duration: t.duration,
+          type: t.type,
+          status,
+          difficulty: t.difficulty,
+          fee: t.fee,
+          year: t.year,
+          aiProctoring: t.aiProctoring,
+          maxAttemptsPerUser: t.maxAttemptsPerUser,
+          scoreScale: t.scoreScale,
+        },
+      },
+      {
+        onError: () => toast({ title: "Cập nhật trạng thái thất bại", variant: "destructive" }),
+      }
+    );
+  };
+
+  const saving = createExam.isPending || updateExam.isPending;
 
   return (
     <div className="p-6 space-y-5">
@@ -67,9 +208,10 @@ const AdminTests = () => {
             <SelectTrigger className="w-36 h-10 rounded-xl"><SelectValue placeholder="Trạng thái" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="active">Hoạt động</SelectItem>
+              <SelectItem value="open">Mở</SelectItem>
               <SelectItem value="draft">Bản nháp</SelectItem>
-              <SelectItem value="archived">Đã lưu trữ</SelectItem>
+              <SelectItem value="closed">Đã đóng</SelectItem>
+              <SelectItem value="hidden">Đã ẩn</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -84,7 +226,7 @@ const AdminTests = () => {
               <TableRow className="bg-muted/30 hover:bg-muted/30">
                 <TableHead className="font-semibold">Mã</TableHead>
                 <TableHead className="font-semibold">Tên bài test</TableHead>
-                <TableHead className="font-semibold">Môn / Cấp độ</TableHead>
+                <TableHead className="font-semibold">Môn / Năm</TableHead>
                 <TableHead className="font-semibold">Loại hình</TableHead>
                 <TableHead className="font-semibold">Câu hỏi</TableHead>
                 <TableHead className="font-semibold">Lượt thi</TableHead>
@@ -93,35 +235,47 @@ const AdminTests = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(t => (
-                <TableRow key={t.id} className="hover:bg-muted/20 transition-colors">
-                  <TableCell className="font-mono text-sm text-muted-foreground">{t.code}</TableCell>
-                  <TableCell className="font-medium text-foreground">{t.name}</TableCell>
-                  <TableCell><div className="text-sm"><span className="text-foreground">{t.subject}</span><span className="text-muted-foreground"> · {t.level}</span></div></TableCell>
-                  <TableCell><span className="text-xs font-medium px-2.5 py-1 rounded-lg bg-muted text-foreground">{t.type === "multiple-choice" ? "Trắc nghiệm" : "Tự luận"}</span></TableCell>
-                  <TableCell className="text-sm font-medium text-foreground">{t.questions.length}</TableCell>
-                  <TableCell className="text-sm font-semibold text-foreground">{t.attempts}</TableCell>
-                  <TableCell>
-                    <Select value={t.status} onValueChange={v => handleStatusChange(t.id, v)}>
-                      <SelectTrigger className={`w-28 h-7 text-[11px] rounded-full border-0 font-medium ${statusColor[t.status]}`}><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Hoạt động</SelectItem>
-                        <SelectItem value="draft">Bản nháp</SelectItem>
-                        <SelectItem value="archived">Đã lưu trữ</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-0.5">
-                      <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" title="Xem câu hỏi" onClick={() => setViewingTest(t)}><Eye className="w-4 h-4 text-muted-foreground" /></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" onClick={() => openEdit(t)}><Edit className="w-4 h-4 text-muted-foreground" /></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-destructive hover:text-destructive" onClick={() => handleDelete(t)}><Trash2 className="w-4 h-4" /></Button>
-                    </div>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                    <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Đang tải bài test...</span>
                   </TableCell>
                 </TableRow>
-              ))}
-              {filtered.length === 0 && (
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-12">Không tải được danh sách bài test. Vui lòng thử lại.</TableCell>
+                </TableRow>
+              ) : exams.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-12">Không tìm thấy bài test</TableCell></TableRow>
+              ) : (
+                exams.map(t => (
+                  <TableRow key={t.id} className="hover:bg-muted/20 transition-colors">
+                    <TableCell className="font-mono text-sm text-muted-foreground">{t.id}</TableCell>
+                    <TableCell className="font-medium text-foreground">{t.title}</TableCell>
+                    <TableCell><div className="text-sm"><span className="text-foreground">{t.subject}</span><span className="text-muted-foreground"> · {t.year}</span></div></TableCell>
+                    <TableCell><span className="text-xs font-medium px-2.5 py-1 rounded-lg bg-muted text-foreground">{typeLabel[t.type] ?? t.type}</span></TableCell>
+                    <TableCell className="text-sm font-medium text-foreground">{t.questionCount}</TableCell>
+                    <TableCell className="text-sm font-semibold text-foreground">{t.attempts}</TableCell>
+                    <TableCell>
+                      <Select value={t.status} onValueChange={v => handleStatusChange(t, v)}>
+                        <SelectTrigger className={`w-28 h-7 text-[11px] rounded-full border-0 font-medium ${statusColor[t.status] ?? ""}`}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">Mở</SelectItem>
+                          <SelectItem value="draft">Bản nháp</SelectItem>
+                          <SelectItem value="closed">Đã đóng</SelectItem>
+                          <SelectItem value="hidden">Đã ẩn</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-0.5">
+                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" title="Xem chi tiết" onClick={() => setViewingExam(t)}><Eye className="w-4 h-4 text-muted-foreground" /></Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" onClick={() => openEdit(t)}><Edit className="w-4 h-4 text-muted-foreground" /></Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-destructive hover:text-destructive" onClick={() => handleDelete(t)}><Trash2 className="w-4 h-4" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>
@@ -134,67 +288,80 @@ const AdminTests = () => {
           <DialogHeader><DialogTitle>{editId ? "Sửa bài test" : "Tạo bài test mới"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Mã bài test</Label><Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} className="rounded-xl mt-1.5" /></div>
+              {/* TODO(BE): test code field not on exam DTO */}
               <div><Label>Môn</Label>
-                <Select value={form.subject} onValueChange={v => setForm(f => ({ ...f, subject: v }))}>
+                <Select value={form.subjectId} onValueChange={v => setForm(f => ({ ...f, subjectId: v }))}>
                   <SelectTrigger className="rounded-xl mt-1.5"><SelectValue placeholder="Chọn môn" /></SelectTrigger>
-                  <SelectContent>{["Toán", "Văn", "Anh", "Lý", "Hóa", "Sinh"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              <div><Label>Năm</Label><Input type="number" value={form.year} onChange={e => setForm(f => ({ ...f, year: Number(e.target.value) }))} className="rounded-xl mt-1.5" /></div>
             </div>
-            <div><Label>Tên bài test</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="rounded-xl mt-1.5" /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Cấp độ</Label><Input value={form.level} onChange={e => setForm(f => ({ ...f, level: e.target.value }))} className="rounded-xl mt-1.5" placeholder="VD: Lớp 12, IELTS..." /></div>
-              <div><Label>Loại hình</Label>
-                <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as TestType }))}>
+            <div><Label>Tên bài test</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="rounded-xl mt-1.5" /></div>
+            <div><Label>Mô tả</Label><Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="rounded-xl mt-1.5" placeholder="Mô tả ngắn về bài test" /></div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Thời lượng (phút)</Label><Input type="number" value={form.duration} onChange={e => setForm(f => ({ ...f, duration: Number(e.target.value) }))} className="rounded-xl mt-1.5" /></div>
+              <div><Label>Học phí (đ)</Label><Input type="number" value={form.fee} onChange={e => setForm(f => ({ ...f, fee: Number(e.target.value) }))} className="rounded-xl mt-1.5" /></div>
+              <div><Label>Độ khó</Label>
+                <Select value={form.difficulty} onValueChange={v => setForm(f => ({ ...f, difficulty: v }))}>
                   <SelectTrigger className="rounded-xl mt-1.5"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="multiple-choice">Trắc nghiệm</SelectItem>
-                    <SelectItem value="essay">Tự luận</SelectItem>
+                    <SelectItem value="easy">Dễ</SelectItem>
+                    <SelectItem value="medium">Trung bình</SelectItem>
+                    <SelectItem value="hard">Khó</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            {!editId && (
-              <div className="bg-muted/50 p-3 rounded-xl">
-                <p className="text-xs text-muted-foreground">Hệ thống sẽ tự động tạo 10 câu hỏi theo môn học đã chọn. Bạn có thể chỉnh sửa sau khi tạo.</p>
+            <div className="grid grid-cols-2 gap-3">
+              {/* TODO(BE): question-type (multiple-choice/essay) not on exam DTO; exam type is tutor-test/student-test */}
+              <div><Label>Loại hình</Label>
+                <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
+                  <SelectTrigger className="rounded-xl mt-1.5"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student-test">Bài cho học sinh</SelectItem>
+                    <SelectItem value="tutor-test">Bài của gia sư</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-            <Button className="w-full rounded-xl" onClick={handleSave}>{editId ? "Cập nhật" : "Tạo bài test"}</Button>
+              <div><Label>Giám sát AI</Label>
+                <Select value={form.aiProctoring ? "yes" : "no"} onValueChange={v => setForm(f => ({ ...f, aiProctoring: v === "yes" }))}>
+                  <SelectTrigger className="rounded-xl mt-1.5"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no">Tắt</SelectItem>
+                    <SelectItem value="yes">Bật</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {/* TODO(BE): test level (e.g. "Lớp 12", "IELTS") not on exam DTO */}
+            <Button className="w-full rounded-xl" onClick={handleSave} disabled={saving}>
+              {saving ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Đang lưu...</span> : editId ? "Cập nhật" : "Tạo bài test"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* View Questions Dialog */}
-      <Dialog open={!!viewingTest} onOpenChange={() => setViewingTest(null)}>
+      {/* View Detail Dialog */}
+      <Dialog open={!!viewingExam} onOpenChange={() => setViewingExam(null)}>
         <DialogContent className="rounded-2xl max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{viewingTest?.name} — {viewingTest?.questions.length} câu hỏi</DialogTitle></DialogHeader>
-          {viewingTest && (
+          <DialogHeader><DialogTitle>{viewingExam?.title} — {viewingExam?.questionCount} câu hỏi</DialogTitle></DialogHeader>
+          {viewingExam && (
             <div className="space-y-4">
-              <div className="flex gap-2 text-xs">
-                <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-medium">{viewingTest.subject}</span>
-                <span className="px-2.5 py-1 rounded-lg bg-muted text-foreground font-medium">{viewingTest.level}</span>
-                <span className={`px-2.5 py-1 rounded-full font-medium ${statusColor[viewingTest.status]}`}>{statusLabel[viewingTest.status]}</span>
+              <div className="flex gap-2 text-xs flex-wrap">
+                <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-medium">{viewingExam.subject}</span>
+                <span className="px-2.5 py-1 rounded-lg bg-muted text-foreground font-medium">{viewingExam.year}</span>
+                <span className="px-2.5 py-1 rounded-lg bg-muted text-foreground font-medium">{typeLabel[viewingExam.type] ?? viewingExam.type}</span>
+                <span className={`px-2.5 py-1 rounded-full font-medium ${statusColor[viewingExam.status] ?? ""}`}>{statusLabel[viewingExam.status] ?? viewingExam.status}</span>
               </div>
-              <div className="space-y-4">
-                {viewingTest.questions.map((q, idx) => (
-                  <div key={q.id} className="bg-muted/30 rounded-xl p-4">
-                    <p className="text-sm font-medium text-foreground mb-3">
-                      <span className="text-primary font-bold mr-2">Câu {idx + 1}.</span>
-                      {q.question}
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {q.options.map((opt, oi) => (
-                        <div key={oi} className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${oi === q.correctAnswer ? "bg-primary/10 text-primary font-medium" : "bg-card text-foreground"}`}>
-                          {oi === q.correctAnswer ? <CheckCircle className="w-3.5 h-3.5 text-primary shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0" />}
-                          <span className="text-xs font-semibold text-muted-foreground mr-1">{String.fromCharCode(65 + oi)}.</span>
-                          {opt}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="bg-muted/30 rounded-xl p-3"><p className="text-xs text-muted-foreground">Thời lượng</p><p className="font-semibold text-foreground">{viewingExam.duration} phút</p></div>
+                <div className="bg-muted/30 rounded-xl p-3"><p className="text-xs text-muted-foreground">Học phí</p><p className="font-semibold text-foreground">{viewingExam.fee.toLocaleString("vi-VN")}đ</p></div>
+                <div className="bg-muted/30 rounded-xl p-3"><p className="text-xs text-muted-foreground">Độ khó</p><p className="font-semibold text-foreground">{viewingExam.difficulty}</p></div>
+                <div className="bg-muted/30 rounded-xl p-3"><p className="text-xs text-muted-foreground">Lượt thi</p><p className="font-semibold text-foreground">{viewingExam.attempts}</p></div>
               </div>
+              {/* TODO(BE): full question list requires ExamDetailResponse (GET /api/exams/{id}); list item only exposes questionCount */}
+              <p className="text-xs text-muted-foreground">Danh sách câu hỏi chi tiết cần tải từ chi tiết bài thi.</p>
             </div>
           )}
         </DialogContent>

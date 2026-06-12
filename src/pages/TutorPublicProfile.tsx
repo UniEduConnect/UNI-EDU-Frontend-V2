@@ -1,16 +1,31 @@
-import { useTutor } from "@/contexts/TutorContext";
-import { ShieldCheck, Star, BookOpen, Video, CalendarDays, Trophy, MessageSquare, ArrowLeft } from "lucide-react";
+import { ShieldCheck, Star, Video, CalendarDays, Trophy, ArrowLeft, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useTutor, useTutorReviews } from "@/hooks/useTutors";
+import { useAuth } from "@/contexts/AuthContext";
 
 const TutorPublicProfile = () => {
-  const { profile, reviews } = useTutor();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const requireAuth = (action: () => void) => {
+    if (!isAuthenticated) {
+      toast.info("Vui lòng đăng nhập để tiếp tục.");
+      navigate("/login");
+      return;
+    }
+    action();
+  };
+  // Tutor id comes from the query string (?id=...); links from the find-tutor list pass it.
+  const [params] = useSearchParams();
+  const tutorId = params.get("id") ?? undefined;
+  const { data: profile, isLoading } = useTutor(tutorId);
+  const { data: reviewsData } = useTutorReviews(tutorId);
+  const reviews = reviewsData?.items ?? [];
   const [trialDialog, setTrialDialog] = useState(false);
-  const [trialForm, setTrialForm] = useState({ name: "", student: "", date: "", time: "", subject: profile.subjects[0] || "" });
+  const [trialForm, setTrialForm] = useState({ name: "", student: "", date: "", time: "", subject: "" });
 
   const handleTrial = () => {
     if (!trialForm.name || !trialForm.student || !trialForm.date) return;
@@ -18,10 +33,29 @@ const TutorPublicProfile = () => {
     setTrialDialog(false);
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background">
+        <p className="text-sm text-muted-foreground">Không tìm thấy gia sư.</p>
+        <button onClick={() => navigate("/find-tutor")} className="px-5 py-2 bg-primary text-primary-foreground rounded-full text-sm font-medium">
+          Tìm gia sư
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="gradient-hero text-white py-12 px-6">
+      <div className="bg-gradient-to-br from-[#1E69E7] to-[#1546A0] text-white py-12 px-6">
         <div className="max-w-4xl mx-auto">
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-white/70 hover:text-white mb-6">
             <ArrowLeft className="w-4 h-4" /> Quay lại
@@ -32,7 +66,7 @@ const TutorPublicProfile = () => {
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-bold">{profile.name}</h1>
                 {profile.degreeVerified && (
-                  <span className="flex items-center gap-1 text-xs font-medium bg-success/150/20 text-emerald-300 px-2 py-0.5 rounded-lg">
+                  <span className="flex items-center gap-1 text-xs font-medium bg-emerald-400/25 text-emerald-50 px-2 py-0.5 rounded-lg">
                     <ShieldCheck className="w-3 h-3" /> Verified
                   </span>
                 )}
@@ -56,7 +90,7 @@ const TutorPublicProfile = () => {
             <div className="text-right">
               <p className="text-2xl font-bold">{profile.hourlyRate.toLocaleString("vi-VN")}đ</p>
               <p className="text-xs text-white/60">/ giờ</p>
-              <button onClick={() => setTrialDialog(true)} className="mt-3 px-6 py-2.5 bg-secondary text-secondary-foreground rounded-full font-semibold text-sm hover:shadow-neon transition-all">
+              <button onClick={() => requireAuth(() => setTrialDialog(true))} className="mt-3 px-6 py-2.5 bg-white text-primary rounded-full font-semibold text-sm hover:bg-white/90 transition-all">
                 Đặt học thử
               </button>
             </div>

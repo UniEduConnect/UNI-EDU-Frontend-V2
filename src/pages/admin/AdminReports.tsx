@@ -1,9 +1,10 @@
-import { useAdmin } from "@/contexts/AdminContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { useMemo } from "react";
-import { CreditCard, BookOpen, Users, TrendingUp } from "lucide-react";
+import { CreditCard, BookOpen, Users, GraduationCap, Loader2 } from "lucide-react";
+import { useAdminReports } from "@/hooks/useAdmin";
+import { useAdminDashboard } from "@/hooks/useDashboard";
 
 const COLORS = [
   "hsl(var(--chart-1))",
@@ -15,75 +16,64 @@ const COLORS = [
 ];
 
 const AdminReports = () => {
-  const { transactions, users, classes, settings } = useAdmin();
+  const { data: report, isLoading: reportLoading } = useAdminReports();
+  const { data: dashboard, isLoading: dashboardLoading } = useAdminDashboard();
 
-  const totalRevenue = transactions.filter(t => t.status === "completed").reduce((s, t) => s + t.amount, 0);
-  const escrowProfit = Math.round(totalRevenue * settings.escrowPercent / 100);
-  const activeClasses = classes.filter(c => c.status === "active").length;
-  const newUsersMonth = users.filter(u => {
-    const d = new Date(u.createdAt);
-    const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
+  const isLoading = reportLoading || dashboardLoading;
 
   const stats = [
-    { label: "Tổng doanh thu", value: `${(totalRevenue / 1000000).toFixed(1)}M`, icon: CreditCard, color: "bg-primary/10 text-primary" },
-    { label: "Lớp đang mở", value: activeClasses, icon: BookOpen, color: "bg-success/10 text-success" },
-    { label: "Người dùng mới", value: newUsersMonth, icon: Users, color: "bg-warning/10 text-warning" },
-    { label: "Lợi nhuận Escrow", value: `${(escrowProfit / 1000000).toFixed(1)}M`, icon: TrendingUp, color: "bg-secondary/20 text-secondary-foreground" },
+    { label: "Tổng doanh thu", value: `${((report?.totalRevenue ?? 0) / 1000000).toFixed(1)}M`, icon: CreditCard, color: "bg-primary/10 text-primary" },
+    { label: "Tổng lớp học", value: report?.totalClasses ?? 0, icon: BookOpen, color: "bg-success/10 text-success" },
+    { label: "Tổng người dùng", value: report?.totalUsers ?? 0, icon: Users, color: "bg-warning/10 text-warning" },
+    { label: "Tổng đề thi", value: report?.totalExams ?? 0, icon: GraduationCap, color: "bg-secondary/20 text-secondary-foreground" },
   ];
 
-  const monthlyRevenue = useMemo(() => {
-    const map: Record<string, number> = {};
-    transactions.filter(t => t.status === "completed").forEach(t => {
-      const key = t.date.slice(0, 7);
-      map[key] = (map[key] || 0) + t.amount;
-    });
-    return Object.entries(map).sort().map(([month, total]) => ({
-      month: month.slice(5),
-      revenue: total,
-      profit: Math.round(total * settings.escrowPercent / 100),
-    }));
-  }, [transactions, settings.escrowPercent]);
+  const monthlyRevenue = useMemo(
+    () =>
+      (report?.monthlyRevenue ?? []).map((m) => ({
+        month: m.month.slice(5),
+        revenue: m.amount,
+      })),
+    [report]
+  );
 
-  const weeklyUsers = useMemo(() => {
-    const weeks: Record<string, number> = {};
-    users.forEach(u => {
-      const d = new Date(u.createdAt);
-      const weekStart = new Date(d);
-      weekStart.setDate(d.getDate() - d.getDay());
-      const key = weekStart.toISOString().slice(5, 10);
-      weeks[key] = (weeks[key] || 0) + 1;
-    });
-    return Object.entries(weeks).sort().slice(-8).map(([week, count]) => ({ week, count }));
-  }, [users]);
+  const newUsers = useMemo(
+    () => (report?.newUsersByMonth ?? []).map((m) => ({ month: m.month.slice(5), count: m.count })),
+    [report]
+  );
 
-  // Revenue by type for pie chart
-  const revenueByType = useMemo(() => {
-    const map: Record<string, number> = {};
-    transactions.filter(t => t.status === "completed").forEach(t => {
-      const label = t.type === "tuition" ? "Học phí" : t.type === "salary" ? "Lương gia sư" : "Phí thi thử";
-      map[label] = (map[label] || 0) + t.amount;
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [transactions]);
+  const TYPE_LABEL: Record<string, string> = {
+    Deposit: "Nạp tiền", EscrowIn: "Học phí", EscrowRelease: "Giải ngân", Withdrawal: "Rút tiền",
+    Refund: "Hoàn tiền", PlatformFee: "Phí nền tảng", TransferIn: "Nhận CK", TransferOut: "Chuyển đi",
+  };
+  const revenueByType = useMemo(
+    () => (report?.revenueByType ?? []).map((t) => ({ name: TYPE_LABEL[t.type] ?? t.type, value: t.amount })).filter((e) => e.value > 0),
+    [report]
+  );
 
-  // Users by role for pie chart
+  // Users by role for pie chart — sourced from the admin dashboard counts.
   const usersByRole = useMemo(() => {
-    const map: Record<string, number> = {};
-    const labels: Record<string, string> = { tutor: "Gia sư", teacher: "Giáo viên", student: "Học sinh", parent: "Phụ huynh" };
-    users.forEach(u => {
-      const label = labels[u.role] || u.role;
-      map[label] = (map[label] || 0) + 1;
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [users]);
+    if (!dashboard) return [] as { name: string; value: number }[];
+    return [
+      { name: "Gia sư", value: dashboard.tutors },
+      { name: "Giáo viên", value: dashboard.teachers },
+      { name: "Học sinh", value: dashboard.students },
+      { name: "Phụ huynh", value: dashboard.parents },
+    ].filter((e) => e.value > 0);
+  }, [dashboard]);
 
   const chartConfig = {
     revenue: { label: "Doanh thu", color: "hsl(var(--chart-1))" },
-    profit: { label: "Lợi nhuận", color: "hsl(var(--chart-2))" },
     count: { label: "Người dùng mới", color: "hsl(var(--chart-1))" },
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải báo cáo...
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-5">
@@ -104,42 +94,47 @@ const AdminReports = () => {
         ))}
       </div>
 
-      {/* Row 1: Revenue bar + Revenue area */}
+      {/* Row 1: Revenue bar + User growth (no source) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card className="border-0 shadow-soft">
           <CardContent className="p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Doanh thu & Lợi nhuận theo tháng</h3>
-            <ChartContainer config={chartConfig} className="h-[280px]">
-              <BarChart data={monthlyRevenue}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis tickFormatter={v => `${(v / 1000000).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="revenue" fill="hsl(var(--chart-1))" radius={[6, 6, 0, 0]} name="Doanh thu" />
-                <Bar dataKey="profit" fill="hsl(var(--chart-2))" radius={[6, 6, 0, 0]} name="Lợi nhuận" />
-              </BarChart>
-            </ChartContainer>
+            <h3 className="text-sm font-semibold text-foreground mb-4">Doanh thu theo tháng</h3>
+            {monthlyRevenue.length === 0 ? (
+              <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                Chưa có dữ liệu
+              </div>
+            ) : (
+              <ChartContainer config={chartConfig} className="h-[280px]">
+                <BarChart data={monthlyRevenue}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tickFormatter={v => `${(v / 1000000).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="revenue" fill="hsl(var(--chart-1))" radius={[6, 6, 0, 0]} name="Doanh thu" />
+                </BarChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-soft">
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold text-foreground mb-4">Xu hướng người dùng mới</h3>
-            <ChartContainer config={chartConfig} className="h-[280px]">
-              <AreaChart data={weeklyUsers}>
-                <defs>
-                  <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="week" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Area type="monotone" dataKey="count" stroke="hsl(var(--chart-1))" strokeWidth={2.5} fill="url(#colorCount)" dot={{ r: 4, fill: "hsl(var(--chart-1))" }} />
-              </AreaChart>
-            </ChartContainer>
+            {newUsers.length === 0 ? (
+              <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                Chưa có dữ liệu
+              </div>
+            ) : (
+              <ChartContainer config={chartConfig} className="h-[280px]">
+                <BarChart data={newUsers}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="count" fill="hsl(var(--chart-2))" radius={[6, 6, 0, 0]} name="Người dùng mới" />
+                </BarChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -149,62 +144,75 @@ const AdminReports = () => {
         <Card className="border-0 shadow-soft">
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold text-foreground mb-4">Phân bổ doanh thu theo loại</h3>
-            <div className="h-[280px] flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={revenueByType}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={4}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {revenueByType.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            {revenueByType.length === 0 ? (
+              <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                Chưa có dữ liệu
+              </div>
+            ) : (
+              <>
+                <div className="h-[230px] flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height={230}>
+                    <PieChart>
+                      <Pie data={revenueByType} cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={3} dataKey="value" isAnimationActive={false}>
+                        {revenueByType.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      </Pie>
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
+                  {revenueByType.map((e, i) => (
+                    <span key={e.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />{e.name}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-soft">
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold text-foreground mb-4">Phân bổ người dùng theo vai trò</h3>
-            <div className="h-[280px] flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={usersByRole}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={4}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {usersByRole.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex flex-wrap gap-3 justify-center mt-2">
-              {usersByRole.map((entry, i) => (
-                <div key={entry.name} className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="text-xs text-muted-foreground">{entry.name}: {entry.value}</span>
+            {usersByRole.length === 0 ? (
+              <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+                Chưa có dữ liệu
+              </div>
+            ) : (
+              <>
+                <div className="h-[280px] flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={usersByRole}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={4}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        isAnimationActive={false}
+                      >
+                        {usersByRole.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
+                <div className="flex flex-wrap gap-3 justify-center mt-2">
+                  {usersByRole.map((entry, i) => (
+                    <div key={entry.name} className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <span className="text-xs text-muted-foreground">{entry.name}: {entry.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

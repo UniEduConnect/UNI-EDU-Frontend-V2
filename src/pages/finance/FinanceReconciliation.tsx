@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useFinance } from "@/contexts/FinanceContext";
+import { useFinanceTransactions, useWithdrawals } from "@/hooks/useFinance";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,7 @@ import {
   Landmark,
   Hourglass,
   Eye,
+  Loader2,
 } from "lucide-react";
 import {
   Pagination,
@@ -29,17 +30,21 @@ import {
 import { cn } from "@/lib/utils";
 
 const FinanceReconciliation = () => {
-  const { transactions, withdrawals } = useFinance();
   const [page, setPage] = useState(1);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
-  const pageSize = 10;
 
+  const { transactions, isLoading: txLoading } = useFinanceTransactions({ Page: page });
+  const { withdrawals, isLoading: wLoading } = useWithdrawals({ Status: "pending" });
+  const isLoading = txLoading || wLoading;
+
+  // NOTE: backend transactions are paged server-side; summary is computed over
+  // the currently-loaded page. Inflow = deposit/escrow_in, outflow = withdrawal/refund/escrow_release.
   const summary = useMemo(() => {
     const totalIn = transactions
       .filter(
         t =>
-          (t.type === "tuition" || t.type === "deposit" || t.type === "exam-fee") &&
+          (t.type === "deposit" || t.type === "escrow_in") &&
           t.status === "completed"
       )
       .reduce((s, t) => s + t.amount, 0);
@@ -47,7 +52,7 @@ const FinanceReconciliation = () => {
     const totalOut = transactions
       .filter(
         t =>
-          (t.type === "salary" || t.type === "withdrawal" || t.type === "refund") &&
+          (t.type === "withdrawal" || t.type === "refund" || t.type === "escrow_release") &&
           t.status === "completed"
       )
       .reduce((s, t) => s + t.amount, 0);
@@ -65,12 +70,20 @@ const FinanceReconciliation = () => {
     return { totalIn, totalOut, pending, pendingWithdraw, delta };
   }, [transactions, withdrawals]);
 
-  const pageCount = Math.max(1, Math.ceil(transactions.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const pagedTransactions = transactions.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
+  // Server paginates; we render the page we fetched. Page-count is unknown from
+  // this endpoint, so keep stepping while the current page is full.
+  // TODO(BE): expose total/totalPages on the transactions list response for exact paging.
+  const pageSize = 10;
+  const hasNextPage = transactions.length >= pageSize;
+  const pagedTransactions = transactions;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 pt-2 pb-6 space-y-4">
@@ -166,6 +179,11 @@ const FinanceReconciliation = () => {
           Nhật ký đối soát
         </h3>
 
+        {pagedTransactions.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            Chưa có dữ liệu đối soát
+          </p>
+        ) : (
         <div className="space-y-3">
           {pagedTransactions.map(tx => {
             const matched = tx.status === "completed";
@@ -222,6 +240,7 @@ const FinanceReconciliation = () => {
             );
           })}
         </div>
+        )}
 
         <div className="mt-5">
           <Pagination>
@@ -236,27 +255,18 @@ const FinanceReconciliation = () => {
                 />
               </PaginationItem>
 
-              {Array.from({ length: pageCount }).map((_, idx) => (
-                <PaginationItem key={idx}>
-                  <PaginationLink
-                    href="#"
-                    isActive={currentPage === idx + 1}
-                    onClick={e => {
-                      e.preventDefault();
-                      setPage(idx + 1);
-                    }}
-                  >
-                    {idx + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              ))}
+              <PaginationItem>
+                <PaginationLink href="#" isActive onClick={e => e.preventDefault()}>
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
 
               <PaginationItem>
                 <PaginationNext
                   href="#"
                   onClick={e => {
                     e.preventDefault();
-                    setPage(p => Math.min(pageCount, p + 1));
+                    if (hasNextPage) setPage(p => p + 1);
                   }}
                 />
               </PaginationItem>

@@ -1,25 +1,29 @@
-import { useExamManager } from "@/contexts/ExamManagerContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Users, DollarSign, TrendingUp, BarChart3, Database, Settings, Eye } from "lucide-react";
+import { FileText, Users, TrendingUp, BarChart3, Database, Settings, Eye, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useExamDashboard } from "@/hooks/useDashboard";
+import { useExams } from "@/hooks/useExams";
+import { useQuestions } from "@/hooks/useQuestions";
 
 const ExamManagerDashboard = () => {
-  const { exams, attempts, questions } = useExamManager();
   const navigate = useNavigate();
+  const { data: dashboard, isLoading: dashLoading } = useExamDashboard();
+  const { exams, isLoading: examsLoading } = useExams();
+  const { questions, isLoading: questionsLoading } = useQuestions();
 
-  const totalAttempts = exams.reduce((s, e) => s + e.attempts, 0);
-  const totalRevenue = exams.reduce((s, e) => s + e.revenue, 0);
-  const openExams = exams.filter(e => e.status === "open").length;
-  const avgCompletion = exams.filter(e => e.attempts > 0).reduce((s, e) => s + e.completionRate, 0) / (exams.filter(e => e.attempts > 0).length || 1);
+  const isLoading = dashLoading || examsLoading || questionsLoading;
+
+  const openExams = exams.filter((e) => e.status === "open").length;
+  const draftExams = exams.filter((e) => e.status === "draft").length;
 
   const stats = [
     { label: "Đề đang mở", value: openExams, icon: FileText, color: "bg-primary/100/10 text-primary" },
-    { label: "Tổng lượt thi", value: totalAttempts.toLocaleString("vi-VN"), icon: Users, color: "bg-success/150/10 text-success" },
-    { label: "Doanh thu", value: `${(totalRevenue / 1000000).toFixed(1)}M`, icon: DollarSign, color: "bg-warning/150/10 text-warning" },
-    { label: "Tỷ lệ hoàn thành", value: `${avgCompletion.toFixed(0)}%`, icon: TrendingUp, color: "bg-purple-500/10 text-purple-600" },
-    { label: "Ngân hàng câu hỏi", value: questions.length, icon: Database, color: "bg-red-500/10 text-red-600" },
-    { label: "Đề nháp", value: exams.filter(e => e.status === "draft").length, icon: Eye, color: "bg-orange-500/10 text-orange-600" },
+    { label: "Tổng lượt thi", value: (dashboard?.totalAttempts ?? 0).toLocaleString("vi-VN"), icon: Users, color: "bg-success/150/10 text-success" },
+    { label: "Điểm trung bình", value: (dashboard?.avgScore ?? 0).toFixed(1), icon: TrendingUp, color: "bg-warning/150/10 text-warning" },
+    { label: "Tổng đề thi", value: (dashboard?.totalExams ?? exams.length).toLocaleString("vi-VN"), icon: BarChart3, color: "bg-purple-500/10 text-purple-600" },
+    { label: "Ngân hàng câu hỏi", value: (dashboard?.totalQuestions ?? questions.length).toLocaleString("vi-VN"), icon: Database, color: "bg-red-500/10 text-red-600" },
+    { label: "Đề nháp", value: draftExams, icon: Eye, color: "bg-orange-500/10 text-orange-600" },
   ];
 
   const quickActions = [
@@ -29,7 +33,13 @@ const ExamManagerDashboard = () => {
     { label: "Ngân hàng câu hỏi", icon: Database, action: () => navigate("/exam-manager/questions") },
   ];
 
-  const recentAttempts = attempts.slice(0, 5);
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải dữ liệu...
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 pt-2 pb-6 space-y-4">
@@ -53,21 +63,8 @@ const ExamManagerDashboard = () => {
         <Card className="lg:col-span-2 border-border">
           <CardHeader className="pb-3"><CardTitle className="text-base">Lượt thi gần đây</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {recentAttempts.map(a => {
-              const exam = exams.find(e => e.id === a.examId);
-              return (
-                <div key={a.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{a.studentName}</p>
-                    <p className="text-xs text-muted-foreground">{exam?.name} • {a.completedAt}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${a.score >= 5 ? "text-success" : "text-red-600"}`}>{a.score}/{a.totalQuestions > 10 ? 10 : a.totalQuestions}</p>
-                    <p className="text-[10px] text-muted-foreground">{a.duration} phút</p>
-                  </div>
-                </div>
-              );
-            })}
+            {/* TODO(BE): exam attempts time-series not exposed */}
+            <div className="text-center py-10 text-muted-foreground text-sm">Chưa có dữ liệu</div>
           </CardContent>
         </Card>
 
@@ -83,6 +80,9 @@ const ExamManagerDashboard = () => {
                 <span className="text-xs font-medium text-muted-foreground">{e.attempts.toLocaleString("vi-VN")} lượt</span>
               </div>
             ))}
+            {exams.filter(e => e.status === "open").length === 0 && (
+              <div className="text-center py-10 text-muted-foreground text-sm">Chưa có dữ liệu</div>
+            )}
           </CardContent>
         </Card>
       </div>

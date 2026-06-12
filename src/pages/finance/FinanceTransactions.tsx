@@ -1,4 +1,4 @@
-import { useFinance } from "@/contexts/FinanceContext";
+import { useFinanceTransactions } from "@/hooks/useFinance";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import {
   ArrowDownRight,
   DollarSign,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -27,14 +28,17 @@ import {
 } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 
+// Matches the backend WalletTxType enum: deposit | escrow_in | escrow_release | withdrawal | refund | platform_fee.
 const typeLabels: Record<string, string> = {
-  tuition: "Học phí",
-  salary: "Lương",
-  withdrawal: "Rút tiền",
   deposit: "Nạp tiền",
-  "exam-fee": "Phí thi",
+  escrow_in: "Ký quỹ vào",
+  escrow_release: "Giải ngân",
+  withdrawal: "Rút tiền",
   refund: "Hoàn tiền",
+  platform_fee: "Phí nền tảng",
 };
+const INFLOW_TYPES = ["deposit", "escrow_in", "platform_fee"];
+const OUTFLOW_TYPES = ["withdrawal", "refund", "escrow_release"];
 
 const statusConfig: Record<
   string,
@@ -47,7 +51,6 @@ const statusConfig: Record<
 };
 
 const FinanceTransactions = () => {
-  const { transactions } = useFinance();
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -59,42 +62,47 @@ const FinanceTransactions = () => {
 
   const pageSize = 10;
 
+  // Live transactions from GET /api/Finance/transactions.
+  // Type/Status/Page are server-side query params; search + date are filtered
+  // client-side over the fetched page.
+  const { transactions, isLoading, isError } = useFinanceTransactions({
+    Type: typeFilter === "all" ? undefined : typeFilter,
+    Status: statusFilter === "all" ? undefined : statusFilter,
+    Page: page,
+  });
+
   const filtered = transactions.filter(t => {
     const matchSearch =
       t.description.toLowerCase().includes(search.toLowerCase()) ||
       t.user.toLowerCase().includes(search.toLowerCase());
-    const matchType = typeFilter === "all" || t.type === typeFilter;
-    const matchStatus = statusFilter === "all" || t.status === statusFilter;
     const matchDate = !dateFilter || t.date.includes(dateFilter);
-    return matchSearch && matchType && matchStatus && matchDate;
+    return matchSearch && matchDate;
   });
 
+  // TODO(BE): summary totals aggregate only the current fetched page; there is no
+  // /Finance/transactions summary endpoint, so figures reset per page. Use
+  // useFinanceReports() for portfolio-wide totals if exact numbers are required.
   const totalIn = transactions
-    .filter(
-      t =>
-        (t.type === "tuition" || t.type === "deposit" || t.type === "exam-fee") &&
-        t.status === "completed"
-    )
+    .filter(t => INFLOW_TYPES.includes(t.type) && t.status === "completed")
     .reduce((s, t) => s + t.amount, 0);
 
   const totalOut = transactions
-    .filter(
-      t =>
-        (t.type === "salary" || t.type === "withdrawal" || t.type === "refund") &&
-        t.status === "completed"
-    )
+    .filter(t => OUTFLOW_TYPES.includes(t.type) && t.status === "completed")
     .reduce((s, t) => s + t.amount, 0);
 
   const pendingCount = transactions.filter(t => t.status === "pending").length;
 
   const detail = transactions.find(t => t.id === detailId);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const pagedTransactions = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Server already paginates by Page; render the (client-filtered) fetched page as-is.
+  const currentPage = page;
+  const pagedTransactions = filtered;
+  // No total-count is returned by the endpoint, so allow paging forward while the
+  // current server page is full and offer the previous page.
+  const hasNextPage = transactions.length >= pageSize;
 
   useEffect(() => {
     setPage(1);
-  }, [search, typeFilter, statusFilter, dateFilter]);
+  }, [typeFilter, statusFilter]);
 
   const exportTransactions = (format: string) => {
     toast({ title: `Đã xuất danh sách giao dịch (${format})` });
@@ -211,12 +219,12 @@ const FinanceTransactions = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả loại</SelectItem>
-                <SelectItem value="tuition">Học phí</SelectItem>
-                <SelectItem value="salary">Lương</SelectItem>
-                <SelectItem value="withdrawal">Rút tiền</SelectItem>
                 <SelectItem value="deposit">Nạp tiền</SelectItem>
-                <SelectItem value="exam-fee">Phí thi</SelectItem>
+                <SelectItem value="escrow_in">Ký quỹ vào</SelectItem>
+                <SelectItem value="escrow_release">Giải ngân</SelectItem>
+                <SelectItem value="withdrawal">Rút tiền</SelectItem>
                 <SelectItem value="refund">Hoàn tiền</SelectItem>
+                <SelectItem value="platform_fee">Phí nền tảng</SelectItem>
               </SelectContent>
             </Select>
 
@@ -244,8 +252,14 @@ const FinanceTransactions = () => {
         </div>
 
         <div className="space-y-3">
-          {pagedTransactions.map(t => {
-            const sCfg = statusConfig[t.status];
+          {isLoading && (
+            <div className="flex items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải giao dịch...
+            </div>
+          )}
+
+          {!isLoading && pagedTransactions.map(t => {
+            const sCfg = statusConfig[t.status] ?? { label: t.status, variant: "outline" as const };
             const isIncome =
               t.type === "tuition" || t.type === "deposit" || t.type === "exam-fee";
 
@@ -260,7 +274,7 @@ const FinanceTransactions = () => {
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-foreground">{t.description}</p>
                       <Badge variant="outline" className="text-[10px]">
-                        {typeLabels[t.type]}
+                        {typeLabels[t.type] ?? t.type}
                       </Badge>
                     </div>
 
@@ -301,14 +315,14 @@ const FinanceTransactions = () => {
             );
           })}
 
-          {filtered.length === 0 && (
+          {!isLoading && filtered.length === 0 && (
             <div className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-              Không tìm thấy giao dịch nào
+              {isError ? "Không tải được giao dịch. Vui lòng thử lại." : "Chưa có giao dịch nào"}
             </div>
           )}
         </div>
 
-        {filtered.length > 0 && (
+        {!isLoading && (currentPage > 1 || hasNextPage) && (
           <div className="pt-5">
             <Pagination>
               <PaginationContent>
@@ -322,27 +336,18 @@ const FinanceTransactions = () => {
                   />
                 </PaginationItem>
 
-                {Array.from({ length: pageCount }).map((_, idx) => (
-                  <PaginationItem key={idx}>
-                    <PaginationLink
-                      href="#"
-                      isActive={currentPage === idx + 1}
-                      onClick={e => {
-                        e.preventDefault();
-                        setPage(idx + 1);
-                      }}
-                    >
-                      {idx + 1}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
+                <PaginationItem>
+                  <PaginationLink href="#" isActive>
+                    {currentPage}
+                  </PaginationLink>
+                </PaginationItem>
 
                 <PaginationItem>
                   <PaginationNext
                     href="#"
                     onClick={e => {
                       e.preventDefault();
-                      setPage(p => Math.min(pageCount, p + 1));
+                      if (hasNextPage) setPage(p => p + 1);
                     }}
                   />
                 </PaginationItem>
@@ -393,7 +398,7 @@ const FinanceTransactions = () => {
                 <div>
                   <Label className="text-xs text-muted-foreground">Loại</Label>
                   <div className="mt-1">
-                    <Badge variant="outline">{typeLabels[detail.type]}</Badge>
+                    <Badge variant="outline">{typeLabels[detail.type] ?? detail.type}</Badge>
                   </div>
                 </div>
 
@@ -415,8 +420,8 @@ const FinanceTransactions = () => {
                 <div>
                   <Label className="text-xs text-muted-foreground">Trạng thái</Label>
                   <div className="mt-1">
-                    <Badge variant={statusConfig[detail.status].variant}>
-                      {statusConfig[detail.status].label}
+                    <Badge variant={statusConfig[detail.status]?.variant ?? "outline"}>
+                      {statusConfig[detail.status]?.label ?? detail.status}
                     </Badge>
                   </div>
                 </div>

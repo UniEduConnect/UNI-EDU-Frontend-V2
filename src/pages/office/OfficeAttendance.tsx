@@ -1,4 +1,4 @@
-import { useOffice } from "@/contexts/OfficeContext";
+import { useAttendance, useConfirmAttendance } from "@/hooks/useOffice";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CheckCircle2, Clock, AlertTriangle, CalendarDays, ClipboardCheck, Eye } from "lucide-react";
+import { CheckCircle2, Clock, AlertTriangle, CalendarDays, ClipboardCheck, Eye, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,11 +20,17 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 };
 
 const OfficeAttendance = () => {
-  const { attendance, confirmAttendance } = useOffice();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  // Live attendance from GET /api/Office/attendance — sole data source.
+  const { attendance, isLoading, isError } = useAttendance(
+    statusFilter === "all" ? {} : { Status: statusFilter }
+  );
+  const confirmMutation = useConfirmAttendance();
+  const confirmAttendance = (id: string) => confirmMutation.mutate(id);
 
   const filtered = attendance.filter(a => {
     const matchSearch = a.className.toLowerCase().includes(search.toLowerCase()) || a.student.toLowerCase().includes(search.toLowerCase()) || a.tutor.toLowerCase().includes(search.toLowerCase());
@@ -123,8 +129,26 @@ const OfficeAttendance = () => {
               <TableHead>Lớp học</TableHead><TableHead>Gia sư</TableHead><TableHead>Học sinh</TableHead><TableHead>Ngày</TableHead><TableHead>Giờ</TableHead><TableHead>Trạng thái</TableHead><TableHead>PH xác nhận</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {filtered.map(a => {
-                const cfg = statusConfig[a.status];
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                    <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Đang tải danh sách buổi học...</span>
+                  </TableCell>
+                </TableRow>
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                    Không tải được danh sách buổi học. Vui lòng thử lại.
+                  </TableCell>
+                </TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                    Không có buổi học nào.
+                  </TableCell>
+                </TableRow>
+              ) : filtered.map(a => {
+                const cfg = statusConfig[a.status] ?? statusConfig.pending;
                 return (
                   <TableRow key={a.id}>
                     <TableCell className="font-medium">{a.className}</TableCell>
@@ -156,19 +180,14 @@ const OfficeAttendance = () => {
             <div className="space-y-4 pt-2">
               <div className="grid grid-cols-2 gap-4">
                 <div><Label className="text-xs text-muted-foreground">Lớp học</Label><p className="text-sm font-medium text-foreground">{detail.className}</p></div>
-                <div><Label className="text-xs text-muted-foreground">Trạng thái</Label><div className="mt-1"><Badge variant={statusConfig[detail.status].variant}>{statusConfig[detail.status].label}</Badge></div></div>
+                <div><Label className="text-xs text-muted-foreground">Trạng thái</Label><div className="mt-1"><Badge variant={(statusConfig[detail.status] ?? statusConfig.pending).variant}>{(statusConfig[detail.status] ?? statusConfig.pending).label}</Badge></div></div>
                 <div><Label className="text-xs text-muted-foreground">Gia sư</Label><p className="text-sm font-medium text-foreground">{detail.tutor}</p></div>
                 <div><Label className="text-xs text-muted-foreground">Học sinh</Label><p className="text-sm font-medium text-foreground">{detail.student}</p></div>
                 <div><Label className="text-xs text-muted-foreground">Ngày</Label><p className="text-sm font-medium text-foreground">{detail.date}</p></div>
                 <div><Label className="text-xs text-muted-foreground">Giờ</Label><p className="text-sm font-medium text-foreground">{detail.time}</p></div>
                 <div><Label className="text-xs text-muted-foreground">PH xác nhận</Label><p className="text-sm font-medium text-foreground">{detail.parentConfirmed ? "Đã xác nhận" : "Chưa xác nhận"}</p></div>
+                <div><Label className="text-xs text-muted-foreground">VP xác nhận</Label><p className="text-sm font-medium text-foreground">{detail.officeConfirmed ? "Đã xác nhận" : "Chưa xác nhận"}</p></div>
               </div>
-              {detail.issue && (
-                <div className="p-3 bg-destructive/5 border border-destructive/20 rounded-xl">
-                  <p className="text-xs font-medium text-destructive">Vấn đề báo cáo:</p>
-                  <p className="text-sm text-destructive/80 mt-1">{detail.issue}</p>
-                </div>
-              )}
             </div>
           )}
         </DialogContent>

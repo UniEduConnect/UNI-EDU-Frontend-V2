@@ -1,49 +1,120 @@
-import { useTutor } from "@/contexts/TutorContext";
-import { ShieldCheck, Star, BookOpen, Trophy, Video, Edit2, Save, MapPin, Phone, Mail, Calendar, Award, TrendingUp, Users } from "lucide-react";
+import { ShieldCheck, Star, BookOpen, Trophy, Video, Edit2, Save, MapPin, Phone, Mail, Calendar, Award, TrendingUp, Users, Loader2, GraduationCap, Briefcase, BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Progress } from "@/components/ui/progress";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { RadarChart, PolarGrid, PolarAngleAxis, Radar, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { useMyTutorProfile, useUpdateMyProfile, useMyReviews } from "@/hooks/useTutors";
+import { useClasses } from "@/hooks/useClasses";
+import { useMySchedule } from "@/hooks/useSchedule";
+import type { UpdateTutorProfileRequest } from "@/types/api";
 
 const TutorProfile = () => {
-  const { profile, updateProfile, classes, reviews, studentProgress } = useTutor();
+  const { data: profile, isLoading } = useMyTutorProfile();
+  const updateProfile = useUpdateMyProfile();
+  const { data: rev } = useMyReviews(1);
+  const { classes } = useClasses();
+  const { classes: activeClassList } = useClasses({ Status: "active" });
+  const { classes: completedClassList } = useClasses({ Status: "completed" });
+  const { sessions } = useMySchedule();
+
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ bio: profile.bio, hourlyRate: profile.hourlyRate, videoUrl: profile.videoUrl, teachingStyle: profile.teachingStyle, location: profile.location });
-  const [credentials, setCredentials] = useState([
-    { id: "cr1", name: "Bằng Cử nhân Sư phạm Toán", uploadedAt: "2026-01-03", status: "verified" },
-    { id: "cr2", name: "Chứng chỉ nghiệp vụ sư phạm", uploadedAt: "2026-01-10", status: "verified" },
-  ]);
+  // editable form mirrors the profile fields we expose for editing
+  const [form, setForm] = useState({ bio: "", hourlyRate: 0, videoUrl: "", teachingStyle: "", location: "" });
+  // certificates/achievements are edited as a plain list of names (no per-doc status from BE)
+  const [certificates, setCertificates] = useState<string[]>([]);
+  const [achievements, setAchievements] = useState<string[]>([]);
   const [newCredential, setNewCredential] = useState("");
+  const [newAchievement, setNewAchievement] = useState("");
+
+  // Seed the editable state once the profile loads (and whenever it changes).
+  useEffect(() => {
+    if (!profile) return;
+    setForm({
+      bio: profile.bio ?? "",
+      hourlyRate: profile.hourlyRate ?? 0,
+      videoUrl: profile.videoUrl ?? "",
+      teachingStyle: profile.teachingStyle ?? "",
+      location: profile.location ?? "",
+    });
+    setCertificates(profile.certificates ?? []);
+    setAchievements(profile.achievements ?? []);
+  }, [profile]);
 
   const handleSave = () => {
-    updateProfile(form);
-    setEditing(false);
-    toast.success("Đã cập nhật hồ sơ!");
+    // FE form field `videoUrl` maps to `introVideoUrl` on the request DTO.
+    const payload: UpdateTutorProfileRequest = {
+      bio: form.bio,
+      hourlyRate: form.hourlyRate,
+      introVideoUrl: form.videoUrl,
+      teachingStyle: form.teachingStyle,
+      location: form.location,
+      certificates,
+      achievements,
+    };
+    updateProfile.mutate(payload, {
+      onSuccess: () => {
+        setEditing(false);
+        toast.success("Đã cập nhật hồ sơ!");
+      },
+      onError: () => toast.error("Cập nhật hồ sơ thất bại. Vui lòng thử lại."),
+    });
   };
 
-  const totalStudents = new Set(studentProgress.map(s => s.studentId)).size;
-  const completedClasses = classes.filter(c => c.escrowStatus === "completed").length;
-  const activeClasses = classes.filter(c => c.escrowStatus === "in_progress").length;
+  // GAP: no /Tutors/me/students endpoint — derive a distinct student count from the tutor's classes.
+  // TODO(BE): GET /Tutors/me/students for accurate student count/progress
+  const totalStudents = useMemo(
+    () => new Set(classes.map((c) => c.studentId)).size,
+    [classes],
+  );
+  const completedClasses = completedClassList.length;
+  const activeClasses = activeClassList.length;
 
-  // Radar data for subjects
-  const subjectData = profile.subjects.map(s => {
-    const subReviews = reviews.filter(r => r.subject === s);
-    return { subject: s, rating: subReviews.length > 0 ? subReviews.reduce((sum, r) => sum + r.rating, 0) / subReviews.length : 0, fullMark: 5 };
-  });
+  // Per-subject average rating from the tutor's own reviews.
+  const subjectData = useMemo(() => {
+    const subjects = profile?.subjects ?? [];
+    const items = rev?.items ?? [];
+    return subjects.map((s) => {
+      const subReviews = items.filter((r) => r.subject === s);
+      return {
+        subject: s,
+        rating: subReviews.length > 0 ? subReviews.reduce((sum, r) => sum + r.rating, 0) / subReviews.length : 0,
+        count: subReviews.length,
+      };
+    });
+  }, [profile?.subjects, rev?.items]);
 
-  // Monthly sessions chart
-  const monthlySessionData = [
-    { month: "T10", sessions: 15 }, { month: "T11", sessions: 22 },
-    { month: "T12", sessions: 18 }, { month: "T1", sessions: 25 },
-    { month: "T2", sessions: 28 }, { month: "T3", sessions: 8 },
-  ];
+  // GAP: no monthly time-series endpoint — derive completed-sessions-per-month from /me schedule.
+  // TODO(BE): GET /Tutors/me/earnings-series (or sessions-series) for the monthly chart
+  const monthlySessionData = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of sessions) {
+      if (s.status !== "completed" || !s.startAt) continue;
+      const d = new Date(s.startAt);
+      if (Number.isNaN(d.getTime())) continue;
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, sessionsCount]) => {
+        const month = Number(key.split("-")[1]) + 1;
+        return { month: `T${month}`, sessions: sessionsCount };
+      });
+  }, [sessions]);
 
   const chartConfig = {
     rating: { label: "Đánh giá", color: "hsl(var(--primary))" },
     sessions: { label: "Buổi dạy", color: "hsl(var(--primary))" },
   };
+
+  if (isLoading || !profile) {
+    return (
+      <div className="flex items-center justify-center py-32 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải hồ sơ...
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -52,10 +123,16 @@ const TutorProfile = () => {
         <div className="flex items-start gap-6">
           <img src={profile.avatar} alt={profile.name} className="w-24 h-24 rounded-2xl object-cover" />
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-1">
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
               <h2 className="text-xl font-bold text-foreground">{profile.name}</h2>
-              {profile.degreeVerified && (
-                <span className="flex items-center gap-1 text-xs font-medium text-success bg-success/15 dark:bg-emerald-900/20 px-2 py-0.5 rounded-lg"><ShieldCheck className="w-3 h-3" /> Verified</span>
+              {profile.type === "teacher" ? (
+                <span className="flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-2 py-0.5 rounded-lg">
+                  <BadgeCheck className="w-3 h-3" /> {profile.isVerified ? "Giáo viên được xác minh" : "Giáo viên"}
+                </span>
+              ) : (
+                profile.degreeVerified && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-success bg-success/15 dark:bg-emerald-900/20 px-2 py-0.5 rounded-lg"><ShieldCheck className="w-3 h-3" /> Verified</span>
+                )
               )}
             </div>
             <p className="text-sm text-muted-foreground">{profile.school} • {profile.degree}</p>
@@ -68,8 +145,25 @@ const TutorProfile = () => {
             <div className="flex gap-2 mt-3">
               {profile.subjects.map(s => <span key={s} className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-lg">{s}</span>)}
             </div>
+            {/* Professional badges — teachers get a richer credential row than tutors */}
+            {profile.type === "teacher" && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {profile.isVerified && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-success bg-success/10 border border-success/30 px-2.5 py-1 rounded-lg"><ShieldCheck className="w-3.5 h-3.5" /> Chứng nhận giáo viên</span>
+                )}
+                {profile.degree && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-2.5 py-1 rounded-lg"><GraduationCap className="w-3.5 h-3.5" /> {profile.degree}</span>
+                )}
+                {profile.school && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-foreground bg-muted border border-border px-2.5 py-1 rounded-lg"><BookOpen className="w-3.5 h-3.5" /> Đang dạy tại {profile.school}</span>
+                )}
+                {!!profile.yearsExperience && profile.yearsExperience > 0 && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-warning bg-warning/10 border border-warning/30 px-2.5 py-1 rounded-lg"><Briefcase className="w-3.5 h-3.5" /> {profile.yearsExperience} năm kinh nghiệm</span>
+                )}
+              </div>
+            )}
           </div>
-          <button onClick={() => setEditing(!editing)} className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground">
+          <button onClick={() => (editing ? handleSave() : setEditing(true))} className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground">
             {editing ? <Save className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
           </button>
         </div>
@@ -108,17 +202,51 @@ const TutorProfile = () => {
       <div className="bg-card border border-border rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-warning" /> Thành tích</h3>
         <div className="flex flex-wrap gap-2">
-          {profile.achievements.map((a, i) => (
+          {(editing ? achievements : profile.achievements).map((a, i) => (
             <span key={i} className="px-3 py-1.5 bg-warning/15 dark:bg-amber-900/10 text-warning dark:text-amber-400 border border-warning/30 dark:border-warning/40 rounded-xl text-xs font-medium">{a}</span>
           ))}
         </div>
+        {editing && (
+          <div className="flex gap-2 mt-3">
+            <input value={newAchievement} onChange={(e) => setNewAchievement(e.target.value)} placeholder="Thêm thành tích mới" className="flex-1 px-3 py-2 rounded-xl border border-border bg-background text-sm" />
+            <button
+              className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm"
+              onClick={() => {
+                if (!newAchievement.trim()) return;
+                setAchievements((prev) => [...prev, newAchievement.trim()]);
+                setNewAchievement("");
+              }}
+            >
+              Thêm
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Subject ratings (per-subject average from reviews) */}
+      {subjectData.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Star className="w-4 h-4 text-amber-400" /> Đánh giá theo môn</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {subjectData.map((s) => (
+              <div key={s.subject} className="p-3 rounded-xl border border-border bg-muted/20">
+                <p className="text-sm font-medium text-foreground">{s.subject}</p>
+                <div className="flex items-center gap-1 mt-1">
+                  <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                  <span className="text-sm font-semibold">{s.count > 0 ? s.rating.toFixed(1) : "—"}</span>
+                  <span className="text-xs text-muted-foreground">({s.count})</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Verified Badges */}
       <div className="grid grid-cols-2 gap-4">
         <div className={cn("p-4 rounded-2xl border flex items-center gap-3", profile.transcriptVerified ? "border-success/30 bg-success/15/50 dark:border-success/40 dark:bg-emerald-900/10" : "border-border bg-card")}>
           <ShieldCheck className={cn("w-6 h-6", profile.transcriptVerified ? "text-success" : "text-muted-foreground")} />
-          <div><p className="text-sm font-medium text-foreground">Bảng điểm</p><p className="text-xs text-muted-foreground">{profile.transcriptVerified ? "Đã xác minh" : "Chưa xác minh"}</p></div>
+          <div><p className="text-sm font-medium text-foreground">{profile.type === "teacher" ? "Chứng nhận giảng dạy" : "Bảng điểm"}</p><p className="text-xs text-muted-foreground">{profile.transcriptVerified ? "Đã xác minh" : "Chưa xác minh"}</p></div>
         </div>
         <div className={cn("p-4 rounded-2xl border flex items-center gap-3", profile.degreeVerified ? "border-success/30 bg-success/15/50 dark:border-success/40 dark:bg-emerald-900/10" : "border-border bg-card")}>
           <Trophy className={cn("w-6 h-6", profile.degreeVerified ? "text-success" : "text-muted-foreground")} />
@@ -126,36 +254,46 @@ const TutorProfile = () => {
         </div>
       </div>
 
+      {/* Văn bằng & chứng chỉ — plain name list (no per-doc verification status from BE). */}
+      {/* TODO(BE): GET/POST /Tutors/me/credentials with per-document verification status + file upload */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground">Văn bằng & chứng chỉ</h3>
-          <span className="text-xs text-muted-foreground">{credentials.length} tài liệu</span>
+          <span className="text-xs text-muted-foreground">{certificates.length} tài liệu</span>
         </div>
         <div className="space-y-2 mb-3">
-          {credentials.map((doc) => (
-            <div key={doc.id} className="p-3 rounded-xl border border-border bg-muted/20 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">{doc.name}</p>
-                <p className="text-xs text-muted-foreground">Tải lên: {doc.uploadedAt}</p>
-              </div>
-              <span className={cn("text-xs px-2 py-1 rounded-lg", doc.status === "verified" ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>{doc.status === "verified" ? "Đã xác minh" : "Chờ duyệt"}</span>
+          {certificates.length === 0 && (
+            <p className="text-xs text-muted-foreground">Chưa có văn bằng/chứng chỉ.</p>
+          )}
+          {certificates.map((name, i) => (
+            <div key={i} className="p-3 rounded-xl border border-border bg-muted/20 flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">{name}</p>
+              {editing && (
+                <button
+                  className="text-xs text-destructive"
+                  onClick={() => setCertificates((prev) => prev.filter((_, idx) => idx !== i))}
+                >
+                  Xóa
+                </button>
+              )}
             </div>
           ))}
         </div>
-        <div className="flex gap-2">
-          <input value={newCredential} onChange={(e) => setNewCredential(e.target.value)} placeholder="Tên văn bằng/chứng chỉ mới" className="flex-1 px-3 py-2 rounded-xl border border-border bg-background text-sm" />
-          <button
-            className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm"
-            onClick={() => {
-              if (!newCredential.trim()) return;
-              setCredentials((prev) => [{ id: `cr-${Date.now()}`, name: newCredential.trim(), uploadedAt: new Date().toLocaleDateString("vi-VN"), status: "pending" }, ...prev]);
-              setNewCredential("");
-              toast.success("Đã thêm hồ sơ văn bằng mới");
-            }}
-          >
-            Upload
-          </button>
-        </div>
+        {editing && (
+          <div className="flex gap-2">
+            <input value={newCredential} onChange={(e) => setNewCredential(e.target.value)} placeholder="Tên văn bằng/chứng chỉ mới" className="flex-1 px-3 py-2 rounded-xl border border-border bg-background text-sm" />
+            <button
+              className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm"
+              onClick={() => {
+                if (!newCredential.trim()) return;
+                setCertificates((prev) => [...prev, newCredential.trim()]);
+                setNewCredential("");
+              }}
+            >
+              Thêm
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -169,18 +307,22 @@ const TutorProfile = () => {
           </div>
         </div>
 
-        {/* Monthly Sessions Chart */}
+        {/* Monthly Sessions Chart — derived from completed sessions. */}
         <div className="bg-card border border-border rounded-2xl p-5">
           <h3 className="text-sm font-semibold text-foreground mb-3">Số buổi dạy theo tháng</h3>
-          <ChartContainer config={chartConfig} className="h-[180px] w-full">
-            <BarChart data={monthlySessionData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-              <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-              <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="sessions" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ChartContainer>
+          {monthlySessionData.length > 0 ? (
+            <ChartContainer config={chartConfig} className="h-[180px] w-full">
+              <BarChart data={monthlySessionData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="sessions" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground">Chưa có dữ liệu</div>
+          )}
         </div>
       </div>
 
@@ -214,7 +356,7 @@ const TutorProfile = () => {
 
       {editing && (
         <div className="flex gap-3">
-          <button onClick={handleSave} className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl font-medium">Lưu thay đổi</button>
+          <button onClick={handleSave} disabled={updateProfile.isPending} className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-60">{updateProfile.isPending ? "Đang lưu..." : "Lưu thay đổi"}</button>
           <button onClick={() => setEditing(false)} className="px-6 py-2.5 bg-muted text-muted-foreground rounded-xl font-medium">Hủy</button>
         </div>
       )}

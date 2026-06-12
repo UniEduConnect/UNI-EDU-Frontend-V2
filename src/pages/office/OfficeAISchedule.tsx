@@ -1,36 +1,35 @@
-import { useOffice } from "@/contexts/OfficeContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CalendarCog, Play, CheckCircle2, AlertTriangle, Clock, BookOpen, Users, Monitor, Info, RefreshCw, Save } from "lucide-react";
-import { useState, useCallback } from "react";
+import { CalendarCog, CheckCircle2, Clock, BookOpen, Users, Monitor, Info, RefreshCw, Save, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-
-interface ScheduleResult {
-  id: string;
-  day: string;
-  dayNum: string;
-  className: string;
-  tutor: string;
-  room: string;
-  time: string;
-}
+import { useClasses } from "@/hooks/useClasses";
+import { useGenerateAiSchedule, useRoomInventory } from "@/hooks/useOffice";
 
 const OfficeAISchedule = () => {
-  const { constraints, classes } = useOffice();
   const { toast } = useToast();
-  const [isRunning, setIsRunning] = useState(false);
+  const { classes, isLoading: classesLoading } = useClasses();
+  const generate = useGenerateAiSchedule();
+  const { data: roomInventory, isLoading: roomsLoading } = useRoomInventory();
+
   const [isDone, setIsDone] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [results, setResults] = useState<ScheduleResult[]>([]);
+  const [result, setResult] = useState<unknown>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [timeFrame, setTimeFrame] = useState("next_week");
   const [branch, setBranch] = useState("all");
   const [objective, setObjective] = useState("balanced");
   const [hardConstraints, setHardConstraints] = useState({ noWeekend: true, maxSessions: true, matchSubject: true });
+
+  // Constraints are form inputs only — no backend store. They feed the AiScheduleRequest payload.
+  const [subject, setSubject] = useState("all");
+  const [sessionsPerWeek, setSessionsPerWeek] = useState("2");
+  const dayOptions = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
+  const [preferredDays, setPreferredDays] = useState<string[]>(["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6"]);
+
+  const isRunning = generate.isPending;
 
   const steps = [
     "Khởi tạo bộ dữ liệu lớp học, giáo viên và phòng học...",
@@ -40,36 +39,35 @@ const OfficeAISchedule = () => {
   ];
 
   const pendingClasses = classes.filter(c => c.status === "active" || c.status === "searching").length;
+  const tutorCount = new Set(classes.map(c => c.tutorId).filter(Boolean)).size;
 
-  const runScheduler = useCallback(() => {
-    setIsRunning(true);
+  const toggleDay = (day: string) =>
+    setPreferredDays(prev => (prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]));
+
+  const runScheduler = () => {
     setIsDone(false);
-    setProgress(0);
-    setResults([]);
+    setResult(null);
     setCurrentStep(0);
 
-    let step = 0;
-    const interval = setInterval(() => {
-      step++;
-      const pct = Math.min(step * 4, 100);
-      setProgress(pct);
-      setCurrentStep(Math.min(Math.floor(step / 6), steps.length - 1));
-
-      if (pct >= 100) {
-        clearInterval(interval);
-        setIsRunning(false);
-        setIsDone(true);
-        setResults([
-          { id: "r1", day: "THỨ 2", dayNum: "09", className: "Toán 12 Nâng cao", tutor: "Nguyễn Văn An", room: "Phòng 301", time: "07:30 - 09:00" },
-          { id: "r2", day: "THỨ 2", dayNum: "09", className: "Vật lý 11", tutor: "Trần Thị Bình", room: "Phòng 302", time: "09:15 - 10:45" },
-          { id: "r3", day: "THỨ 3", dayNum: "10", className: "Hóa học 10", tutor: "Lê Văn Tiến", room: "Phòng 201", time: "14:00 - 15:30" },
-          { id: "r4", day: "THỨ 4", dayNum: "11", className: "Tiếng Anh 12", tutor: "Phạm Thị Hoa", room: "Phòng 105", time: "07:30 - 09:00" },
-          { id: "r5", day: "THỨ 5", dayNum: "12", className: "Ngữ văn 11", tutor: "Hoàng Minh Đức", room: "Phòng 303", time: "14:00 - 15:30" },
-          { id: "r6", day: "THỨ 6", dayNum: "13", className: "Toán 10 Cơ bản", tutor: "Nguyễn Văn An", room: "Phòng 201", time: "09:15 - 10:45" },
-        ]);
+    generate.mutate(
+      {
+        subject: subject === "all" ? undefined : subject,
+        preferredDays: preferredDays.length > 0 ? preferredDays : undefined,
+        sessionsPerWeek: Number(sessionsPerWeek) || undefined,
+      },
+      {
+        onSuccess: (data) => {
+          setResult(data ?? null);
+          setIsDone(true);
+          setCurrentStep(steps.length - 1);
+          toast({ title: "Đã tạo lịch gợi ý" });
+        },
+        onError: () => {
+          toast({ title: "Không thể tạo lịch gợi ý", variant: "destructive" });
+        },
       }
-    }, 120);
-  }, []);
+    );
+  };
 
   return (
     <div className="px-6 pt-2 pb-6 space-y-4">
@@ -83,12 +81,12 @@ const OfficeAISchedule = () => {
           <div className="flex items-center gap-3">
             <CheckCircle2 className="w-6 h-6 text-success" />
             <div>
-              <p className="text-sm font-semibold text-success dark:text-emerald-400">Tạo lịch thành công!</p>
-              <p className="text-xs text-success dark:text-success">Tất cả {results.length} lớp học đã tìm được thời gian phù hợp mà không bị xung đột.</p>
+              <p className="text-sm font-semibold text-success dark:text-emerald-400">Đã tạo lịch gợi ý</p>
+              <p className="text-xs text-success dark:text-success">Hệ thống đã đề xuất một thời khóa biểu dựa trên các ràng buộc đã chọn.</p>
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="rounded-xl" onClick={() => { setIsDone(false); setResults([]); }}><RefreshCw className="w-4 h-4 mr-1" /> Làm lại</Button>
+            <Button variant="outline" className="rounded-xl" onClick={() => { setIsDone(false); setResult(null); }}><RefreshCw className="w-4 h-4 mr-1" /> Làm lại</Button>
             <Button className="rounded-xl" onClick={() => toast({ title: "Đã duyệt và lưu lịch trình" })}><Save className="w-4 h-4 mr-1" /> Duyệt và Lưu</Button>
           </div>
         </div>
@@ -133,6 +131,48 @@ const OfficeAISchedule = () => {
                   </Select>
                 </div>
 
+                <div className="border-t border-border pt-4 grid grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-2">Môn học ưu tiên</p>
+                    <Select value={subject} onValueChange={setSubject}>
+                      <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tất cả môn</SelectItem>
+                        <SelectItem value="Toán">Toán</SelectItem>
+                        <SelectItem value="Vật lý">Vật lý</SelectItem>
+                        <SelectItem value="Hóa học">Hóa học</SelectItem>
+                        <SelectItem value="Ngữ văn">Ngữ văn</SelectItem>
+                        <SelectItem value="Tiếng Anh">Tiếng Anh</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-2">Số buổi mỗi tuần</p>
+                    <Select value={sessionsPerWeek} onValueChange={setSessionsPerWeek}>
+                      <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 buổi</SelectItem>
+                        <SelectItem value="2">2 buổi</SelectItem>
+                        <SelectItem value="3">3 buổi</SelectItem>
+                        <SelectItem value="4">4 buổi</SelectItem>
+                        <SelectItem value="5">5 buổi</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="border-t border-border pt-4">
+                  <p className="text-sm font-medium text-foreground mb-3">Ngày ưu tiên xếp lịch</p>
+                  <div className="flex flex-wrap gap-4">
+                    {dayOptions.map(day => (
+                      <label key={day} className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox checked={preferredDays.includes(day)} onCheckedChange={() => toggleDay(day)} />
+                        <span className="text-sm text-foreground">{day}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="border-t border-border pt-4">
                   <p className="text-sm font-medium text-foreground mb-3">Ràng buộc cứng</p>
                   <div className="space-y-3">
@@ -162,18 +202,11 @@ const OfficeAISchedule = () => {
                         <p className="text-xs text-muted-foreground mt-1">Hệ thống đang kiểm tra chéo lịch giáo viên, phòng học và học sinh để đảm bảo không xung đột.</p>
                       </div>
                     </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-foreground">Tiến trình</span>
-                        <span className="text-sm font-medium text-foreground">{progress}%</span>
-                      </div>
-                      <Progress value={progress} className="h-2" />
-                    </div>
                     <div className="p-3 bg-muted/50 rounded-xl space-y-2">
                       {steps.map((s, i) => (
                         <div key={i} className="flex items-center gap-2">
-                          {i < currentStep ? <CheckCircle2 className="w-4 h-4 text-success" /> : i === currentStep ? <Clock className="w-4 h-4 text-primary animate-spin" style={{ animationDuration: "2s" }} /> : <div className="w-4 h-4" />}
-                          <span className={`text-xs ${i <= currentStep ? "text-foreground" : "text-muted-foreground"}`}>{s}</span>
+                          {i === currentStep ? <Clock className="w-4 h-4 text-primary animate-spin" style={{ animationDuration: "2s" }} /> : <div className="w-4 h-4" />}
+                          <span className="text-xs text-foreground">{s}</span>
                         </div>
                       ))}
                     </div>
@@ -187,33 +220,22 @@ const OfficeAISchedule = () => {
             </Card>
           )}
 
-          {results.length > 0 && (
+          {isDone && (
             <Card className="border-border">
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Bản nháp thời khóa biểu</CardTitle>
-                  <Select defaultValue="list"><SelectTrigger className="w-36 rounded-xl h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="list">Dạng Danh sách</SelectItem><SelectItem value="calendar">Dạng Lịch</SelectItem></SelectContent>
-                  </Select>
-                </div>
+                <CardTitle className="text-base">Bản nháp thời khóa biểu</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {results.map(r => (
-                  <div key={r.id} className="flex items-center gap-4 p-4 bg-muted/50 rounded-xl hover:bg-muted/80 transition-colors">
-                    <div className="text-center min-w-[60px]">
-                      <p className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded">{r.day}</p>
-                      <p className="text-2xl font-bold text-foreground">{r.dayNum}</p>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-foreground">{r.className}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-3 mt-1">
-                        <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {r.tutor}</span>
-                        <span className="flex items-center gap-1"><Monitor className="w-3 h-3" /> {r.room}</span>
-                      </p>
-                    </div>
-                    <p className="text-sm font-medium text-primary">{r.time}</p>
-                  </div>
-                ))}
+                {/* TODO(BE): type the /Office/ai-schedule response (suggested sessions list) */}
+                <div className="p-3 bg-muted/50 rounded-xl flex items-start gap-2">
+                  <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                  <p className="text-xs text-muted-foreground">Hệ thống đã trả về gợi ý lịch trình. Định dạng chi tiết sẽ được hiển thị khi backend chuẩn hóa cấu trúc phản hồi.</p>
+                </div>
+                {result != null && (
+                  <pre className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-4 overflow-auto max-h-80 whitespace-pre-wrap break-words">
+                    {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
+                  </pre>
+                )}
               </CardContent>
             </Card>
           )}
@@ -249,15 +271,15 @@ const OfficeAISchedule = () => {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center"><BookOpen className="w-4 h-4 text-primary" /></div><span className="text-sm text-foreground">Lớp chờ xếp lịch</span></div>
-                  <span className="text-lg font-bold text-foreground">{pendingClasses}</span>
+                  <span className="text-lg font-bold text-foreground">{classesLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : pendingClasses}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-success/150/10 flex items-center justify-center"><Users className="w-4 h-4 text-success" /></div><span className="text-sm text-foreground">Giáo viên tham gia</span></div>
-                  <span className="text-lg font-bold text-foreground">12</span>
+                  <span className="text-lg font-bold text-foreground">{classesLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : tutorCount}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center"><Monitor className="w-4 h-4 text-purple-600" /></div><span className="text-sm text-foreground">Phòng học trống</span></div>
-                  <span className="text-lg font-bold text-purple-600">10</span>
+                  <span className="text-lg font-bold text-purple-600">{roomsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (roomInventory?.summary.free ?? 0)}</span>
                 </div>
               </div>
               <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl flex items-start gap-2">

@@ -1,29 +1,29 @@
-import { useFinance } from "@/contexts/FinanceContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, ArrowUpRight, Clock, TrendingUp, ArrowLeftRight, Banknote, BarChart3 } from "lucide-react";
+import { DollarSign, Clock, Lock, Undo2, ArrowLeftRight, Banknote, BarChart3, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-const revenueData = [
-  { month: "T10", revenue: 28000000 },
-  { month: "T11", revenue: 32000000 },
-  { month: "T12", revenue: 35000000 },
-  { month: "T1", revenue: 30000000 },
-  { month: "T2", revenue: 38000000 },
-  { month: "T3", revenue: 42000000 },
-];
+import { useFinanceDashboard } from "@/hooks/useDashboard";
+import { useFinanceTransactions, useFinanceReports } from "@/hooks/useFinance";
 
 const FinanceDashboard = () => {
-  const { transactions, withdrawals } = useFinance();
   const navigate = useNavigate();
+  const { data: dashboard, isLoading: dashboardLoading } = useFinanceDashboard();
+  const { transactions, isLoading: txLoading } = useFinanceTransactions();
+  const { data: reports } = useFinanceReports();
 
-  const totalRevenue = transactions.filter(t => t.type === "tuition" && t.status === "completed").reduce((s, t) => s + t.amount, 0);
-  const todayTx = transactions.filter(t => t.date === "03/03/2026").length;
-  const pendingPayouts = withdrawals.filter(w => w.status === "pending").reduce((s, w) => s + w.amount, 0);
-  const growth = 12.5;
+  const totalRevenue = dashboard?.totalRevenue ?? 0;
+  const pendingWithdrawals = dashboard?.pendingWithdrawals ?? 0;
+  const totalEscrow = dashboard?.totalEscrow ?? 0;
+  const refundsPending = dashboard?.refundsPending ?? 0;
 
   const recentTx = transactions.slice(0, 5);
+
+  // Monthly revenue time-series from GET /Finance/reports (mapped to chart shape).
+  const revenueData = (reports?.monthlyRevenue ?? []).map((m) => ({
+    month: m.month,
+    revenue: m.amount,
+  }));
 
   const quickActions = [
     { label: "Giao dịch", icon: ArrowLeftRight, action: () => navigate("/finance/transactions") },
@@ -45,8 +45,8 @@ const FinanceDashboard = () => {
       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-3">
         <DollarSign className="w-5 h-5 text-white" />
       </div>
-      <p className="text-xl font-bold">{totalRevenue.toLocaleString("vi-VN")}đ</p>
-      <p className="text-xs text-white/80 mt-1">Doanh thu tháng</p>
+      <p className="text-xl font-bold">{dashboardLoading ? "…" : `${totalRevenue.toLocaleString("vi-VN")}đ`}</p>
+      <p className="text-xs text-white/80 mt-1">Tổng doanh thu</p>
     </CardContent>
   </Card>
 
@@ -54,10 +54,10 @@ const FinanceDashboard = () => {
   <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
     <CardContent className="p-4">
       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-3">
-        <ArrowLeftRight className="w-5 h-5 text-white" />
+        <Lock className="w-5 h-5 text-white" />
       </div>
-      <p className="text-xl font-bold">{todayTx}</p>
-      <p className="text-xs text-white/80 mt-1">Giao dịch hôm nay</p>
+      <p className="text-xl font-bold">{dashboardLoading ? "…" : `${totalEscrow.toLocaleString("vi-VN")}đ`}</p>
+      <p className="text-xs text-white/80 mt-1">Đang ký quỹ</p>
     </CardContent>
   </Card>
 
@@ -67,7 +67,7 @@ const FinanceDashboard = () => {
       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-3">
         <Clock className="w-5 h-5 text-white" />
       </div>
-      <p className="text-xl font-bold">{pendingPayouts.toLocaleString("vi-VN")}đ</p>
+      <p className="text-xl font-bold">{dashboardLoading ? "…" : `${pendingWithdrawals.toLocaleString("vi-VN")}đ`}</p>
       <p className="text-xs text-white/80 mt-1">Chờ thanh toán</p>
     </CardContent>
   </Card>
@@ -76,21 +76,24 @@ const FinanceDashboard = () => {
   <Card className="border-0 bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg">
     <CardContent className="p-4">
       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-3">
-        <TrendingUp className="w-5 h-5 text-white" />
+        <Undo2 className="w-5 h-5 text-white" />
       </div>
-      <p className="text-xl font-bold flex items-center gap-1">
-        +{growth}% <ArrowUpRight className="w-4 h-4 text-white" />
-      </p>
-      <p className="text-xs text-white/80 mt-1">Tăng trưởng</p>
+      <p className="text-xl font-bold">{dashboardLoading ? "…" : `${refundsPending.toLocaleString("vi-VN")}đ`}</p>
+      <p className="text-xs text-white/80 mt-1">Hoàn tiền chờ duyệt</p>
     </CardContent>
   </Card>
 </div>
-      
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 border-border">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Doanh thu 6 tháng gần nhất</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Doanh thu các tháng gần nhất</CardTitle></CardHeader>
           <CardContent>
+            {revenueData.length === 0 ? (
+              <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+                Chưa có dữ liệu doanh thu
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={revenueData}>
                 <defs>
@@ -106,23 +109,32 @@ const FinanceDashboard = () => {
                 <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="url(#revenueGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border-border">
           <CardHeader className="pb-3"><CardTitle className="text-base">Giao dịch gần đây</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {recentTx.map(t => (
-              <div key={t.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-xl">
-                <div>
-                  <p className="text-xs font-medium text-foreground">{t.description}</p>
-                  <p className="text-[10px] text-muted-foreground">{t.date}</p>
-                </div>
-                <span className={`text-xs font-bold ${t.type === "tuition" || t.type === "deposit" ? "text-primary" : "text-foreground"}`}>
-                  {t.type === "refund" ? "-" : "+"}{t.amount.toLocaleString("vi-VN")}đ
-                </span>
+            {txLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải...
               </div>
-            ))}
+            ) : recentTx.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">Chưa có dữ liệu</p>
+            ) : (
+              recentTx.map(t => (
+                <div key={t.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-xl">
+                  <div>
+                    <p className="text-xs font-medium text-foreground">{t.description}</p>
+                    <p className="text-[10px] text-muted-foreground">{t.date}</p>
+                  </div>
+                  <span className={`text-xs font-bold ${t.type === "tuition" || t.type === "deposit" ? "text-primary" : "text-foreground"}`}>
+                    {t.type === "refund" ? "-" : "+"}{t.amount.toLocaleString("vi-VN")}đ
+                  </span>
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>

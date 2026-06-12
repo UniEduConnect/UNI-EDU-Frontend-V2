@@ -1,0 +1,51 @@
+{
+  "title": "Parent portal — backend endpoints/fields the frontend still needs",
+  "generatedFor": "UNI-EDU backend team",
+  "context": "The Parent portal pages were migrated from mock (ParentContext, deleted) to real API calls. Below is data the UI renders but the backend does NOT expose. Reused endpoints: GET/PUT /Parents/me, /Parents/me/children, /Parents/me/dashboard, /Parents/me/report, /Wallet(+transactions/deposit/withdraw), /me/conversations, /classes/{id}/messages, /Classes, /Sessions/{id}/confirm, /classes/{id}/review, /me/reviews, /Notifications, /Users/me.",
+  "gaps": [
+    {
+      "id": "P-GAP-0",
+      "priority": "critical",
+      "title": "GET /Parents/me/children currently returns 403 for the Parent role",
+      "affectedPages": ["ParentDashboard", "ParentChildren", "ParentReports", "ParentWallet"],
+      "currentState": "Known backend role bug — the children endpoint 403s for a logged-in Parent, so the children list is empty. The FE hook uses retry:false and renders an empty state. Fix the authorization so a Parent can read their own children.",
+      "proposedChanges": ["Allow role=Parent on GET /Parents/me/children (and the other /Parents/me/* routes)."]
+    },
+    {
+      "id": "P-GAP-1",
+      "priority": "high",
+      "title": "Per-child sessions / tests / attendance for parents",
+      "affectedPages": ["ParentChildren"],
+      "currentState": "A parent has no /me/sessions of their own, and there is no endpoint to list a child's sessions/tests/attendance. The schedule, tests, and attendance lists render empty. The confirm-attendance mutation (PATCH /Sessions/{id}/confirm) exists but is unreachable without a session list.",
+      "proposedEndpoints": [
+        "GET /api/Parents/me/children/{childId}/sessions -> SessionResponse[] (with className/tutorName)",
+        "GET /api/Parents/me/children/{childId}/tests -> SubmissionResponse[]",
+        "GET /api/Parents/me/pending-confirmations -> SessionResponse[] (sessions awaiting parent confirmation)"
+      ]
+    },
+    {
+      "id": "P-GAP-2",
+      "priority": "high",
+      "title": "Per-child progress + subject-score analytics",
+      "affectedPages": ["ParentDashboard", "ParentReports"],
+      "currentState": "childProgress and childSubjectScores (per-child GPA trend, subject scores, attendance, homework rate) have no backend source — all charts render empty. /Parents/me/report gives only { childrenCount, activeClasses, totalSpent, avgChildScore }.",
+      "proposedEndpoint": "GET /api/Parents/me/children/{childId}/progress -> { gpaSeries, subjectScores, attendanceRate, homeworkRate } (mirror the proposed GET /Tutors/me/students item shape)."
+    },
+    {
+      "id": "P-GAP-3",
+      "priority": "medium",
+      "title": "No pay-tuition endpoint",
+      "affectedPages": ["ParentWallet"],
+      "currentState": "payChildTuition is disabled — tuition is escrowed at class creation and there is no endpoint to pay tuition for an existing class from the wallet (same as the student S-GAP-6).",
+      "proposedEndpoint": "POST /api/classes/{classId}/pay-tuition { amount } if paying tuition outside class creation is a real flow; otherwise confirm it can be removed."
+    },
+    {
+      "id": "P-GAP-4",
+      "priority": "low",
+      "title": "Reviews list lacks subject/className and is single-paged",
+      "affectedPages": ["ParentReviews"],
+      "currentState": "GET /me/reviews returns bare ReviewResponse (no className/subject/tutorName), so the page joins against /Classes; only page 1 is fetched. Enriching the review DTO (className, subject, tutorName) and exposing total/totalPages would remove the join.",
+      "proposedChanges": ["Add className/subject/tutorName to the review DTO returned by /me/reviews; return PagedResult with total/totalPages."]
+    }
+  ]
+}

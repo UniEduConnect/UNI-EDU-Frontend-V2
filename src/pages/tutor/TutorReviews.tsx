@@ -1,19 +1,28 @@
-import { useTutor } from "@/contexts/TutorContext";
-import { Star, TrendingUp, Search, X, Filter } from "lucide-react";
+import { Star, TrendingUp, Search, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { useMyReviews, useMyTutorProfile } from "@/hooks/useTutors";
 
 const TutorReviews = () => {
-  const { profile, reviews } = useTutor();
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useMyReviews(page);
+  const { data: profile } = useMyTutorProfile();
+
   const [search, setSearch] = useState("");
   const [filterRating, setFilterRating] = useState<number | null>(null);
   const [filterSubject, setFilterSubject] = useState("all");
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
 
+  const reviews = data?.items ?? [];
+  const pageCount = Math.max(1, data?.totalPages ?? 1);
+
+  const rating = profile?.rating ?? 0;
+  const totalReviews = profile?.totalReviews ?? 0;
+  const testPassRate = profile?.testPassRate ?? 0;
+
+  // Filters apply to the current server page of reviews.
   const subjects = [...new Set(reviews.map(r => r.subject))];
   const filtered = reviews.filter(r => {
     if (search && !r.comment.toLowerCase().includes(search.toLowerCase()) && !r.parentName.toLowerCase().includes(search.toLowerCase())) return false;
@@ -21,30 +30,31 @@ const TutorReviews = () => {
     if (filterSubject !== "all" && r.subject !== filterSubject) return false;
     return true;
   });
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const pagedReviews = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
+  // Rating distribution + per-subject averages computed from fetched items.
   const ratingDist = [5, 4, 3, 2, 1].map(r => ({
     stars: r,
     count: reviews.filter(rv => rv.rating === r).length,
     pct: reviews.length > 0 ? (reviews.filter(rv => rv.rating === r).length / reviews.length) * 100 : 0,
   }));
 
-  // Chart data
   const barData = ratingDist.map(r => ({ name: `${r.stars}★`, count: r.count }));
   const subjectRatings = subjects.map(s => {
     const subReviews = reviews.filter(r => r.subject === s);
     return { subject: s, avg: subReviews.reduce((sum, r) => sum + r.rating, 0) / subReviews.length, count: subReviews.length };
   });
 
-  // Tags
-  const allTags = reviews.flatMap(r => r.tags || []);
-  const tagCounts = allTags.reduce((acc, t) => ({ ...acc, [t]: (acc[t] || 0) + 1 }), {} as Record<string, number>);
-  const topTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  // TODO(BE): add tags[] to the tutor review DTO to restore the keyword cloud
 
   const chartConfig = { count: { label: "Số lượng", color: "hsl(var(--primary))" } };
-  const pieColors = ["hsl(var(--primary))", "#f59e0b", "#10b981", "#6366f1", "#ef4444"];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -53,11 +63,11 @@ const TutorReviews = () => {
         <div className="bg-card border border-border rounded-2xl p-6">
           <div className="flex items-center gap-8">
             <div className="text-center">
-              <p className="text-4xl font-bold text-foreground">{profile.rating.toFixed(1)}</p>
+              <p className="text-4xl font-bold text-foreground">{rating.toFixed(1)}</p>
               <div className="flex items-center gap-0.5 justify-center my-1">
-                {[...Array(5)].map((_, i) => <Star key={i} className={cn("w-4 h-4", i < Math.round(profile.rating) ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30")} />)}
+                {[...Array(5)].map((_, i) => <Star key={i} className={cn("w-4 h-4", i < Math.round(rating) ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30")} />)}
               </div>
-              <p className="text-xs text-muted-foreground">{profile.totalReviews} đánh giá</p>
+              <p className="text-xs text-muted-foreground">{totalReviews} đánh giá</p>
             </div>
             <div className="flex-1 space-y-1.5">
               {ratingDist.map(r => (
@@ -89,24 +99,15 @@ const TutorReviews = () => {
                 <span className="text-xs text-muted-foreground">{s.count} đánh giá</span>
               </div>
             ))}
+            {subjectRatings.length === 0 && <p className="text-sm text-muted-foreground">Chưa có dữ liệu</p>}
           </div>
         </div>
 
-        {/* Top Tags */}
-        <div className="bg-card border border-border rounded-2xl p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Từ khóa nổi bật</h3>
-          <div className="flex flex-wrap gap-2">
-            {topTags.map(([tag, count]) => (
-              <span key={tag} className="px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-xs font-medium">
-                {tag} <span className="text-primary/60 ml-1">({count})</span>
-              </span>
-            ))}
-          </div>
-          <div className="mt-4 pt-4 border-t border-border text-center">
-            <p className="text-3xl font-bold text-primary">{profile.testPassRate}%</p>
-            <p className="text-xs text-muted-foreground">Tỷ lệ đậu test</p>
-            <TrendingUp className="w-4 h-4 text-success mx-auto mt-1" />
-          </div>
+        {/* Test pass rate */}
+        <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center justify-center">
+          <p className="text-3xl font-bold text-primary">{testPassRate}%</p>
+          <p className="text-xs text-muted-foreground">Tỷ lệ đậu test</p>
+          <TrendingUp className="w-4 h-4 text-success mx-auto mt-1" />
         </div>
       </div>
 
@@ -146,7 +147,7 @@ const TutorReviews = () => {
 
       {/* Review List */}
       <div className="space-y-3">
-        {pagedReviews.map(r => (
+        {filtered.map(r => (
           <div key={r.id} className="bg-card border border-border rounded-2xl p-5">
             <div className="flex items-start gap-4">
               <img src={r.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
@@ -162,9 +163,6 @@ const TutorReviews = () => {
                   {[...Array(5)].map((_, i) => <Star key={i} className={cn("w-3.5 h-3.5", i < r.rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30")} />)}
                 </div>
                 <p className="text-sm text-muted-foreground">{r.comment}</p>
-                {r.tags && r.tags.length > 0 && (
-                  <div className="flex gap-1 mt-2">{r.tags.map(t => <span key={t} className="text-[10px] px-2 py-0.5 bg-primary/5 text-primary rounded-lg">{t}</span>)}</div>
-                )}
               </div>
             </div>
           </div>
@@ -172,7 +170,7 @@ const TutorReviews = () => {
         {filtered.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">Không có đánh giá nào</p>}
       </div>
 
-      {filtered.length > 0 && (
+      {pageCount > 1 && (
         <Pagination>
           <PaginationContent>
             <PaginationItem>
@@ -188,7 +186,7 @@ const TutorReviews = () => {
               <PaginationItem key={idx}>
                 <PaginationLink
                   href="#"
-                  isActive={currentPage === idx + 1}
+                  isActive={page === idx + 1}
                   onClick={(e) => {
                     e.preventDefault();
                     setPage(idx + 1);

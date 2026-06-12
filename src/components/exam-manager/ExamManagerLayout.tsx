@@ -1,10 +1,12 @@
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard,
   FileText,
   Settings,
   BarChart3,
   Database,
+  Home,
   LogOut,
   PanelLeftClose,
   PanelLeft,
@@ -17,10 +19,16 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useExamManager } from "@/contexts/ExamManagerContext";
 import EduLogo from "@/components/EduLogo";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { useState, useRef, useEffect } from "react";
+import {
+  useNotifications,
+  useUnreadCount,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+} from "@/hooks/useNotifications";
+import { useMe } from "@/hooks/useUsers";
 
 const navItems = [
   { to: "/exam-manager", icon: LayoutDashboard, label: "Tổng quan", end: true },
@@ -38,7 +46,7 @@ const pageTitles: Record<string, string> = {
   "/exam-manager/questions": "Ngân Hàng Câu Hỏi",
 };
 
-const notifIcon: Record<string, JSX.Element> = {
+const notifIcon: Record<string, React.ReactNode> = {
   warning: <AlertTriangle className="w-4 h-4 text-warning" />,
   info: <Info className="w-4 h-4 text-info" />,
   success: <CheckCircle2 className="w-4 h-4 text-success" />,
@@ -47,19 +55,19 @@ const notifIcon: Record<string, JSX.Element> = {
 
 const ExamManagerLayout = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const location = useLocation();
-  const {
-    notifications,
-    markNotificationRead,
-    markAllNotificationsRead,
-    profile,
-  } = useExamManager();
+
+  const { data: me } = useMe();
+  const { notifications } = useNotifications();
+  const { count: unreadNotif } = useUnreadCount();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
 
   const [collapsed, setCollapsed] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unreadNotif = notifications.filter((n) => !n.read).length;
   const currentTitle = pageTitles[location.pathname] || "Quản lý đề";
 
   useEffect(() => {
@@ -139,9 +147,20 @@ const ExamManagerLayout = () => {
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-sidebar-border/40">
+        <div className="px-3 py-3 border-t border-sidebar-border/40 space-y-1">
+          <NavLink
+            to="/"
+            title={collapsed ? "Trang chủ" : undefined}
+            className={cn(
+              "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white w-full transition-all duration-300",
+              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+            )}
+          >
+            <Home className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span>Trang chủ</span>}
+          </NavLink>
           <button
-            onClick={() => navigate("/")}
+            onClick={async () => { await logout(); navigate("/login"); }}
             title={collapsed ? "Đăng xuất" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-red-500 hover:text-white w-full transition-all duration-300",
@@ -190,7 +209,7 @@ const ExamManagerLayout = () => {
                       </h3>
                       {unreadNotif > 0 && (
                         <button
-                          onClick={() => markAllNotificationsRead()}
+                          onClick={() => markAllRead.mutate()}
                           className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-500 font-medium"
                         >
                           <Check className="w-3 h-3" /> Đọc tất cả
@@ -208,8 +227,13 @@ const ExamManagerLayout = () => {
                           <button
                             key={n.id}
                             onClick={() => {
-                              markNotificationRead(n.id);
+                              if (!n.read) markRead.mutate(n.id);
                               setShowNotif(false);
+
+                              if (n.link) {
+                                navigate(n.link);
+                                return;
+                              }
 
                               if (
                                 n.title.includes("đề thi") ||
@@ -270,7 +294,7 @@ const ExamManagerLayout = () => {
                                 {n.message}
                               </p>
                               <p className="text-[10px] text-slate-400 mt-1">
-                                {n.timestamp}
+                                {n.createdAt}
                               </p>
                             </div>
                           </button>
@@ -294,9 +318,9 @@ const ExamManagerLayout = () => {
               </div>
 
               <UserAvatarDropdown
-                avatar={profile?.avatar}
-                name={profile?.name || "Quản lý đề thi"}
-                role="Exam Manager"
+                avatar=""
+                name={me?.fullname || "Quản lý đề thi"}
+                role="Quản lý đề thi"
               />
             </div>
           </header>

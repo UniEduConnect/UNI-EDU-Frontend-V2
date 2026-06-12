@@ -1,9 +1,11 @@
-import { useAdmin } from "@/contexts/AdminContext";
+import { useAdminDashboard } from "@/hooks/useDashboard";
+import { useAdminUsers, useAdminReports } from "@/hooks/useAdmin";
+import { useClasses } from "@/hooks/useClasses";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, GraduationCap, BookOpen, CreditCard, Clock, FileText, UserCheck, ArrowUpRight, ArrowDownRight, ChevronRight, Plus, BarChart3, PieChart as PieChartIcon } from "lucide-react";
+import { Users, GraduationCap, BookOpen, CreditCard, Clock, FileText, UserCheck, ArrowUpRight, ChevronRight, Plus, BarChart3, PieChart as PieChartIcon, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Pie, Cell, PieChart } from "recharts";
+import { ResponsiveContainer, Pie, Cell, PieChart, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 
 const DASHBOARD_THEME = {
   primary: "#1E68E6",
@@ -17,74 +19,25 @@ const DASHBOARD_THEME = {
 const PIE_COLORS = [DASHBOARD_THEME.primary, DASHBOARD_THEME.success, DASHBOARD_THEME.warning, DASHBOARD_THEME.danger];
 
 const AdminDashboard = () => {
-  const { users, classes, tests, transactions, settings } = useAdmin();
   const navigate = useNavigate();
 
-  // Mock demo data nếu chưa có data thật để demo nhanh
-  const demoUsers = users.length ? users : [
-    { id: "u1", name: "Mai Anh", role: "student", status: "active", avatar: "https://i.pravatar.cc/40?img=32", createdAt: "2024-02-01" },
-    { id: "u2", name: "Nguyễn Dũng", role: "tutor", status: "active", avatar: "https://i.pravatar.cc/40?img=12", createdAt: "2024-03-10" },
-    { id: "u3", name: "Lê Thảo", role: "parent", status: "pending", avatar: "https://i.pravatar.cc/40?img=8", createdAt: "2024-03-14" },
-    { id: "u4", name: "Vũ Minh", role: "teacher", status: "active", avatar: "https://i.pravatar.cc/40?img=24", createdAt: "2024-03-08" },
-    { id: "u5", name: "Trần Hương", role: "student", status: "active", avatar: "https://i.pravatar.cc/40?img=16", createdAt: "2024-03-02" },
-    { id: "u6", name: "Phạm Khánh", role: "tutor", status: "pending", avatar: "https://i.pravatar.cc/40?img=36", createdAt: "2024-04-01" },
-    { id: "u7", name: "Hoàng Long", role: "teacher", status: "active", avatar: "https://i.pravatar.cc/40?img=22", createdAt: "2024-03-12" },
-    { id: "u8", name: "Đặng Sơn", role: "parent", status: "active", avatar: "https://i.pravatar.cc/40?img=20", createdAt: "2024-03-18" },
-  ];
+  // All dashboard data comes from the real API — no mock fallback (empty = real empty state).
+  const { data: dash, isLoading: dashLoading } = useAdminDashboard();
+  const { users: userData, isLoading: usersLoading } = useAdminUsers();
+  const { classes: classData, isLoading: classesLoading } = useClasses();
+  const { data: report } = useAdminReports();
+  const monthlyRevenue = (report?.monthlyRevenue ?? []).map((m) => ({ month: m.month.slice(5), revenue: m.amount }));
 
-  const demoClasses = classes.length ? classes : [
-    { id: "c1", name: "Toán lớp 10", tutorId: "u2", fee: 1900000, status: "active" },
-    { id: "c2", name: "Hóa lớp 11", tutorId: "u4", fee: 2200000, status: "searching" },
-    { id: "c3", name: "Anh văn giao tiếp", tutorId: "u2", fee: 1700000, status: "completed" },
-    { id: "c4", name: "Lý luyện thi", tutorId: "u4", fee: 2200000, status: "active" },
-    { id: "c5", name: "Vật lý 9", tutorId: "u7", fee: 1800000, status: "active" },
-    { id: "c6", name: "Sinh học 12", tutorId: "u2", fee: 2300000, status: "completed" },
-    { id: "c7", name: "Tiếng Anh thi Đại học", tutorId: "u6", fee: 2500000, status: "searching" },
-  ];
+  const isLoading = dashLoading || usersLoading || classesLoading;
 
-  const demoTests = tests.length ? tests : [
-    { id: "t1", createdAt: "2024-01-20" },
-    { id: "t2", createdAt: "2024-02-02" },
-    { id: "t3", createdAt: "2024-02-27" },
-    { id: "t4", createdAt: "2024-03-05" },
-    { id: "t5", createdAt: "2024-03-09" },
-    { id: "t6", createdAt: "2024-03-11" },
-    { id: "t7", createdAt: "2024-03-15" },
-    { id: "t8", createdAt: "2024-03-17" },
-  ];
-
-  const demoTransactions = transactions.length ? transactions : [
-    { id: "tx1", userId: "u1", date: "2024-01-18", amount: 900000, status: "completed", description: "Thanh toán lớp Toán" },
-    { id: "tx2", userId: "u3", date: "2024-01-22", amount: 1200000, status: "completed", description: "Đăng ký lớp Hóa" },
-    { id: "tx3", userId: "u2", date: "2024-02-01", amount: 1700000, status: "completed", description: "Thanh toán lớp Anh" },
-    { id: "tx4", userId: "u4", date: "2024-02-15", amount: 2100000, status: "completed", description: "Thanh toán lớp Lý" },
-    { id: "tx5", userId: "u1", date: "2024-03-02", amount: 1400000, status: "failed", description: "Thanh toán thất bại" },
-    { id: "tx6", userId: "u8", date: "2024-03-05", amount: 2300000, status: "completed", description: "Đăng ký lớp Vật lý" },
-    { id: "tx7", userId: "u5", date: "2024-03-10", amount: 1800000, status: "pending", description: "Đang chờ xác nhận" },
-    { id: "tx8", userId: "u7", date: "2024-03-14", amount: 2500000, status: "refunded", description: "Hoàn tiền lớp Anh văn" },
-    { id: "tx9", userId: "u6", date: "2024-03-18", amount: 2000000, status: "completed", description: "Thanh toán lớp Toán 11" },
-  ];
-
-  const userData = demoUsers;
-  const classData = demoClasses;
-  const testData = demoTests;
-  const transactionData = demoTransactions;
-
-  const totalUsers = userData.length;
-  const totalTutorsTeachers = userData.filter(u => u.role === "tutor" || u.role === "teacher").length;
-  const activeClasses = classData.filter(c => c.status === "active").length;
-  const pendingApprovals = userData.filter(u => u.status === "pending").length;
+  const totalUsers = dash?.totalUsers ?? 0;
+  const totalTutorsTeachers = dash ? dash.tutors + dash.teachers : 0;
+  const activeClasses = dash?.activeClasses ?? 0;
+  const pendingApprovals = dash?.pendingApprovals ?? 0;
+  const monthRevenue = dash?.totalRevenue ?? 0;
+  const monthTests = dash?.totalExams ?? 0;
 
   const now = new Date();
-  const monthRevenue = transactionData
-    .filter(t => t.status === "completed" && new Date(t.date).getMonth() === now.getMonth() && new Date(t.date).getFullYear() === now.getFullYear())
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const monthTests = testData.filter(t => {
-    const d = new Date(t.createdAt);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
-
   const pendingUsers = userData.filter(u => u.status === "pending");
   const avgApprovalDays = pendingUsers.length > 0
     ? Math.round(pendingUsers.reduce((sum, u) => sum + Math.ceil((now.getTime() - new Date(u.createdAt).getTime()) / 86400000), 0) / pendingUsers.length)
@@ -98,17 +51,7 @@ const AdminDashboard = () => {
   ];
 
   const recentClasses = classData.filter(c => c.status === "searching" || c.status === "active").slice(0, 4);
-  const recentTransactions = transactionData.slice(0, 5);
-
-  const monthlyData = Array.from({ length: 6 }).map((_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - (5 - i));
-    const month = `Tháng ${d.getMonth() + 1}`;
-    const revenue = transactionData
-      .filter((t) => t.status === "completed" && new Date(t.date).getMonth() === d.getMonth())
-      .reduce((s, t) => s + t.amount, 0);
-    return { month, revenue };
-  });
+  const recentUsers = userData.slice(0, 5);
 
   const roleNameMap: Record<string, string> = {
     tutor: "Gia sư",
@@ -117,12 +60,13 @@ const AdminDashboard = () => {
     parent: "Phụ huynh",
   };
 
-  const usersByRole = ["tutor", "teacher", "student", "parent"].map((role) => ({
-    name: roleNameMap[role] || role,
-    value: userData.filter((u) => u.role === role).length,
-  }));
-
-  const getUserName = (id: string) => userData.find(u => u.id === id)?.name || "—";
+  // Driven by the admin dashboard aggregate counts.
+  const usersByRole = [
+    { name: roleNameMap.tutor, value: dash?.tutors ?? 0 },
+    { name: roleNameMap.teacher, value: dash?.teachers ?? 0 },
+    { name: roleNameMap.student, value: dash?.students ?? 0 },
+    { name: roleNameMap.parent, value: dash?.parents ?? 0 },
+  ];
 
   const statusLabel: Record<string, string> = { searching: "Đang tìm", active: "Đang học", completed: "Hoàn thành" };
   const statusClass: Record<string, string> = {
@@ -131,13 +75,21 @@ const AdminDashboard = () => {
     completed: "bg-emerald-100 text-emerald-700",
   };
 
-  const txStatusLabel: Record<string, string> = { completed: "Hoàn thành", pending: "Đang xử lý", failed: "Thất bại", refunded: "Hoàn tiền" };
-  const txStatusClass: Record<string, string> = {
-    completed: "bg-emerald-100 text-emerald-700",
+  const userStatusLabel: Record<string, string> = { approved: "Đã duyệt", pending: "Chờ duyệt", rejected: "Từ chối", suspended: "Tạm khóa" };
+  const userStatusClass: Record<string, string> = {
+    approved: "bg-emerald-100 text-emerald-700",
     pending: "bg-amber-100 text-amber-700",
-    failed: "bg-red-100 text-red-700",
-    refunded: "bg-sky-100 text-sky-700",
+    rejected: "bg-red-100 text-red-700",
+    suspended: "bg-slate-100 text-slate-700",
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải dữ liệu...
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -151,7 +103,7 @@ const AdminDashboard = () => {
                   <p className="text-[13px] text-white/80 font-medium">{s.label}</p>
                   <p className="text-3xl font-bold text-white tracking-tight">{s.value}</p>
                   <div className="flex items-center gap-1">
-                    {s.up ? <ArrowUpRight className="w-3.5 h-3.5" style={{ color: "rgba(255,255,255,.9)" }} /> : <ArrowDownRight className="w-3.5 h-3.5" style={{ color: "rgba(255,255,255,.9)" }} />}
+                    <ArrowUpRight className="w-3.5 h-3.5" style={{ color: "rgba(255,255,255,.9)" }} />
                     <span className="text-xs font-semibold text-white/90">{s.change}</span>
                     <span className="text-xs text-white/70">vs tháng trước</span>
                   </div>
@@ -236,18 +188,21 @@ const AdminDashboard = () => {
         <Card className="lg:col-span-2 border-0 shadow-soft">
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Doanh thu theo tháng</h3>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 116, 139, 0.35)" />
-                <XAxis dataKey="month" tick={{ fill: "#475569", fontSize: 12 }} />
-                <YAxis tick={{ fill: "#475569", fontSize: 12 }} tickFormatter={(v) => `${Math.round(v / 1000000)}M`} />
-                <Tooltip
-                  formatter={(v: number) => [`${v.toLocaleString("vi-VN")} đ`, "Doanh thu"]}
-                  cursor={{ fill: "rgba(30, 58, 138, 0.06)" }}
-                />
-                <Bar dataKey="revenue" fill={DASHBOARD_THEME.primary} radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {monthlyRevenue.length === 0 ? (
+              <div className="flex items-center justify-center h-[240px] text-sm text-muted-foreground">
+                Chưa có dữ liệu
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={monthlyRevenue}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip formatter={(v: number) => `${v.toLocaleString("vi-VN")}đ`} contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.9)", border: "1px solid rgba(148, 163, 184, 0.4)", color: "white" }} />
+                  <Bar dataKey="revenue" fill={DASHBOARD_THEME.primary} radius={[6, 6, 0, 0]} name="Doanh thu" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -255,20 +210,26 @@ const AdminDashboard = () => {
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><PieChartIcon className="w-4 h-4" /> Cơ cấu người dùng</h3>
             <div className="h-[240px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={usersByRole} dataKey="value" nameKey="name" outerRadius={85} label>
-                    {usersByRole.map((entry, index) => <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.9)", border: "1px solid rgba(148, 163, 184, 0.4)", color: "white" }} />
-                </PieChart>
-              </ResponsiveContainer>
+              {usersByRole.some(r => r.value > 0) ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie data={usersByRole} dataKey="value" nameKey="name" outerRadius={85} label isAnimationActive={false}>
+                      {usersByRole.map((entry, index) => <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.9)", border: "1px solid rgba(148, 163, 184, 0.4)", color: "white" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                  Chưa có dữ liệu
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Classes + Transactions */}
+      {/* Classes + Users */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card className="border-0 shadow-soft">
           <CardContent className="p-5">
@@ -286,10 +247,10 @@ const AdminDashboard = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
-                    <p className="text-xs text-muted-foreground">{getUserName(c.tutorId)} · {c.fee.toLocaleString("vi-VN")}đ</p>
+                    <p className="text-xs text-muted-foreground">{c.tutorName || "—"} · {c.fee.toLocaleString("vi-VN")}đ</p>
                   </div>
                   <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${statusClass[c.status] ?? "bg-slate-100 text-slate-700"}`}>
-                    {statusLabel[c.status]}
+                    {statusLabel[c.status] ?? c.status}
                   </span>
                 </div>
               ))}
@@ -304,30 +265,27 @@ const AdminDashboard = () => {
         <Card className="border-0 shadow-soft">
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-foreground">Giao dịch gần đây</h3>
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/admin/transactions")}>
+              <h3 className="text-sm font-semibold text-foreground">Người dùng mới</h3>
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/admin/users")}>
                 Xem tất cả <ChevronRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </div>
             <div className="space-y-3">
-              {recentTransactions.map(tx => {
-                const user = users.find(u => u.id === tx.userId);
-                return (
-                  <div key={tx.id} className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-muted/30 transition-colors">
-                    {user?.avatar && <img src={user.avatar} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />}
-                    <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
-                      <p className="text-xs text-muted-foreground">{user?.name || "—"} · {tx.date}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-foreground">{tx.amount.toLocaleString("vi-VN")}đ</p>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${txStatusClass[tx.status] ?? "bg-slate-100 text-slate-700"}`}>
-                        {txStatusLabel[tx.status]}
-                      </span>
-                    </div>
+              {recentUsers.map(u => (
+                <div key={u.id} className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-muted/30 transition-colors">
+                  {u.avatar
+                    ? <img src={u.avatar} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                    : <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0"><Users className="w-4 h-4 text-muted-foreground" /></div>}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{u.name}</p>
+                    <p className="text-xs text-muted-foreground">{roleNameMap[u.role] ?? u.role} · {u.email}</p>
                   </div>
-                );
-              })}
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${userStatusClass[u.status] ?? "bg-slate-100 text-slate-700"}`}>
+                    {userStatusLabel[u.status] ?? u.status}
+                  </span>
+                </div>
+              ))}
+              {recentUsers.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Chưa có người dùng</p>}
             </div>
           </CardContent>
         </Card>

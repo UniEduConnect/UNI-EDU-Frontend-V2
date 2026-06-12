@@ -1,4 +1,5 @@
-import { useAdmin } from "@/contexts/AdminContext";
+import { useSettings, useUpdateSettings } from "@/hooks/useSettings";
+import type { SystemSettings } from "@/types/api";
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,16 +11,25 @@ import { useToast } from "@/hooks/use-toast";
 import { Settings, CreditCard, Bell, Shield, Save, FileText, MessageSquare, Wrench, Lock, Clock, KeyRound, Mail, Smartphone, BellRing } from "lucide-react";
 
 const AdminSettings = () => {
-  const { settings, updateSettings } = useAdmin();
-  const [form, setForm] = useState(settings);
+  // Live settings from GET /api/Admin/settings — no seed fallback.
+  const { data: settings } = useSettings();
+  const updateMutation = useUpdateSettings();
+  const [form, setForm] = useState<SystemSettings | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => { setForm(settings); }, [settings]);
+  useEffect(() => { if (settings) setForm(settings); }, [settings]);
 
   const handleSave = () => {
-    updateSettings(form);
-    toast({ title: "Đã lưu cài đặt thành công" });
+    if (!form) return;
+    updateMutation.mutate(form, {
+      onSuccess: () => toast({ title: "Đã lưu cài đặt thành công" }),
+      onError: (e) => toast({ title: e instanceof Error ? e.message : "Lưu thất bại", variant: "destructive" }),
+    });
   };
+
+  if (!form) {
+    return <div className="p-6 text-muted-foreground">Đang tải cài đặt...</div>;
+  }
 
   return (
     <div className="p-6 space-y-5">

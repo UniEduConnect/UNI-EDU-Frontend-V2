@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { useTutor, type RefundRequest } from "@/contexts/TutorContext";
-import { useFinance } from "@/contexts/FinanceContext";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -13,6 +11,7 @@ import {
   RefreshCcw,
   CheckCircle2,
   XCircle,
+  Loader2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -24,15 +23,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-
-interface ModerationLog {
-  id: string;
-  refundId: string;
-  action: "approved" | "rejected";
-  by: string;
-  reason: string;
-  timestamp: string;
-}
+import { useRefunds, useApproveRefund, useRejectRefund } from "@/hooks/useRefunds";
+import type { RefundItem } from "@/types/api";
 
 const statusLabels: Record<string, string> = {
   pending: "Chờ duyệt",
@@ -46,196 +38,44 @@ const statusColors: Record<string, string> = {
   rejected: "bg-destructive/10 text-destructive",
 };
 
-const MOCK_DATA: RefundRequest[] = [
-  {
-    id: "rf-s1",
-    classId: "c1",
-    className: "Toán 12 - Ôn thi ĐH",
-    tutorId: "u1",
-    tutorName: "Nguyễn Văn An",
-    amount: 1200000,
-    maxAmount: 1200000,
-    reason: "Phụ huynh yêu cầu dừng lớp",
-    status: "pending",
-    createdAt: "04/03/2026 09:15",
-    studentName: "Lê Minh Châu",
-    subject: "Toán",
-  },
-  {
-    id: "rf-s2",
-    classId: "tc2",
-    className: "Sinh 11 - Nâng cao",
-    tutorId: "t1",
-    tutorName: "Trần Thị Bích Ngọc",
-    amount: 800000,
-    maxAmount: 2000000,
-    reason: "Lớp học bị hủy do học sinh không tham gia",
-    status: "pending",
-    createdAt: "03/03/2026 14:30",
-    studentName: "Lê Hoàng Nam",
-    subject: "Sinh",
-  },
-  {
-    id: "rf-s3",
-    classId: "c3",
-    className: "IELTS Writing",
-    tutorId: "u1",
-    tutorName: "Nguyễn Văn An",
-    amount: 3000000,
-    maxAmount: 3000000,
-    reason: "Gia sư không thể tiếp tục giảng dạy",
-    status: "pending",
-    createdAt: "02/03/2026 10:00",
-    studentName: "Trương Văn Kiên",
-    subject: "Anh",
-  },
-  {
-    id: "rf-s4",
-    classId: "tc1",
-    className: "Hóa 12 - Ôn thi ĐH",
-    tutorId: "t1",
-    tutorName: "Trần Thị Bích Ngọc",
-    amount: 1680000,
-    maxAmount: 1680000,
-    reason: "Chất lượng không đạt yêu cầu - đồng thuận hoàn tiền",
-    status: "approved",
-    createdAt: "28/02/2026 08:45",
-    studentName: "Nguyễn Thị Mai",
-    subject: "Hóa",
-    processedAt: "01/03/2026 10:20",
-    processedBy: "Lê Thị Hương",
-    processNote: "Đã xác nhận với phụ huynh, đồng ý hoàn toàn bộ escrow chưa giải ngân",
-  },
-  {
-    id: "rf-s5",
-    classId: "c5",
-    className: "Lý 10 - Cơ bản",
-    tutorId: "u2",
-    tutorName: "Đỗ Quang Minh",
-    amount: 500000,
-    maxAmount: 1500000,
-    reason: "Lịch học không phù hợp, không thể sắp xếp lại",
-    status: "approved",
-    createdAt: "25/02/2026 16:00",
-    studentName: "Phạm Đức Anh",
-    subject: "Lý",
-    processedAt: "26/02/2026 09:30",
-    processedBy: "Lê Thị Hương",
-    processNote: "Hoàn một phần theo yêu cầu gia sư, phụ huynh đồng ý",
-  },
-  {
-    id: "rf-s6",
-    classId: "tc3",
-    className: "Sinh 10 - Cơ bản",
-    tutorId: "t1",
-    tutorName: "Trần Thị Bích Ngọc",
-    amount: 1600000,
-    maxAmount: 1600000,
-    reason: "Phụ huynh yêu cầu dừng lớp",
-    status: "rejected",
-    createdAt: "22/02/2026 11:20",
-    studentName: "Trần Minh Quân",
-    subject: "Sinh",
-    processedAt: "23/02/2026 14:00",
-    processedBy: "Lê Thị Hương",
-    processNote:
-      "Lớp đã hoàn thành 4/16 buổi, phụ huynh chưa xác nhận dừng. Cần phụ huynh gửi yêu cầu trực tiếp.",
-  },
-  {
-    id: "rf-s7",
-    classId: "c6",
-    className: "Toán 11 - Hàm số",
-    tutorId: "u3",
-    tutorName: "Hoàng Đức Em",
-    amount: 2000000,
-    maxAmount: 2000000,
-    reason: "Lớp học bị hủy do học sinh không tham gia",
-    status: "rejected",
-    createdAt: "20/02/2026 09:00",
-    studentName: "Võ Thị Hồng",
-    subject: "Toán",
-    processedAt: "21/02/2026 11:45",
-    processedBy: "Lê Thị Hương",
-    processNote: "Học sinh vẫn tham gia đầy đủ theo hệ thống điểm danh. Yêu cầu không hợp lệ.",
-  },
-];
-
-const MOCK_LOGS: ModerationLog[] = [
-  {
-    id: "log-seed1",
-    refundId: "rf-s4",
-    action: "approved",
-    by: "Lê Thị Hương",
-    reason: "Đã xác nhận với phụ huynh, đồng ý hoàn toàn bộ escrow chưa giải ngân",
-    timestamp: "01/03/2026 10:20",
-  },
-  {
-    id: "log-seed2",
-    refundId: "rf-s5",
-    action: "approved",
-    by: "Lê Thị Hương",
-    reason: "Hoàn một phần theo yêu cầu gia sư, phụ huynh đồng ý",
-    timestamp: "26/02/2026 09:30",
-  },
-  {
-    id: "log-seed3",
-    refundId: "rf-s6",
-    action: "rejected",
-    by: "Lê Thị Hương",
-    reason: "Lớp đã hoàn thành 4/16 buổi, phụ huynh chưa xác nhận dừng.",
-    timestamp: "23/02/2026 14:00",
-  },
-  {
-    id: "log-seed4",
-    refundId: "rf-s7",
-    action: "rejected",
-    by: "Lê Thị Hương",
-    reason: "Học sinh vẫn tham gia đầy đủ. Yêu cầu không hợp lệ.",
-    timestamp: "21/02/2026 11:45",
-  },
-];
+const pageSize = 10;
 
 const FinanceRefunds = () => {
-  const { refundRequests: live } = useTutor();
-  const { profile } = useFinance();
-
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [processDialog, setProcessDialog] = useState<{
-    request: RefundRequest;
+    request: RefundItem;
     action: "approve" | "reject";
   } | null>(null);
   const [processNote, setProcessNote] = useState("");
-  const [logs, setLogs] = useState<ModerationLog[]>(MOCK_LOGS);
   const [showLogs, setShowLogs] = useState(false);
-  const [localOverrides, setLocalOverrides] = useState<
-    Record<string, { status: "approved" | "rejected"; note: string; processedAt: string }>
-  >({});
   const [page, setPage] = useState(1);
 
-  const pageSize = 10;
+  const { refunds, isLoading, isError } = useRefunds({
+    Status: filterStatus === "all" ? undefined : filterStatus,
+    Page: page,
+  });
+  const approveRefund = useApproveRefund();
+  const rejectRefund = useRejectRefund();
 
-  const allRefundRequests = [...MOCK_DATA, ...live];
-  const gs = (r: RefundRequest) => localOverrides[r.id]?.status || r.status;
+  const allRefundRequests = refunds;
 
-  const filtered = allRefundRequests
-    .filter(r => filterStatus === "all" || gs(r) === filterStatus)
-    .filter(
-      r =>
-        !search ||
-        r.tutorName.toLowerCase().includes(search.toLowerCase()) ||
-        r.className.toLowerCase().includes(search.toLowerCase())
-    );
+  const filtered = allRefundRequests.filter(
+    r =>
+      !search ||
+      r.tutorName.toLowerCase().includes(search.toLowerCase()) ||
+      r.className.toLowerCase().includes(search.toLowerCase())
+  );
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const pagedRefunds = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const pendingCount = allRefundRequests.filter(r => gs(r) === "pending").length;
-  const approvedCount = allRefundRequests.filter(r => gs(r) === "approved").length;
-  const rejectedCount = allRefundRequests.filter(r => gs(r) === "rejected").length;
+  const pendingCount = allRefundRequests.filter(r => r.status === "pending").length;
+  const approvedCount = allRefundRequests.filter(r => r.status === "approved").length;
+  const rejectedCount = allRefundRequests.filter(r => r.status === "rejected").length;
   const totalRefundAmount = allRefundRequests
-    .filter(r => gs(r) === "approved")
+    .filter(r => r.status === "approved")
     .reduce((sum, r) => sum + r.amount, 0);
 
   useEffect(() => {
@@ -249,32 +89,22 @@ const FinanceRefunds = () => {
     }
 
     const { request, action } = processDialog;
-    const now = new Date().toLocaleString("vi-VN");
+    const note = processNote.trim();
+    const mutation = action === "approve" ? approveRefund : rejectRefund;
 
-    setLocalOverrides(prev => ({
-      ...prev,
-      [request.id]: {
-        status: action === "approve" ? "approved" : "rejected",
-        note: processNote.trim(),
-        processedAt: now,
-      },
-    }));
-
-    setLogs(prev => [
-      ...prev,
+    mutation.mutate(
+      { id: request.id, payload: { note } },
       {
-        id: `log-${Date.now()}`,
-        refundId: request.id,
-        action: action === "approve" ? "approved" : "rejected",
-        by: profile.name,
-        reason: processNote.trim(),
-        timestamp: now,
-      },
-    ]);
-
-    toast.success(action === "approve" ? "Đã duyệt hoàn tiền" : "Đã từ chối hoàn tiền");
-    setProcessDialog(null);
-    setProcessNote("");
+        onSuccess: () => {
+          toast.success(action === "approve" ? "Đã duyệt hoàn tiền" : "Đã từ chối hoàn tiền");
+          setProcessDialog(null);
+          setProcessNote("");
+        },
+        onError: () => {
+          toast.error("Không thể xử lý yêu cầu. Vui lòng thử lại.");
+        },
+      }
+    );
   };
 
   return (
@@ -410,18 +240,24 @@ const FinanceRefunds = () => {
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12 text-muted-foreground">
+            <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Đang tải yêu cầu hoàn tiền...
+          </div>
+        ) : isError && allRefundRequests.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Không tải được danh sách hoàn tiền. Vui lòng thử lại.
+          </p>
+        ) : filtered.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             Không có yêu cầu hoàn tiền nào
           </p>
         ) : (
           <div className="space-y-3">
             {pagedRefunds.map(r => {
-              const st = gs(r);
-              const ov = localOverrides[r.id];
-              const pNote = ov?.note || r.processNote;
-              const pAt = ov?.processedAt || r.processedAt;
-              const pBy = ov ? profile.name : r.processedBy;
+              const st = r.status;
+              const pNote = r.reviewNote;
+              const pAt = r.reviewedAt;
 
               return (
                 <div
@@ -443,8 +279,7 @@ const FinanceRefunds = () => {
                       </div>
 
                       <p className="text-xs text-muted-foreground">
-                        Lớp: <strong>{r.className}</strong> • Môn: {r.subject} • HS:{" "}
-                        {r.studentName}
+                        Lớp: <strong>{r.className}</strong> • HS: {r.studentName}
                       </p>
 
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -470,9 +305,11 @@ const FinanceRefunds = () => {
                           <p className="text-xs text-muted-foreground">
                             <strong>Ghi chú KT:</strong> {pNote}
                           </p>
-                          <p className="mt-1 text-[10px] text-muted-foreground/70">
-                            Xử lý bởi {pBy} lúc {pAt}
-                          </p>
+                          {pAt && (
+                            <p className="mt-1 text-[10px] text-muted-foreground/70">
+                              Xử lý lúc {pAt}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -611,7 +448,9 @@ const FinanceRefunds = () => {
 
               <button
                 onClick={handleProcess}
-                disabled={!processNote.trim()}
+                disabled={
+                  !processNote.trim() || approveRefund.isPending || rejectRefund.isPending
+                }
                 className={cn(
                   "w-full rounded-xl py-2.5 font-medium transition-colors disabled:opacity-50",
                   processDialog.action === "approve"
@@ -636,38 +475,10 @@ const FinanceRefunds = () => {
             </DialogTitle>
           </DialogHeader>
 
+          {/* TODO(BE): no moderation-log endpoint exists. Each refund only carries
+              reviewNote/reviewedAt; a dedicated audit-log API is needed to populate this. */}
           <div className="max-h-[400px] space-y-2 overflow-y-auto">
-            {logs.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">Chưa có log nào</p>
-            ) : (
-              logs.map(log => {
-                const req = allRefundRequests.find(r => r.id === log.refundId);
-
-                return (
-                  <div key={log.id} className="rounded-xl border border-border p-3">
-                    <div className="mb-1 flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "rounded-lg px-2 py-0.5 text-[10px] font-medium",
-                          statusColors[log.action]
-                        )}
-                      >
-                        {log.action === "approved" ? "Đã duyệt" : "Từ chối"}
-                      </span>
-                      <span className="text-xs font-medium text-foreground">
-                        {req?.className || log.refundId}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-muted-foreground">
-                      Người xử lý: <strong>{log.by}</strong>
-                    </p>
-                    <p className="text-xs text-muted-foreground">Lý do: {log.reason}</p>
-                    <p className="text-[10px] text-muted-foreground/70">{log.timestamp}</p>
-                  </div>
-                );
-              })
-            )}
+            <p className="py-8 text-center text-sm text-muted-foreground">Chưa có dữ liệu</p>
           </div>
         </DialogContent>
       </Dialog>
