@@ -1,15 +1,41 @@
-import { useAdmin } from "@/contexts/AdminContext";
 import { useState, useMemo } from "react";
+import {
+  useAdminUsers, useApproveUser, useRejectUser, useSuspendUser,
+  useCreateUser, useUpdateUser, useDeleteUser,
+} from "@/hooks/useAdmin";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Eye, Search, Star, Users, UserCheck, GraduationCap, UserPlus, CheckCircle2, XCircle } from "lucide-react";
-import type { AdminUser, UserStatus } from "@/contexts/AdminContext";
+import { Trash2, Eye, Pencil, Plus, Search, Users, UserCheck, GraduationCap, UserPlus, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import type { AdminUserResponse } from "@/types/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+
+const emptyEdit = { fullname: "", phoneNumber: "", email: "", school: "", grade: 0, gender: "", degree: "", studentIdNumber: "", bio: "" };
+
+const emptyCreate = { email: "", password: "", fullname: "", phoneNumber: "", role: "student", school: "", grade: 10, gender: "Male", studentIdNumber: "", degree: "" };
+
+const fmtDate = (iso?: string) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString("vi-VN");
+};
+
+const initial = (name?: string) => (name?.trim()?.[0] || "?").toUpperCase();
+
+const Avatar = ({ src, name, className }: { src?: string | null; name: string; className: string }) =>
+  src ? (
+    <img src={src} alt={name} className={`${className} object-cover`} />
+  ) : (
+    <div className={`${className} bg-muted text-foreground/70 flex items-center justify-center text-sm font-semibold`}>
+      {initial(name)}
+    </div>
+  );
 
 const roleTabs = [
   { value: "all", label: "Tất cả", icon: Users },
@@ -17,6 +43,9 @@ const roleTabs = [
   { value: "teacher", label: "Giáo viên", icon: UserCheck },
   { value: "student", label: "Học sinh", icon: UserPlus },
   { value: "parent", label: "Phụ huynh", icon: Users },
+  { value: "office", label: "Văn phòng", icon: Users },
+  { value: "finance", label: "Tài chính", icon: Users },
+  { value: "exam-manager", label: "Phòng thi", icon: Users },
 ];
 
 const statusOptions = [
@@ -34,20 +63,33 @@ const statusColor: Record<string, string> = {
   rejected: "bg-rose-100 text-rose-700",
   suspended: "bg-slate-100 text-slate-700",
 };
-const roleLabel: Record<string, string> = { tutor: "Gia sư", teacher: "Giáo viên", student: "Học sinh", parent: "Phụ huynh", admin: "Admin" };
+const roleLabel: Record<string, string> = { tutor: "Gia sư", teacher: "Giáo viên", student: "Học sinh", parent: "Phụ huynh", admin: "Admin", office: "Văn phòng", finance: "Tài chính", "exam-manager": "Phòng thi" };
 
 const ITEMS_PER_PAGE = 8;
 
 const AdminUsers = () => {
-  const { users, updateUserStatus, deleteUser, rejectUser } = useAdmin();
+  // Live users from /api/Admin/users — real data only (no mock fallback).
+  const { users, isLoading, isError } = useAdminUsers();
+  const approveUser = useApproveUser();
+  const suspendUser = useSuspendUser();
+  const rejectUserMutation = useRejectUser();
+  const createUserMut = useCreateUser();
+  const updateUserMut = useUpdateUser();
+  const deleteUserMut = useDeleteUser();
+  const { user: currentUser } = useAuth();
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [detail, setDetail] = useState<AdminUser | null>(null);
-  const [rejectUserTarget, setRejectUserTarget] = useState<AdminUser | null>(null);
+  const [detail, setDetail] = useState<AdminUserResponse | null>(null);
+  const [rejectUserTarget, setRejectUserTarget] = useState<AdminUserResponse | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [page, setPage] = useState(1);
   const [showPendingDialog, setShowPendingDialog] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState(emptyCreate);
+  const [editTarget, setEditTarget] = useState<AdminUserResponse | null>(null);
+  const [editForm, setEditForm] = useState(emptyEdit);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUserResponse | null>(null);
   const { toast } = useToast();
 
   const filtered = useMemo(() => users.filter(u => {
@@ -60,9 +102,64 @@ const AdminUsers = () => {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  const handleDelete = (u: AdminUser) => {
-    deleteUser(u.id);
-    toast({ title: `Đã xóa ${u.name}`, variant: "destructive" });
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    const name = deleteTarget.name;
+    deleteUserMut.mutate(deleteTarget.id, {
+      onSuccess: () => toast({ title: `Đã xóa ${name}`, variant: "destructive" }),
+      onError: (e) => toast({ title: e instanceof Error ? e.message : "Xóa thất bại", variant: "destructive" }),
+    });
+    setDeleteTarget(null);
+  };
+
+  const handleCreate = () => {
+    if (!addForm.email || !addForm.password || !addForm.fullname || !addForm.phoneNumber) {
+      toast({ title: "Vui lòng điền email, mật khẩu, họ tên, SĐT", variant: "destructive" });
+      return;
+    }
+    createUserMut.mutate(addForm, {
+      onSuccess: () => { toast({ title: "Đã tạo người dùng" }); setShowAdd(false); setAddForm(emptyCreate); },
+      onError: (e) => toast({ title: e instanceof Error ? e.message : "Tạo thất bại", variant: "destructive" }),
+    });
+  };
+
+  const openEdit = (u: AdminUserResponse) => {
+    setEditTarget(u);
+    setEditForm({
+      fullname: u.name || "",
+      phoneNumber: u.phone || "",
+      email: u.email || "",
+      school: u.school || "",
+      grade: u.grade || 0,
+      gender: u.gender || "",
+      degree: u.degree || "",
+      studentIdNumber: u.studentIdNumber || "",
+      bio: u.bio || "",
+    });
+  };
+
+  const handleEdit = () => {
+    if (!editTarget) return;
+    updateUserMut.mutate(
+      {
+        id: editTarget.id,
+        payload: {
+          fullname: editForm.fullname,
+          phoneNumber: editForm.phoneNumber,
+          email: editForm.email,
+          school: editForm.school,
+          grade: Number(editForm.grade) || undefined,
+          gender: editForm.gender,
+          degree: editForm.degree,
+          studentIdNumber: editForm.studentIdNumber,
+          bio: editForm.bio,
+        },
+      },
+      {
+        onSuccess: () => { toast({ title: "Đã cập nhật người dùng" }); setEditTarget(null); },
+        onError: (e) => toast({ title: e instanceof Error ? e.message : "Cập nhật thất bại", variant: "destructive" }),
+      },
+    );
   };
 
   const handleStatusChange = (id: string, status: string) => {
@@ -75,15 +172,23 @@ const AdminUsers = () => {
       return;
     }
 
-    updateUserStatus(id, status as UserStatus);
-    toast({ title: "Đã cập nhật trạng thái" });
+    const mutation = status === "suspended" ? suspendUser : approveUser;
+    mutation.mutate(id, {
+      onSuccess: () => toast({ title: "Đã cập nhật trạng thái" }),
+      onError: (e) => toast({ title: e instanceof Error ? e.message : "Cập nhật thất bại", variant: "destructive" }),
+    });
   };
 
   const handleRejectConfirm = () => {
     if (!rejectUserTarget) return;
     const reason = rejectReason.trim() || "Lý do không được cung cấp";
-    rejectUser(rejectUserTarget.id, reason);
-    toast({ title: `Đã từ chối ${rejectUserTarget.name}` });
+    rejectUserMutation.mutate(
+      { id: rejectUserTarget.id, payload: { reason } },
+      {
+        onSuccess: () => toast({ title: `Đã từ chối ${rejectUserTarget.name}` }),
+        onError: (e) => toast({ title: e instanceof Error ? e.message : "Từ chối thất bại", variant: "destructive" }),
+      },
+    );
     setRejectUserTarget(null);
     setRejectReason("");
   };
@@ -143,6 +248,9 @@ const AdminUsers = () => {
         {(search || statusFilter !== "all" || tab !== "all") && (
           <Button variant="outline" onClick={resetFilters} className="h-11 rounded-2xl">Xóa lọc</Button>
         )}
+        <Button onClick={() => { setAddForm(emptyCreate); setShowAdd(true); }} className="h-11 rounded-2xl gap-1.5">
+          <Plus className="w-4 h-4" /> Thêm người dùng
+        </Button>
       </div>
 
       <p className="text-sm text-muted-foreground">Tìm thấy <span className="font-semibold text-foreground">{filtered.length}</span> người dùng</p>
@@ -170,7 +278,7 @@ const AdminUsers = () => {
               {pendingApprovals.slice(0, 5).map((u) => (
                 <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
                   <div className="flex items-center gap-3">
-                    <img src={u.avatar} alt={u.name} className="w-9 h-9 rounded-full object-cover" />
+                    <Avatar src={u.avatar} name={u.name} className="w-9 h-9 rounded-full" />
                     <div>
                       <p className="text-sm font-medium text-foreground">{u.name}</p>
                       <p className="text-xs text-muted-foreground">{roleLabel[u.role] || u.role} · {u.email}</p>
@@ -200,7 +308,7 @@ const AdminUsers = () => {
                 pendingApprovals.map(u => (
                   <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
                     <div className="flex items-center gap-3">
-                      <img src={u.avatar} alt={u.name} className="w-9 h-9 rounded-full object-cover" />
+                      <Avatar src={u.avatar} name={u.name} className="w-9 h-9 rounded-full" />
                       <div>
                         <p className="text-sm font-medium text-slate-900">{u.name}</p>
                         <p className="text-xs text-slate-500">{roleLabel[u.role] || u.role} · {u.email}</p>
@@ -270,7 +378,7 @@ const AdminUsers = () => {
                 <TableRow key={u.id} className="hover:bg-muted/20 transition-colors">
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <img src={u.avatar} alt={u.name} className="w-9 h-9 rounded-xl object-cover" />
+                      <Avatar src={u.avatar} name={u.name} className="w-9 h-9 rounded-xl" />
                       <div>
                         <p className="font-medium text-foreground text-sm">{u.name}</p>
                         <p className="text-xs text-muted-foreground">{u.email}</p>
@@ -278,15 +386,8 @@ const AdminUsers = () => {
                     </div>
                   </TableCell>
                   <TableCell><span className="text-xs font-medium px-2.5 py-1 rounded-lg bg-muted text-foreground">{roleLabel[u.role] || u.role}</span></TableCell>
-                  <TableCell>{u.subject ? <span className="text-xs px-2.5 py-1 rounded-lg bg-muted text-foreground font-medium">{u.subject}</span> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
-                  <TableCell>
-                    {(u.role === "tutor" || u.role === "teacher") ? (
-                      <div className="flex items-center gap-1">
-                        <Star className="w-3.5 h-3.5 fill-foreground text-foreground" />
-                        <span className="text-sm font-medium text-foreground">4.{Math.floor(Math.random() * 5) + 5}</span>
-                      </div>
-                    ) : <span className="text-xs text-muted-foreground">—</span>}
-                  </TableCell>
+                  <TableCell>{u.school ? <span className="text-xs px-2.5 py-1 rounded-lg bg-muted text-foreground font-medium">{u.school}</span> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                  <TableCell><span className="text-xs text-muted-foreground">—</span></TableCell>
                   <TableCell>
                     <Select value={u.status} onValueChange={v => handleStatusChange(u.id, v)}>
                       <SelectTrigger className={`w-28 h-7 text-[11px] rounded-full border-0 font-medium ${statusColor[u.status]}`}><SelectValue /></SelectTrigger>
@@ -298,17 +399,32 @@ const AdminUsers = () => {
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{u.createdAt}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{fmtDate(u.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-0.5">
                       <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" onClick={() => setDetail(u)}><Eye className="w-4 h-4 text-muted-foreground" /></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-destructive hover:text-destructive" onClick={() => handleDelete(u)}><Trash2 className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" onClick={() => openEdit(u)}><Pencil className="w-4 h-4 text-muted-foreground" /></Button>
+                      {currentUser?.id !== u.id && (
+                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-destructive hover:text-destructive" onClick={() => setDeleteTarget(u)}><Trash2 className="w-4 h-4" /></Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
               ))}
               {paginated.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-12">Không tìm thấy người dùng</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
+                    {isLoading ? (
+                      <span className="inline-flex items-center justify-center">
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải người dùng...
+                      </span>
+                    ) : isError ? (
+                      "Không tải được danh sách người dùng. Vui lòng thử lại."
+                    ) : (
+                      "Không tìm thấy người dùng"
+                    )}
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
@@ -333,7 +449,7 @@ const AdminUsers = () => {
           {detail && (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <img src={detail.avatar} className="w-16 h-16 rounded-2xl object-cover" alt={detail.name} />
+                <Avatar src={detail.avatar} name={detail.name} className="w-16 h-16 rounded-2xl" />
                 <div>
                   <p className="font-bold text-lg text-foreground">{detail.name}</p>
                   <span className="text-xs px-2.5 py-1 rounded-lg bg-muted text-foreground font-medium">{roleLabel[detail.role]}</span>
@@ -343,14 +459,118 @@ const AdminUsers = () => {
                 <div className="bg-muted/50 p-3 rounded-xl"><span className="text-muted-foreground block text-xs mb-1">Email</span><span className="text-foreground">{detail.email}</span></div>
                 <div className="bg-muted/50 p-3 rounded-xl"><span className="text-muted-foreground block text-xs mb-1">SĐT</span><span className="text-foreground">{detail.phone}</span></div>
                 <div className="bg-muted/50 p-3 rounded-xl"><span className="text-muted-foreground block text-xs mb-1">Trạng thái</span><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[detail.status]}`}>{statusLabel[detail.status]}</span></div>
-                <div className="bg-muted/50 p-3 rounded-xl"><span className="text-muted-foreground block text-xs mb-1">Ngày tạo</span><span className="text-foreground">{detail.createdAt}</span></div>
-                {detail.subject && <div className="bg-muted/50 p-3 rounded-xl col-span-2"><span className="text-muted-foreground block text-xs mb-1">Môn</span><span className="text-foreground">{detail.subject}</span></div>}
+                <div className="bg-muted/50 p-3 rounded-xl"><span className="text-muted-foreground block text-xs mb-1">Ngày tạo</span><span className="text-foreground">{fmtDate(detail.createdAt)}</span></div>
                 {detail.school && <div className="bg-muted/50 p-3 rounded-xl col-span-2"><span className="text-muted-foreground block text-xs mb-1">Trường</span><span className="text-foreground">{detail.school}</span></div>}
-                {detail.studentId && <div className="bg-muted/50 p-3 rounded-xl col-span-2"><span className="text-muted-foreground block text-xs mb-1">MSSV</span><span className="text-foreground">{detail.studentId}</span></div>}
+                {detail.studentIdNumber && <div className="bg-muted/50 p-3 rounded-xl col-span-2"><span className="text-muted-foreground block text-xs mb-1">MSSV</span><span className="text-foreground">{detail.studentIdNumber}</span></div>}
               </div>
               {detail.bio && <p className="text-sm text-foreground bg-muted/50 p-3 rounded-xl">{detail.bio}</p>}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add user */}
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogContent className="rounded-2xl max-w-lg">
+          <DialogHeader><DialogTitle>Thêm người dùng</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Họ và tên</Label><Input value={addForm.fullname} onChange={e => setAddForm(f => ({ ...f, fullname: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+              <div><Label>Số điện thoại</Label><Input value={addForm.phoneNumber} onChange={e => setAddForm(f => ({ ...f, phoneNumber: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+            </div>
+            <div><Label>Email</Label><Input type="email" value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Mật khẩu</Label><Input type="password" value={addForm.password} onChange={e => setAddForm(f => ({ ...f, password: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+              <div><Label>Vai trò</Label>
+                <Select value={addForm.role} onValueChange={v => setAddForm(f => ({ ...f, role: v }))}>
+                  <SelectTrigger className="mt-1.5 rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student">Học sinh</SelectItem>
+                    <SelectItem value="parent">Phụ huynh</SelectItem>
+                    <SelectItem value="tutor">Gia sư</SelectItem>
+                    <SelectItem value="teacher">Giáo viên</SelectItem>
+                    <SelectItem value="office">Văn phòng</SelectItem>
+                    <SelectItem value="finance">Tài chính</SelectItem>
+                    <SelectItem value="exam-manager">Phòng thi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {addForm.role === "student" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Trường</Label><Input value={addForm.school} onChange={e => setAddForm(f => ({ ...f, school: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+                <div><Label>Khối lớp</Label><Input type="number" value={addForm.grade} onChange={e => setAddForm(f => ({ ...f, grade: Number(e.target.value) }))} className="mt-1.5 rounded-xl" /></div>
+              </div>
+            )}
+            {(addForm.role === "tutor" || addForm.role === "teacher") && (
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Bằng cấp</Label><Input value={addForm.degree} onChange={e => setAddForm(f => ({ ...f, degree: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+                <div><Label>MSSV</Label><Input value={addForm.studentIdNumber} onChange={e => setAddForm(f => ({ ...f, studentIdNumber: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowAdd(false)} className="h-10">Hủy</Button>
+              <Button onClick={handleCreate} className="h-10">Tạo</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit user */}
+      <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null); }}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader><DialogTitle>Chỉnh sửa người dùng {editTarget && <span className="text-sm font-normal text-muted-foreground">· {roleLabel[editTarget.role] || editTarget.role}</span>}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Họ và tên</Label><Input value={editForm.fullname} onChange={e => setEditForm(f => ({ ...f, fullname: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+              <div><Label>Số điện thoại</Label><Input value={editForm.phoneNumber} onChange={e => setEditForm(f => ({ ...f, phoneNumber: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+            </div>
+            <div><Label>Email</Label><Input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+            {editTarget?.role === "student" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Trường</Label><Input value={editForm.school} onChange={e => setEditForm(f => ({ ...f, school: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+                <div><Label>Khối lớp</Label><Input type="number" value={editForm.grade} onChange={e => setEditForm(f => ({ ...f, grade: Number(e.target.value) }))} className="mt-1.5 rounded-xl" /></div>
+              </div>
+            )}
+            {(editTarget?.role === "tutor" || editTarget?.role === "teacher") && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Giới tính</Label>
+                    <Select value={editForm.gender} onValueChange={v => setEditForm(f => ({ ...f, gender: v }))}>
+                      <SelectTrigger className="mt-1.5 rounded-xl"><SelectValue placeholder="Chọn" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Nam</SelectItem>
+                        <SelectItem value="Female">Nữ</SelectItem>
+                        <SelectItem value="Other">Khác</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>MSSV</Label><Input value={editForm.studentIdNumber} onChange={e => setEditForm(f => ({ ...f, studentIdNumber: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Trường</Label><Input value={editForm.school} onChange={e => setEditForm(f => ({ ...f, school: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+                  <div><Label>Bằng cấp</Label><Input value={editForm.degree} onChange={e => setEditForm(f => ({ ...f, degree: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+                </div>
+                <div><Label>Giới thiệu (bio)</Label><Textarea value={editForm.bio} onChange={e => setEditForm(f => ({ ...f, bio: e.target.value }))} className="mt-1.5 rounded-xl" /></div>
+              </>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setEditTarget(null)} className="h-10">Hủy</Button>
+              <Button onClick={handleEdit} className="h-10">Lưu</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent className="rounded-2xl max-w-sm">
+          <DialogHeader><DialogTitle>Xóa người dùng</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Bạn có chắc muốn xóa <span className="font-semibold text-foreground">{deleteTarget?.name}</span>? Hành động này không thể hoàn tác.</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} className="h-10">Hủy</Button>
+            <Button variant="destructive" onClick={confirmDelete} className="h-10">Xóa</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

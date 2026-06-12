@@ -1,4 +1,3 @@
-import { useExamManager, Exam } from "@/contexts/ExamManagerContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,50 +5,110 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, ShieldCheck, Sparkles, AlertTriangle, Eye, Users, DollarSign, TrendingUp, BarChart3 } from "lucide-react";
-import { useState } from "react";
+import { Settings, ShieldCheck, Sparkles, AlertTriangle, Users, FileText, Clock, BarChart3, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useExams, useExamAiConfig, useUpdateExamAiConfig, useUpdateExam } from "@/hooks/useExams";
+import { getExam } from "@/services/exams";
+import type { ExamAiConfig, ExamListItemResponse } from "@/types/api";
 
-const difficultyLabels = { easy: "Dễ", medium: "Trung bình", hard: "Khó" };
-const modeLabels = { auto_generate: "Tự động generate mỗi lượt", fixed_set: "Bộ đề cố định" };
-const severityConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  low: { label: "Thấp", variant: "outline" },
-  medium: { label: "Trung bình", variant: "secondary" },
-  high: { label: "Cao", variant: "destructive" },
-};
-const typeLabels: Record<string, string> = {
-  tab_switch: "Chuyển tab",
-  copy_paste: "Copy/Paste",
-  screen_split: "Chia màn hình",
-  suspicious_time: "Thời gian bất thường",
-};
+const difficultyLabels: Record<string, string> = { easy: "Dễ", medium: "Trung bình", hard: "Khó" };
+
+// PUT /Exams/{id} expects a full UpdateExamRequest, so rebuild it from the listing
+// row. `description` isn't on the list item, so the caller fetches it first and
+// passes it in — otherwise toggling proctoring would blank the exam description.
+const toUpdatePayload = (e: ExamListItemResponse, patch: Partial<ExamListItemResponse>, description: string) => ({
+  subjectId: e.subjectId,
+  title: e.title,
+  description,
+  duration: e.duration,
+  type: e.type,
+  status: e.status,
+  difficulty: e.difficulty,
+  fee: e.fee,
+  year: e.year,
+  startDate: e.startDate ?? null,
+  endDate: e.endDate ?? null,
+  maxAttemptsPerUser: e.maxAttemptsPerUser,
+  scoreScale: e.scoreScale,
+  aiProctoring: e.aiProctoring,
+  ...patch,
+});
 
 const ExamManagerAIConfig = () => {
-  const { exams, updateExam, proctoringLogs } = useExamManager();
   const { toast } = useToast();
-  const [selectedExam, setSelectedExam] = useState(exams[0]?.id || "");
+  const { exams, isLoading: examsLoading } = useExams();
+  const { data: aiConfig, isLoading: configLoading } = useExamAiConfig();
+  const updateAiConfig = useUpdateExamAiConfig();
+  const updateExam = useUpdateExam();
+
+  // Fetch the full exam (for its description) before the per-exam proctoring toggle,
+  // so PUT /Exams/{id} doesn't wipe the description.
+  const handleToggleProctoring = async (exam: ExamListItemResponse, v: boolean) => {
+    let description = "";
+    try {
+      description = (await getExam(exam.id)).description ?? "";
+    } catch {
+      /* keep empty if the detail fetch fails */
+    }
+    updateExam.mutate(
+      { id: exam.id, payload: toUpdatePayload(exam, { aiProctoring: v }, description) },
+      {
+        onSuccess: () => toast({ title: "Đã cập nhật proctoring cho đề thi" }),
+        onError: () => toast({ title: "Cập nhật thất bại", variant: "destructive" }),
+      },
+    );
+  };
+
+  const [selectedExam, setSelectedExam] = useState<string>("");
   const [topicRatio, setTopicRatio] = useState([30, 25, 20, 15, 10]);
+  const [form, setForm] = useState<ExamAiConfig | null>(null);
 
-  const exam = exams.find(e => e.id === selectedExam);
+  // Seed the local form from the fetched global AI config.
+  useEffect(() => {
+    if (aiConfig) setForm(aiConfig);
+  }, [aiConfig]);
+
+  // Default the exam selector once exams load.
+  useEffect(() => {
+    if (!selectedExam && exams.length > 0) setSelectedExam(String(exams[0].id));
+  }, [exams, selectedExam]);
+
   const topics = ["Hàm số", "Tích phân", "Xác suất", "Hình học", "Đại số"];
+  const exam = exams.find(e => String(e.id) === selectedExam);
 
-  if (!exam) return <div className="p-6"><p className="text-muted-foreground">Chưa có đề thi nào</p></div>;
+  const saveConfig = (partial: Partial<ExamAiConfig>) => {
+    updateAiConfig.mutate(partial, {
+      onSuccess: () => toast({ title: "Đã lưu cấu hình AI" }),
+      onError: () => toast({ title: "Lưu cấu hình thất bại", variant: "destructive" }),
+    });
+  };
+
+  if (examsLoading || configLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải cấu hình AI...
+      </div>
+    );
+  }
+
+  if (!exam || !form) return <div className="p-6"><p className="text-muted-foreground">Chưa có đề thi nào</p></div>;
 
   return (
     <div className="px-6 pt-2 pb-6 space-y-4">
       <div className="flex items-center gap-3">
         <Select value={selectedExam} onValueChange={setSelectedExam}>
           <SelectTrigger className="w-80 rounded-xl"><SelectValue /></SelectTrigger>
-          <SelectContent>{exams.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
+          <SelectContent>{exams.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.title}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Lượt thi", value: exam.attempts, icon: Users, gradient: "linear-gradient(to right, #2563eb, #3b82f6)" },
-          { label: "Doanh thu", value: `${(exam.revenue / 1000000).toFixed(2)}M`, icon: DollarSign, gradient: "linear-gradient(to right, #10b981, #14b8a6)" },
-          { label: "Hoàn thành", value: `${exam.completionRate}%`, icon: TrendingUp, gradient: "linear-gradient(to right, #f59e0b, #f97316)" },
-          { label: "Đạt TB", value: `${exam.aboveAverageRate}%`, icon: BarChart3, gradient: "linear-gradient(to right, #a855f7, #d946ef)" },
+          { label: "Số câu hỏi", value: exam.questionCount, icon: FileText, gradient: "linear-gradient(to right, #10b981, #14b8a6)" },
+          { label: "Thời lượng", value: `${exam.duration}'`, icon: Clock, gradient: "linear-gradient(to right, #f59e0b, #f97316)" },
+          { label: "Học phí", value: `${(exam.fee / 1000).toFixed(0)}K`, icon: BarChart3, gradient: "linear-gradient(to right, #a855f7, #d946ef)" },
         ].map((s, i) => (
           <Card key={i} className="border-0 text-white shadow-lg" style={{ backgroundImage: s.gradient }}>
             <CardContent className="p-4 flex items-center justify-between">
@@ -70,11 +129,11 @@ const ExamManagerAIConfig = () => {
           <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4" /> Chế độ AI Generate</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
-              {(["auto_generate", "fixed_set"] as const).map(mode => (
-                <button key={mode} onClick={() => updateExam(exam.id, { aiMode: mode })}
-                  className={`w-full p-4 rounded-xl border text-left transition-all ${exam.aiMode === mode ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
-                  <p className="text-sm font-medium text-foreground">{modeLabels[mode]}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{mode === "auto_generate" ? "Mỗi lần thi hệ thống sẽ generate đề mới từ ngân hàng câu hỏi" : "Sử dụng bộ đề đã soạn sẵn, không thay đổi giữa các lượt"}</p>
+              {([true, false] as const).map(mode => (
+                <button key={String(mode)} onClick={() => setForm({ ...form, autoGenerateEnabled: mode })}
+                  className={`w-full p-4 rounded-xl border text-left transition-all ${form.autoGenerateEnabled === mode ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
+                  <p className="text-sm font-medium text-foreground">{mode ? "Tự động generate mỗi lượt" : "Bộ đề cố định"}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{mode ? "Mỗi lần thi hệ thống sẽ generate đề mới từ ngân hàng câu hỏi" : "Sử dụng bộ đề đã soạn sẵn, không thay đổi giữa các lượt"}</p>
                 </button>
               ))}
             </div>
@@ -86,11 +145,11 @@ const ExamManagerAIConfig = () => {
           <CardContent className="space-y-4">
             <div className="space-y-3">
               {(["easy", "medium", "hard"] as const).map(d => (
-                <button key={d} onClick={() => updateExam(exam.id, { difficulty: d })}
-                  className={`w-full p-3 rounded-xl border text-left transition-all ${exam.difficulty === d ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
+                <button key={d} onClick={() => setForm({ ...form, defaultDifficulty: d })}
+                  className={`w-full p-3 rounded-xl border text-left transition-all ${form.defaultDifficulty === d ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-foreground">{difficultyLabels[d]}</p>
-                    {exam.difficulty === d && <Badge variant="default" className="text-[10px]">Đang chọn</Badge>}
+                    {form.defaultDifficulty === d && <Badge variant="default" className="text-[10px]">Đang chọn</Badge>}
                   </div>
                 </button>
               ))}
@@ -119,21 +178,57 @@ const ExamManagerAIConfig = () => {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl">
               <div>
-                <p className="text-sm font-medium text-foreground">Giám sát chống gian lận</p>
+                <p className="text-sm font-medium text-foreground">Giám sát chống gian lận (toàn hệ thống)</p>
                 <p className="text-xs text-muted-foreground">Phát hiện chuyển tab, chia màn hình, copy/paste</p>
               </div>
-              <Switch checked={exam.aiProctoring} onCheckedChange={v => updateExam(exam.id, { aiProctoring: v })} />
+              <Switch checked={form.proctoringEnabled} onCheckedChange={v => setForm({ ...form, proctoringEnabled: v })} />
             </div>
-            <div className="space-y-2 text-xs text-muted-foreground">
-              <p>Tính năng bao gồm:</p>
-              <ul className="space-y-1 ml-4 list-disc">
-                <li>Phát hiện rời khỏi tab thi</li>
-                <li>Chặn copy/paste nội dung</li>
-                <li>Ghi nhận thời gian bất thường</li>
-                <li>Cảnh báo realtime cho admin</li>
-              </ul>
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-foreground">Phát hiện khuôn mặt</p>
+                <p className="text-xs text-muted-foreground">Xác thực thí sinh qua webcam</p>
+              </div>
+              <Switch checked={form.faceDetection} onCheckedChange={v => setForm({ ...form, faceDetection: v })} />
             </div>
-            <Button onClick={() => toast({ title: "Đã lưu cấu hình AI" })} className="w-full rounded-xl">Lưu cấu hình</Button>
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-foreground">Bắt buộc toàn màn hình</p>
+                <p className="text-xs text-muted-foreground">Thoát fullscreen sẽ bị ghi nhận</p>
+              </div>
+              <Switch checked={form.fullscreenRequired} onCheckedChange={v => setForm({ ...form, fullscreenRequired: v })} />
+            </div>
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-foreground">Chặn copy/paste</p>
+                <p className="text-xs text-muted-foreground">Ngăn sao chép nội dung đề thi</p>
+              </div>
+              <Switch checked={form.copyPasteBlocked} onCheckedChange={v => setForm({ ...form, copyPasteBlocked: v })} />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-foreground">Số lần chuyển tab tối đa</span>
+                <span className="text-xs font-medium text-muted-foreground">{form.tabSwitchLimit}</span>
+              </div>
+              <Slider value={[form.tabSwitchLimit]} max={10} step={1} onValueChange={v => setForm({ ...form, tabSwitchLimit: v[0] })} />
+            </div>
+            <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border">
+              <div>
+                <p className="text-sm font-medium text-foreground">Bật proctoring cho đề này</p>
+                <p className="text-xs text-muted-foreground">Áp dụng riêng cho "{exam.title}"</p>
+              </div>
+              <Switch
+                checked={exam.aiProctoring}
+                disabled={updateExam.isPending}
+                onCheckedChange={v => handleToggleProctoring(exam, v)}
+              />
+            </div>
+            <Button
+              onClick={() => saveConfig(form)}
+              disabled={updateAiConfig.isPending}
+              className="w-full rounded-xl"
+            >
+              {updateAiConfig.isPending ? "Đang lưu..." : "Lưu cấu hình"}
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -143,10 +238,11 @@ const ExamManagerAIConfig = () => {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Log AI Proctoring - Cảnh báo gian lận</CardTitle>
-            <Badge variant="destructive" className="text-[10px]">{proctoringLogs.filter(l => l.severity === "high").length} cảnh báo cao</Badge>
+            <Badge variant="destructive" className="text-[10px]">0 cảnh báo cao</Badge>
           </div>
         </CardHeader>
         <CardContent>
+          {/* TODO(BE): proctoring violation logs endpoint not exposed */}
           <Table>
             <TableHeader>
               <TableRow>
@@ -159,16 +255,11 @@ const ExamManagerAIConfig = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {proctoringLogs.map(log => (
-                <TableRow key={log.id}>
-                  <TableCell className="font-medium text-sm">{log.userName}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-[10px]">{typeLabels[log.type]}</Badge></TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{log.description}</TableCell>
-                  <TableCell className="text-sm">{exams.find(e => e.id === log.examId)?.name?.split(" ").slice(3, 5).join(" ") || log.examId}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{log.timestamp}</TableCell>
-                  <TableCell><Badge variant={severityConfig[log.severity].variant}>{severityConfig[log.severity].label}</Badge></TableCell>
-                </TableRow>
-              ))}
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                  Chưa có dữ liệu
+                </TableCell>
+              </TableRow>
             </TableBody>
           </Table>
         </CardContent>

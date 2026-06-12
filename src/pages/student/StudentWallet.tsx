@@ -1,4 +1,6 @@
-import { useStudent } from "@/contexts/StudentContext";
+import { useWallet, useWalletTransactions, useDeposit, useWithdraw } from "@/hooks/useWallet";
+import { useClasses } from "@/hooks/useClasses";
+import type { DepositResponse, ClassItem } from "@/types/api";
 import {
   Wallet,
   ArrowDownLeft,
@@ -9,6 +11,7 @@ import {
   Search,
   Download,
   Receipt,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -41,6 +44,8 @@ import {
 
 const typeLabels: Record<string, string> = {
   deposit: "Nạp tiền",
+  transfer_in: "Nhận từ phụ huynh",
+  transfer_out: "Chuyển đi",
   tuition_payment: "Học phí",
   mock_exam_purchase: "Mua đề thi",
   refund: "Hoàn tiền",
@@ -50,6 +55,7 @@ const typeLabels: Record<string, string> = {
 const paymentMethods = [
   { id: "momo", name: "MoMo", desc: "Ví điện tử MoMo" },
   { id: "vnpay", name: "VNPay", desc: "Cổng thanh toán VNPay" },
+  { id: "payos", name: "PayOS", desc: "Cổng thanh toán PayOS" },
   { id: "vietcombank", name: "Vietcombank", desc: "Ngân hàng Vietcombank" },
   { id: "techcombank", name: "Techcombank", desc: "Ngân hàng Techcombank" },
 ];
@@ -62,14 +68,12 @@ const CHART_COLORS = [
 ];
 
 const StudentWallet = () => {
-  const {
-    walletBalance,
-    walletTransactions,
-    depositToWallet,
-    payTuition,
-    classes,
-    withdrawFromWallet,
-  } = useStudent();
+  const { data: walletData } = useWallet();
+  const { transactions: walletTransactions, isLoading: txLoading } = useWalletTransactions();
+  const { classes } = useClasses({ Status: "active" });
+  const depositMutation = useDeposit();
+  const withdrawMutation = useWithdraw();
+  const walletBalance = walletData?.balance ?? 0;
 
   const [showDeposit, setShowDeposit] = useState(false);
   const [showPayTuition, setShowPayTuition] = useState(false);
@@ -78,19 +82,6 @@ const StudentWallet = () => {
   const [selectedMethod, setSelectedMethod] = useState("");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-
-  const pendingTuitions = classes
-    .filter((c) => c.status === "active")
-    .map((c) => {
-      const paid = walletTransactions.some(
-        (t) =>
-          t.type === "tuition_payment" &&
-          t.relatedId === c.id &&
-          t.date >= "2026-03-01"
-      );
-      return { ...c, paid };
-    })
-    .filter((c) => !c.paid);
 
   const filtered = walletTransactions
     .filter((t) => typeFilter === "all" || t.type === typeFilter)
@@ -155,13 +146,25 @@ const StudentWallet = () => {
     const amt = parseInt(amount);
     if (!amt || amt <= 0 || !selectedMethod) return;
 
-    const method =
+    const methodName =
       paymentMethods.find((m) => m.id === selectedMethod)?.name || selectedMethod;
 
-    depositToWallet(amt, method);
-    toast.success(`Nạp ${amt.toLocaleString("vi-VN")}đ thành công qua ${method}!`);
-    setShowDeposit(false);
-    resetDialogState();
+    depositMutation.mutate(
+      { amount: amt, method: selectedMethod },
+      {
+        onSuccess: (res: DepositResponse) => {
+          // Online gateways (MoMo/VNPay) return a redirect URL to complete payment.
+          if (res?.payUrl) {
+            window.location.href = res.payUrl;
+            return;
+          }
+          toast.success(`Đã tạo yêu cầu nạp ${amt.toLocaleString("vi-VN")}đ qua ${methodName}!`);
+          setShowDeposit(false);
+          resetDialogState();
+        },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Nạp tiền thất bại."),
+      },
+    );
   };
 
   const handleWithdraw = () => {
@@ -173,24 +176,26 @@ const StudentWallet = () => {
       return;
     }
 
-    const method =
+    const methodName =
       paymentMethods.find((m) => m.id === selectedMethod)?.name || selectedMethod;
 
-    withdrawFromWallet(amt, method);
-    toast.success(`Đã rút ${amt.toLocaleString("vi-VN")}đ qua ${method}`);
-    setShowWithdraw(false);
-    resetDialogState();
+    withdrawMutation.mutate(
+      { amount: amt, method: selectedMethod, bankAccount: "", bankName: methodName, note: "" },
+      {
+        onSuccess: () => {
+          toast.success(`Đã gửi yêu cầu rút ${amt.toLocaleString("vi-VN")}đ qua ${methodName}`);
+          setShowWithdraw(false);
+          resetDialogState();
+        },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Rút tiền thất bại."),
+      },
+    );
   };
 
-  const handlePayTuitionItem = (cls: typeof classes[0]) => {
-    if (walletBalance < cls.fee) {
-      toast.error("Số dư ví không đủ. Vui lòng nạp thêm tiền.");
-      return;
-    }
-
-    payTuition(cls.id, cls.fee, `Thanh toán học phí - ${cls.name}`);
-    toast.success(
-      `Đã thanh toán ${cls.fee.toLocaleString("vi-VN")}đ cho ${cls.name}`
+  // TODO(BE): no pay-tuition endpoint (tuition is escrowed at class creation)
+  const handlePayTuitionItem = (_cls: ClassItem) => {
+    toast.info(
+      "Học phí được giữ trong escrow khi tạo lớp — chưa có luồng thanh toán riêng."
     );
   };
 
@@ -480,7 +485,13 @@ const StudentWallet = () => {
         </div>
 
         <div className="space-y-3">
-          {filtered.map((t) => (
+          {txLoading && (
+            <div className="flex items-center justify-center py-10 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải giao dịch...
+            </div>
+          )}
+
+          {!txLoading && filtered.map((t) => (
             <div
               key={t.id}
               className="flex items-center gap-3 sm:gap-4 p-4 border border-border/60 hover:bg-muted/30 rounded-2xl transition-colors"
@@ -520,7 +531,7 @@ const StudentWallet = () => {
             </div>
           ))}
 
-          {filtered.length === 0 && (
+          {!txLoading && filtered.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">
               Không có giao dịch nào
             </p>
@@ -632,12 +643,21 @@ const StudentWallet = () => {
               </span>
             </p>
 
-            {pendingTuitions.length === 0 ? (
+            {/* TODO(BE): no pay-tuition endpoint (tuition is escrowed at class creation) */}
+            <div className="flex gap-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl">
+              <ShieldCheck className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Học phí được giữ trong escrow ngay khi tạo lớp và giải ngân theo
+                buổi học. Hiện chưa có luồng thanh toán học phí riêng.
+              </p>
+            </div>
+
+            {classes.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                Không có học phí nào cần thanh toán tháng này.
+                Không có lớp đang hoạt động.
               </p>
             ) : (
-              pendingTuitions.map((cls) => (
+              classes.map((cls) => (
                 <div
                   key={cls.id}
                   className="flex items-center gap-3 p-4 border border-border rounded-2xl"
@@ -653,7 +673,7 @@ const StudentWallet = () => {
                       {cls.name}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {cls.tutorName} • {cls.schedule}
+                      {cls.tutorName}
                     </p>
                     <p className="text-sm font-semibold text-foreground mt-1">
                       {cls.fee.toLocaleString("vi-VN")}đ
@@ -662,11 +682,12 @@ const StudentWallet = () => {
 
                   <Button
                     size="sm"
+                    variant="outline"
                     className="rounded-xl text-xs h-9 px-4"
-                    disabled={walletBalance < cls.fee}
+                    disabled
                     onClick={() => handlePayTuitionItem(cls)}
                   >
-                    Thanh toán
+                    Đã giữ escrow
                   </Button>
                 </div>
               ))

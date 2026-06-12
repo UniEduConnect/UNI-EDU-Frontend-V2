@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard,
   BookOpen,
@@ -8,6 +9,8 @@ import {
   Star,
   MessageSquare,
   UserCircle,
+  UserSearch,
+  Home,
   LogOut,
   PanelLeftClose,
   PanelLeft,
@@ -20,11 +23,18 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTutor } from "@/contexts/TutorContext";
 import EduLogo from "@/components/EduLogo";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { useState, useRef, useEffect } from "react";
 import MessageBubble from "@/components/MessageBubble";
+import {
+  useNotifications,
+  useUnreadCount,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+} from "@/hooks/useNotifications";
+import { useMyTutorProfile } from "@/hooks/useTutors";
+import { useConversations } from "@/hooks/useConversations";
 
 const navItems = [
   { to: "/tutor", icon: LayoutDashboard, label: "Tổng quan", end: true },
@@ -41,6 +51,7 @@ const pageTitles: Record<string, string> = {
   "/tutor": "Tổng Quan",
   "/tutor/classes": "Quản Lý Lớp Học",
   "/tutor/students": "Tiến Độ Học Sinh",
+  "/tutor/find-students": "Tìm Học Sinh",
   "/tutor/wallet": "Thu Nhập",
   "/tutor/schedule": "Lịch Dạy",
   "/tutor/reviews": "Đánh Giá",
@@ -48,59 +59,7 @@ const pageTitles: Record<string, string> = {
   "/tutor/profile": "Hồ Sơ Cá Nhân",
 };
 
-interface Notification {
-  id: string;
-  type: "warning" | "info" | "success" | "error";
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-}
-
-const seedNotifications: Notification[] = [
-  {
-    id: "tn1",
-    type: "success",
-    title: "Buổi học đã hoàn thành",
-    message: "Buổi Toán 12 ngày 01/03 đã được phụ huynh xác nhận.",
-    timestamp: "01/03/2026 21:30",
-    read: false,
-  },
-  {
-    id: "tn2",
-    type: "info",
-    title: "Yêu cầu học thử mới",
-    message: "Phụ huynh Nguyễn Văn B yêu cầu học thử Lý 11 cho con.",
-    timestamp: "02/03/2026 10:15",
-    read: false,
-  },
-  {
-    id: "tn3",
-    type: "warning",
-    title: "Lịch dạy sắp tới",
-    message: "Bạn có buổi dạy Toán 12 lúc 19:00 hôm nay.",
-    timestamp: "03/03/2026 08:00",
-    read: false,
-  },
-  {
-    id: "tn4",
-    type: "success",
-    title: "Thanh toán đã nhận",
-    message: "Bạn đã nhận 500.000đ từ buổi dạy Lý 11.",
-    timestamp: "28/02/2026 15:00",
-    read: true,
-  },
-  {
-    id: "tn5",
-    type: "info",
-    title: "Đánh giá mới",
-    message: "Phụ huynh Trần C đã đánh giá 5 sao cho buổi học.",
-    timestamp: "27/02/2026 20:00",
-    read: true,
-  },
-];
-
-const notifIcon: Record<Notification["type"], React.ReactNode> = {
+const notifIcon: Record<string, React.ReactNode> = {
   warning: <AlertTriangle className="w-4 h-4 text-warning" />,
   info: <Info className="w-4 h-4 text-info" />,
   success: <CheckCircle2 className="w-4 h-4 text-success" />,
@@ -109,20 +68,22 @@ const notifIcon: Record<Notification["type"], React.ReactNode> = {
 
 const TutorLayout = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const location = useLocation();
-  const { profile, chatMessages } = useTutor();
+
+  const { data: profile } = useMyTutorProfile();
+  const { notifications } = useNotifications();
+  const { count: unreadNotif } = useUnreadCount();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+  const { conversations } = useConversations();
 
   const [collapsed, setCollapsed] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
-  const [notifications, setNotifications] =
-    useState<Notification[]>(seedNotifications);
 
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unreadChat = chatMessages.filter(
-    (m) => !m.read && m.sender !== "tutor"
-  ).length;
-  const unreadNotif = notifications.filter((n) => !n.read).length;
+  const unreadChat = conversations.reduce((n, c) => n + c.unreadCount, 0);
   const currentTitle = pageTitles[location.pathname] || "Gia sư";
 
   useEffect(() => {
@@ -135,16 +96,6 @@ const TutorLayout = () => {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  const markNotificationRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-  };
-
-  const markAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
 
   return (
     <div className="relative min-h-screen bg-slate-100">
@@ -224,9 +175,20 @@ const TutorLayout = () => {
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-sidebar-border/40">
+        <div className="px-3 py-3 border-t border-sidebar-border/40 space-y-1">
+          <NavLink
+            to="/"
+            title={collapsed ? "Trang chủ" : undefined}
+            className={cn(
+              "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white w-full transition-all duration-300",
+              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+            )}
+          >
+            <Home className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span>Trang chủ</span>}
+          </NavLink>
           <button
-            onClick={() => navigate("/")}
+            onClick={async () => { await logout(); navigate("/login"); }}
             title={collapsed ? "Đăng xuất" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-red-500 hover:text-white w-full transition-all duration-300",
@@ -276,7 +238,7 @@ const TutorLayout = () => {
                       </h3>
                       {unreadNotif > 0 && (
                         <button
-                          onClick={markAllNotificationsRead}
+                          onClick={() => markAllRead.mutate()}
                           className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-500 font-medium"
                         >
                           <Check className="w-3 h-3" /> Đọc tất cả
@@ -294,8 +256,13 @@ const TutorLayout = () => {
                           <button
                             key={n.id}
                             onClick={() => {
-                              markNotificationRead(n.id);
+                              if (!n.read) markRead.mutate(n.id);
                               setShowNotif(false);
+
+                              if (n.link) {
+                                navigate(n.link);
+                                return;
+                              }
 
                               if (n.title.includes("Đánh giá")) {
                                 navigate("/tutor/reviews");
@@ -346,7 +313,7 @@ const TutorLayout = () => {
                                 {n.message}
                               </p>
                               <p className="text-[10px] text-slate-400 mt-1">
-                                {n.timestamp}
+                                {n.createdAt}
                               </p>
                             </div>
                           </button>
@@ -370,8 +337,8 @@ const TutorLayout = () => {
               </div>
 
               <UserAvatarDropdown
-                avatar={profile.avatar}
-                name={profile.name}
+                avatar={profile?.avatar ?? ""}
+                name={profile?.name ?? ""}
                 role="Gia sư"
                 profilePath="/tutor/profile"
               />

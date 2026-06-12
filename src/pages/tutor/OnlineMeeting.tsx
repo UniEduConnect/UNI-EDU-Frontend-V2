@@ -1,22 +1,51 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, Users, X, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMySchedule } from "@/hooks/useSchedule";
+import { useClasses } from "@/hooks/useClasses";
+import { useClassMessages, useSendMessage } from "@/hooks/useChat";
 
+// NOTE: the audio/video tiles below are a UI simulation — there is no real
+// WebRTC/meeting backend yet (see backend-gaps GAP-11). The participant
+// identity + in-meeting chat ARE wired to real data.
 const OnlineMeeting = () => {
   const { sessionId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // There is no GET /Sessions/{id}; resolve the session -> class by joining /me/sessions with /Classes.
+  const { sessions } = useMySchedule();
+  const { classes } = useClasses();
+  const session = sessions.find((s) => s.id === sessionId);
+  const classId = session?.classId;
+  const cls = classes.find((c) => c.id === classId);
+  const studentName = cls?.studentName ?? "Học sinh";
+  const className = cls?.name ?? cls?.subject ?? "Buổi học";
+
+  // In-meeting chat reuses the class message thread (real, persisted).
+  const { messages: rawMessages } = useClassMessages(classId);
+  const sendMsg = useSendMessage(classId ?? "");
+
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [screenShare, setScreenShare] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState([
-    { id: 1, sender: "Lê Minh Châu", message: "Em đã vào lớp rồi thầy ạ", time: "19:00" },
-    { id: 2, sender: "Bạn", message: "OK em, chờ thầy share màn hình nhé", time: "19:01" },
-  ]);
   const [duration, setDuration] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const messages = useMemo(
+    () =>
+      rawMessages.map((m) => ({
+        id: m.id,
+        sender: m.senderId === user?.id ? "Bạn" : m.senderName,
+        message: m.message,
+        time: new Date(m.timestamp).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      })),
+    [rawMessages, user?.id],
+  );
 
   useEffect(() => {
     const interval = setInterval(() => setDuration(d => d + 1), 1000);
@@ -34,8 +63,9 @@ const OnlineMeeting = () => {
   };
 
   const handleSend = () => {
-    if (!chatInput.trim()) return;
-    setMessages(prev => [...prev, { id: Date.now(), sender: "Bạn", message: chatInput, time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) }]);
+    const text = chatInput.trim();
+    if (!text || !classId) return;
+    sendMsg.mutate(text);
     setChatInput("");
   };
 
@@ -50,7 +80,7 @@ const OnlineMeeting = () => {
         <div className="flex items-center gap-3">
           <span className="text-white/80 text-sm font-medium">EduConnect Meeting</span>
           <span className="text-white/40 text-xs">|</span>
-          <span className="text-white/60 text-xs">Session #{sessionId}</span>
+          <span className="text-white/60 text-xs">{className}</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-white/60 text-sm font-mono">{formatDuration(duration)}</span>
@@ -90,10 +120,10 @@ const OnlineMeeting = () => {
             <div className="absolute bottom-4 right-4 w-40 h-28 bg-[#3c4043] rounded-xl overflow-hidden border-2 border-[#5f6368]">
               <div className="w-full h-full flex items-center justify-center">
                 <div className="w-12 h-12 rounded-full bg-primary/30 flex items-center justify-center">
-                  <span className="text-sm text-primary font-bold">HS</span>
+                  <span className="text-sm text-primary font-bold">{studentName.charAt(0).toUpperCase()}</span>
                 </div>
               </div>
-              <div className="absolute bottom-1 left-2 text-[10px] text-white/70">Lê Minh Châu</div>
+              <div className="absolute bottom-1 left-2 text-[10px] text-white/70">{studentName}</div>
             </div>
 
             {/* Participants count */}

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,8 @@ import Header from "@/components/Header";
 import FooterSection from "@/components/FooterSection";
 import { toast } from "sonner";
 import { CheckCircle, Loader2, Upload, FileText, X } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { EmailOtpField } from "@/components/auth/EmailOtpField";
 
 const benefits = [
   "Thu nhập ổn định, thanh toán minh bạch",
@@ -21,9 +23,25 @@ const subjects = ["Toán", "Vật lý", "Hóa học", "Sinh học", "Tiếng Anh
 
 const RegisterTutor = () => {
   const [loading, setLoading] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { registerTutor } = useAuth();
+  const navigate = useNavigate();
+
+  // Fields the backend's TutorRegister actually accepts.
+  const [form, setForm] = useState({
+    fullname: "",
+    phone: "",
+    email: "",
+    password: "",
+    gender: "",
+    studentIdNumber: "",
+    degree: "",
+  });
+  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -36,15 +54,38 @@ const RegisterTutor = () => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!emailVerified) {
+      toast.error("Vui lòng xác thực email bằng mã OTP trước khi đăng ký.");
+      return;
+    }
+    if (form.password.length < 6) {
+      toast.error("Mật khẩu phải có ít nhất 6 ký tự!");
+      return;
+    }
     setLoading(true);
-    setTimeout(() => {
+    try {
+      // Note: uploaded certificate files are not sent — the backend has no upload endpoint yet.
+      await registerTutor({
+        email: form.email,
+        password: form.password,
+        phoneNumber: form.phone,
+        fullname: form.fullname,
+        gender: form.gender,
+        studentIdNumber: form.studentIdNumber,
+        degree: form.degree,
+      });
       toast.success("Đăng ký thành công! Chúng tôi sẽ xem xét hồ sơ của bạn trong 48 giờ.");
       formRef.current?.reset();
+      setForm({ fullname: "", phone: "", email: "", password: "", gender: "", studentIdNumber: "", degree: "" });
       setFiles([]);
+      navigate("/login");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Đăng ký thất bại.");
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -79,16 +120,35 @@ const RegisterTutor = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="fullname">Họ và tên</Label>
-                    <Input id="fullname" placeholder="Nguyễn Văn A" className="mt-1.5 rounded-xl h-11" required />
+                    <Input id="fullname" placeholder="Nguyễn Văn A" className="mt-1.5 rounded-xl h-11" value={form.fullname} onChange={set("fullname")} required />
                   </div>
                   <div>
                     <Label htmlFor="phone">Số điện thoại</Label>
-                    <Input id="phone" placeholder="0901234567" className="mt-1.5 rounded-xl h-11" required />
+                    <Input id="phone" placeholder="0901234567" className="mt-1.5 rounded-xl h-11" value={form.phone} onChange={set("phone")} required />
                   </div>
                 </div>
-                <div>
-                  <Label htmlFor="temail">Email</Label>
-                  <Input id="temail" type="email" placeholder="email@example.com" className="mt-1.5 rounded-xl h-11" required />
+                <EmailOtpField
+                  email={form.email}
+                  onEmailChange={(v) => setForm((prev) => ({ ...prev, email: v }))}
+                  verified={emailVerified}
+                  onVerifiedChange={setEmailVerified}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="tpassword">Mật khẩu</Label>
+                    <Input id="tpassword" type="password" placeholder="Tối thiểu 6 ký tự" className="mt-1.5 rounded-xl h-11" value={form.password} onChange={set("password")} required />
+                  </div>
+                  <div>
+                    <Label>Giới tính</Label>
+                    <Select value={form.gender} onValueChange={(v) => setForm((p) => ({ ...p, gender: v }))}>
+                      <SelectTrigger className="rounded-xl mt-1.5 h-11"><SelectValue placeholder="Chọn giới tính" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Nam</SelectItem>
+                        <SelectItem value="Female">Nữ</SelectItem>
+                        <SelectItem value="Other">Khác</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -99,17 +159,17 @@ const RegisterTutor = () => {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="exp-years">Số năm kinh nghiệm</Label>
-                    <Input id="exp-years" type="number" placeholder="VD: 3" className="mt-1.5 rounded-xl h-11" required />
+                    <Label htmlFor="studentId">Mã số sinh viên (MSSV)</Label>
+                    <Input id="studentId" placeholder="VD: SV2021001" className="mt-1.5 rounded-xl h-11" value={form.studentIdNumber} onChange={set("studentIdNumber")} required />
                   </div>
                 </div>
                 <div>
                   <Label htmlFor="exp">Mô tả kinh nghiệm giảng dạy</Label>
-                  <Textarea id="exp" placeholder="Mô tả kinh nghiệm dạy kèm, phương pháp giảng dạy..." className="mt-1.5 rounded-xl min-h-[100px]" required />
+                  <Textarea id="exp" placeholder="Mô tả kinh nghiệm dạy kèm, phương pháp giảng dạy..." className="mt-1.5 rounded-xl min-h-[100px]" />
                 </div>
                 <div>
                   <Label htmlFor="education">Bằng cấp / Chứng chỉ</Label>
-                  <Input id="education" placeholder="VD: Cử nhân Sư phạm Toán - ĐH Sư phạm HN" className="mt-1.5 rounded-xl h-11" required />
+                  <Input id="education" placeholder="VD: Cử nhân Sư phạm Toán - ĐH Sư phạm HN" className="mt-1.5 rounded-xl h-11" value={form.degree} onChange={set("degree")} required />
                 </div>
 
                 {/* File Upload */}
@@ -149,8 +209,8 @@ const RegisterTutor = () => {
                   )}
                 </div>
 
-                <Button type="submit" disabled={loading} className="w-full h-12 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-base font-bold">
-                  {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Đang gửi...</> : "Gửi đăng ký gia sư"}
+                <Button type="submit" disabled={loading || !emailVerified} className="w-full h-12 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-base font-bold disabled:opacity-60">
+                  {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Đang gửi...</> : emailVerified ? "Gửi đăng ký gia sư" : "Xác thực email để đăng ký"}
                 </Button>
 
                 <p className="text-center text-sm text-muted-foreground">

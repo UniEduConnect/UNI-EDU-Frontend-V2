@@ -1,0 +1,98 @@
+{
+  "title": "Student portal — backend endpoints/fields the frontend still needs",
+  "generatedFor": "UNI-EDU backend team",
+  "context": "The Student portal pages were migrated from mock data (StudentContext, now deleted) to real API calls. Everything below is data the UI renders but the backend does NOT currently expose. Each gap lists the affected page(s), what's missing, and a proposed JSON shape (camelCase, wrapped in the usual ApiResponse<T> envelope). Until these ship, the affected UI shows an empty 'Chưa có dữ liệu' state. Note: 4 retired/unreachable student pages (StudentFindTutor, StudentAvailability, StudentMockExam, StudentResults) were deleted — students use the public /find-tutor page and StudentTests instead.",
+  "swaggerBase": "http://localhost:5115 — all routes under /api",
+  "reusedEndpoints": "Most student pages reuse shared endpoints: GET /Students/me, /Students/me/dashboard, /Students/me/report, /Classes, /Classes/{id}, /me/sessions, /me/conversations, /classes/{id}/messages, /Wallet(+transactions/deposit/withdraw), /Exams(+/{id}, /me/submissions, /{id}/submit), /Sessions/{id}/rate, /Notifications.",
+  "gaps": [
+    {
+      "id": "S-GAP-1",
+      "priority": "high",
+      "title": "Student GPA / goalGpa + monthly progress time-series",
+      "affectedPages": ["StudentDashboard", "StudentReport"],
+      "currentState": "StudentProfileResponse has no gpa/goalGpa; StudentReportResponse has only {examsTaken, avgScore, activeClasses, completedSessions} — no per-month series. The GPA headline now uses avgScore (exam average); the GPA-trend / study-hours / sessions-vs-tests charts render an empty placeholder.",
+      "proposedEndpoint": "GET /api/Students/me/progress-series?months=6 -> ProgressPoint[]",
+      "exampleItem": { "month": "2026-02", "gpa": 8.2, "studyHours": 24, "sessionsCompleted": 12, "testsCompleted": 3 },
+      "alsoPropose": "Add gpa + goalGpa to StudentProfileResponse (or the dashboard) if GPA is a real concept separate from exam avgScore."
+    },
+    {
+      "id": "S-GAP-2",
+      "priority": "high",
+      "title": "Structured assignments (submission + score + feedback + attachments)",
+      "affectedPages": ["StudentClassDetail", "StudentTests (assignments tab)"],
+      "currentState": "No assignments model. The only per-session 'assignment' data is session.homework (string) + session.homeworkFiles (string[]). The class-detail assignments area is rebuilt from session.homework; the tests assignments tab shows an empty state.",
+      "proposedEndpoints": [
+        "GET /api/Students/me/assignments -> PagedResult<AssignmentItem>",
+        "GET /api/classes/{classId}/assignments -> AssignmentItem[]",
+        "POST /api/assignments/{id}/submit  (multipart or { text, attachments[] })"
+      ],
+      "exampleItem": {
+        "id": "guid",
+        "classId": "guid",
+        "className": "Toán 12",
+        "subject": "Toán",
+        "title": "Bài tập chương 1",
+        "description": "...",
+        "requirements": ["..."],
+        "dueDate": "2026-03-05",
+        "status": "pending | submitted | graded | overdue",
+        "submittedAt": "2026-03-04T10:00:00Z",
+        "score": 8.5,
+        "feedback": "...",
+        "attachments": ["https://.../baitap.pdf"]
+      }
+    },
+    {
+      "id": "S-GAP-3",
+      "priority": "medium",
+      "title": "Mock-exam metadata: purchase state, community average, attempt history",
+      "affectedPages": ["StudentTests"],
+      "currentState": "Tests/mock-exams are wired to the Exams API (GET /Exams?type=student-test, GET /Exams/{id}, POST /Exams/{id}/submit, GET /Exams/me/submissions). ExamListItemResponse has fee + attempts but no per-user 'purchased' flag, no community average score, and no per-user attempt history. SubmissionResponse has no 'passed' flag (computed client-side as score/scoreScale*100 >= 50) and no per-question review (selectedOption/correctOption/explanation).",
+      "proposedChanges": [
+        "Add purchased:boolean + communityAvgScore:number to ExamListItemResponse (for student-test exams).",
+        "Add passed:boolean + passThreshold:number to SubmissionResponse.",
+        "Add per-question results to the submission detail (questionId, selectedOption, correctOption, explanation).",
+        "GET /api/Exams/{id}/my-attempts -> SubmissionResponse[] for per-user attempt history."
+      ]
+    },
+    {
+      "id": "S-GAP-4",
+      "priority": "medium",
+      "title": "Tutor comments, achievements, and study goals for the student",
+      "affectedPages": ["StudentReport", "StudentDashboard (weekly goal)"],
+      "currentState": "No endpoints for: tutor comments about the student, student achievements, next goals, or a weekly study goal. These sections render empty placeholders.",
+      "proposedEndpoints": [
+        "GET /api/Students/me/feedback -> TutorComment[]  ({ tutorName, subject, comment, date })",
+        "GET /api/Students/me/achievements -> string[] (or { title, achievedAt }[])",
+        "GET/PUT /api/Students/me/goals -> { weeklyTarget, weeklyCurrent, nextGoals: string[] }"
+      ]
+    },
+    {
+      "id": "S-GAP-5",
+      "priority": "medium",
+      "title": "Student profile is missing display fields (avatar, contact, parent)",
+      "affectedPages": ["StudentLayout", "StudentDashboard", "StudentReport"],
+      "currentState": "GET /Students/me returns only { id, fullName, school, grade, parentId }. No avatar, email, phone, parentName, or parentPhone — so the layout uses an initial-letter avatar and contact info can't be shown.",
+      "proposedChanges": ["Add avatar, email, phone, parentName, parentPhone to StudentProfileResponse (email/phone from the User row, parent fields from the linked Parent)."]
+    },
+    {
+      "id": "S-GAP-6",
+      "priority": "medium",
+      "title": "No standalone pay-tuition endpoint",
+      "affectedPages": ["StudentWallet"],
+      "currentState": "The wallet's 'pay tuition' action is disabled — tuition is escrowed at class creation (a separate flow), and there is no endpoint to pay tuition for an existing class from the wallet.",
+      "proposedEndpoint": "POST /api/classes/{classId}/pay-tuition  { amount }  -> debits wallet -> escrow, if paying tuition outside class creation is a real flow. Otherwise confirm tuition is always handled at class creation and the action can be removed."
+    },
+    {
+      "id": "S-GAP-7",
+      "priority": "low",
+      "title": "Enrich GET /me/sessions with class/tutor info (shared with tutor GAP-8)",
+      "affectedPages": ["StudentSchedule", "StudentReviews", "StudentDashboard"],
+      "currentState": "SessionResponse only carries classId; the schedule/reviews pages join client-side against GET /Classes to show className/subject/tutorName. There is also no meetingLink for online sessions, so join-class buttons are hidden.",
+      "proposedChanges": [
+        "Add className, subject, tutorName (and tutorAvatar) to the SessionResponse returned by GET /me/sessions.",
+        "Add meetingLink: string|null to SessionResponse for online/hybrid sessions (shared with tutor GAP-11)."
+      ]
+    }
+  ]
+}

@@ -1,12 +1,13 @@
-import { useAdmin } from "@/contexts/AdminContext";
+import { useFinanceTransactions } from "@/hooks/useFinance";
+import { useSettings } from "@/hooks/useSettings";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CreditCard, TrendingUp, Wallet, Receipt, Search, Download } from "lucide-react";
-import { useState } from "react";
+import { CreditCard, TrendingUp, Wallet, Receipt, Search, Download, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const typeLabel: Record<string, string> = { tuition: "Học phí", salary: "Lương gia sư", "exam-fee": "Phí thi thử" };
@@ -23,10 +24,9 @@ const statusVariant: Record<string, "success" | "warning" | "destructive" | "inf
   refunded: "info",
 };
 
-const ITEMS_PER_PAGE = 10;
+const PAGE_SIZE = 10;
 
 const AdminTransactions = () => {
-  const { transactions, users, settings } = useAdmin();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -34,29 +34,45 @@ const AdminTransactions = () => {
   const [page, setPage] = useState(1);
   const { toast } = useToast();
 
+  // Live transactions from GET /api/Finance/transactions.
+  // Type/Status/Page are server-side query params; search is filtered
+  // client-side over the fetched page.
+  const { transactions, isLoading, isError } = useFinanceTransactions({
+    Type: filterType === "all" ? undefined : filterType,
+    Status: filterStatus === "all" ? undefined : filterStatus,
+    Page: page,
+  });
+
+  // System settings supply the escrow (profit) percentage shown on the cards.
+  const { data: settings } = useSettings();
+  const escrowPercent = settings?.escrowPercent ?? 0;
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterType, filterStatus]);
+
   const filtered = transactions.filter(t => {
-    if (filterType !== "all" && t.type !== filterType) return false;
-    if (filterStatus !== "all" && t.status !== filterStatus) return false;
     if (search) {
-      const user = users.find(u => u.id === t.userId);
       const q = search.toLowerCase();
-      if (!t.description.toLowerCase().includes(q) && !(user?.name.toLowerCase().includes(q))) return false;
+      if (!t.description.toLowerCase().includes(q) && !t.user.toLowerCase().includes(q)) return false;
     }
     return true;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
-  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
-
+  // TODO(BE): paged total + transactions summary — the list response has no
+  // total/totalPages (so we page via prev/next while the server page is full)
+  // and no summary endpoint, so the aggregate cards reflect the current page
+  // only (same as finance F-GAP-1/2).
+  const hasNextPage = transactions.length >= PAGE_SIZE;
 
   const totalRevenue = transactions.filter(t => t.status === "completed").reduce((s, t) => s + t.amount, 0);
-  const escrowProfit = Math.round(totalRevenue * settings.escrowPercent / 100);
+  const escrowProfit = Math.round(totalRevenue * escrowPercent / 100);
   const pendingAmount = transactions.filter(t => t.status === "pending").reduce((s, t) => s + t.amount, 0);
 
   const stats = [
     { label: "Tổng giao dịch", value: transactions.length, icon: Receipt, bg: "from-blue-700 to-blue-900", iconBg: "bg-blue-100", iconColor: "text-blue-700" },
     { label: "Tổng doanh thu", value: `${(totalRevenue / 1000000).toFixed(1)}M`, icon: CreditCard, bg: "from-emerald-500 to-teal-500", iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-    { label: `Lợi nhuận (${settings.escrowPercent}%)`, value: `${(escrowProfit / 1000000).toFixed(1)}M`, icon: TrendingUp, bg: "from-amber-500 to-orange-500", iconBg: "bg-amber-100", iconColor: "text-amber-600" },
+    { label: `Lợi nhuận (${escrowPercent}%)`, value: `${(escrowProfit / 1000000).toFixed(1)}M`, icon: TrendingUp, bg: "from-amber-500 to-orange-500", iconBg: "bg-amber-100", iconColor: "text-amber-600" },
     { label: "Đang chờ xử lý", value: `${(pendingAmount / 1000000).toFixed(1)}M`, icon: Wallet, bg: "from-rose-500 to-pink-500", iconBg: "bg-rose-100", iconColor: "text-rose-600" },
   ];
 
@@ -141,53 +157,59 @@ const AdminTransactions = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginated.map(tx => {
-                const user = users.find(u => u.id === tx.userId);
-                return (
-                  <TableRow key={tx.id} className="hover:bg-muted/20 transition-colors">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        {user && <img src={user.avatar} className="w-8 h-8 rounded-lg object-cover" />}
-                        <span className="text-sm font-medium text-foreground">{user?.name || "—"}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={typeVariant[tx.type] ?? "default"}>
-                        {typeLabel[tx.type]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm font-semibold text-foreground">{tx.amount.toLocaleString("vi-VN")}đ</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{tx.date}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{tx.description}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant[tx.status] ?? "outline"}>
-                        {statusLabel[tx.status]}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-12">Không tìm thấy giao dịch</TableCell></TableRow>
+              {!isLoading && filtered.map(tx => (
+                <TableRow key={tx.id} className="hover:bg-muted/20 transition-colors">
+                  <TableCell>
+                    <span className="text-sm font-medium text-foreground">{tx.user || "—"}</span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={typeVariant[tx.type] ?? "default"}>
+                      {typeLabel[tx.type] ?? tx.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm font-semibold text-foreground">{tx.amount.toLocaleString("vi-VN")}đ</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{tx.date}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{tx.description}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant[tx.status] ?? "outline"}>
+                      {statusLabel[tx.status] ?? tx.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {isLoading && (
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-12">
+                  <span className="inline-flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải giao dịch...</span>
+                </TableCell></TableRow>
+              )}
+              {!isLoading && filtered.length === 0 && (
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-12">
+                  {isError ? "Không tải được giao dịch. Vui lòng thử lại." : "Không tìm thấy giao dịch"}
+                </TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {totalPages > 1 && (
+      {!isLoading && (page > 1 || hasNextPage) && (
         <div className="flex items-center justify-between mt-3">
-          <p className="text-sm text-muted-foreground">Hiển thị {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, filtered.length)} / {filtered.length}</p>
+          <p className="text-sm text-muted-foreground">Trang {page}</p>
           <div className="flex gap-1">
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i}
-                onClick={() => setPage(i + 1)}
-                className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${page === i + 1 ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-              >
-                {i + 1}
-              </button>
-            ))}
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 h-8 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:bg-muted disabled:opacity-50 disabled:hover:bg-transparent"
+            >
+              Trước
+            </button>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={!hasNextPage}
+              className="px-3 h-8 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:bg-muted disabled:opacity-50 disabled:hover:bg-transparent"
+            >
+              Sau
+            </button>
           </div>
         </div>
       )}

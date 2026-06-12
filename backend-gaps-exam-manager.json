@@ -1,0 +1,46 @@
+{
+  "title": "Exam-Manager portal — backend endpoints/fields the frontend still needs",
+  "generatedFor": "UNI-EDU backend team",
+  "context": "The Exam-Manager portal pages were migrated from mock (ExamManagerContext, deleted) to real API calls. Exam-Manager maps to the backend Admin role. Reused endpoints: GET /Exams (+/{id}, create/update/delete, /{id}/questions, /{id}/attempts, /{id}/submissions, /stats, /dashboard), GET/PUT /Exams/ai-config, /Questions (CRUD), /Subjects, /Notifications, /Users/me.",
+  "gaps": [
+    {
+      "id": "E-GAP-1",
+      "priority": "high",
+      "title": "Visibility toggle / edit needs a status-only PATCH (PUT requires full body incl. description)",
+      "affectedPages": ["ExamManagerExams", "ExamManagerAIConfig"],
+      "currentState": "PUT /Exams/{id} requires the full UpdateExamRequest including `description`, but ExamListItemResponse (the list row) has no `description`. Toggling visibility or per-exam aiProctoring from a row sends `description: \"\"`, which can OVERWRITE an existing exam description.",
+      "proposedChanges": [
+        "Add PATCH /Exams/{id}/status { status } and PATCH /Exams/{id}/proctoring { aiProctoring } (partial updates), OR",
+        "Add `description` to ExamListItemResponse so the FE can round-trip the full body safely."
+      ]
+    },
+    {
+      "id": "E-GAP-2",
+      "priority": "high",
+      "title": "/Exams/stats is untyped; no score-distribution or attempts time-series",
+      "affectedPages": ["ExamManagerStats", "ExamManagerDashboard"],
+      "currentState": "GET /Exams/stats returns an untyped body (consumed defensively). There is no score-distribution endpoint and no attempts-over-time series, so those charts render empty. ExamDashboard gives only 4 scalars (totalExams, totalQuestions, totalAttempts, avgScore); /Exams/{id}/attempts is per-exam only (no global recent-attempts feed).",
+      "proposedChanges": [
+        "Type /Exams/stats with explicit fields.",
+        "Add a score-distribution endpoint and an attempts time-series (daily/weekly).",
+        "Add a global recent-attempts feed (not just per-exam-id)."
+      ]
+    },
+    {
+      "id": "E-GAP-3",
+      "priority": "medium",
+      "title": "Proctoring violation logs not exposed",
+      "affectedPages": ["ExamManagerAIConfig"],
+      "currentState": "There is no endpoint for per-attempt proctoring/violation logs (face-not-detected, tab-switch, etc.). That section renders empty and the 'high severity' alert count is hardcoded to 0.",
+      "proposedEndpoint": "GET /api/Exams/proctoring-logs (or /Exams/{id}/proctoring-logs) -> [{ attemptId, studentName, examTitle, violation, severity, timestamp }]"
+    },
+    {
+      "id": "E-GAP-4",
+      "priority": "low",
+      "title": "Exam/question model gaps vs the UI",
+      "affectedPages": ["ExamManagerExams", "ExamManagerQuestions"],
+      "currentState": "The UI had fields with no backing on the DTOs and they were dropped: exam-level scorePerQuestion/penaltyForWrong/maxTotalAttempts/aiMode and an exam version-history feature; per-topic question-ratio sliders; question import-from-file. ExamAiConfig has no per-topic ratio field. Question edit is not surfaced (only add/delete in the UI).",
+      "proposedChanges": ["Add the exam scoring/penalty/version fields and a question bulk-import endpoint if those features are required; otherwise confirm they can stay dropped."]
+    }
+  ]
+}

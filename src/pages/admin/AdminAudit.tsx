@@ -1,7 +1,7 @@
-import { useAdmin } from "@/contexts/AdminContext";
+import { useAuditLogs } from "@/hooks/useAdmin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ScrollText, Shield, Clock, User, Search } from "lucide-react";
+import { ScrollText, Shield, Clock, User, Search, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 const actionColor: Record<string, string> = {
@@ -18,18 +18,6 @@ const actionColor: Record<string, string> = {
   "Thêm giao dịch": "bg-green-100 text-green-700",
 };
 
-const ITEMS_PER_PAGE = 10;
-
-const mockAuditLog = [
-  { id: "al1", actor: "Admin", action: "Duyệt tài khoản", target: "Nguyễn Văn An (Gia sư)", timestamp: "2026-03-10 09:00" },
-  { id: "al2", actor: "Admin", action: "Tạo lớp học", target: "Toán 12 - Ôn thi ĐH", timestamp: "2026-03-09 15:20" },
-  { id: "al3", actor: "Admin", action: "Cập nhật cài đặt", target: "Phí escrow 20%", timestamp: "2026-03-09 14:10" },
-  { id: "al4", actor: "Admin", action: "Xóa người dùng", target: "Bùi Văn Hùng", timestamp: "2026-03-08 11:45" },
-  { id: "al5", actor: "Admin", action: "Thêm giao dịch", target: "Học phí Văn 11", timestamp: "2026-03-07 13:30" },
-  { id: "al6", actor: "Admin", action: "Cập nhật lớp học", target: "IELTS Writing", timestamp: "2026-03-06 10:25" },
-  { id: "al7", actor: "Admin", action: "Từ chối tài khoản", target: "Đinh Thị Hoa", timestamp: "2026-03-05 08:40" },
-];
-
 const actionOptions = [
   { value: "all", label: "Tất cả hành động" },
   { value: "Duyệt tài khoản", label: "Duyệt tài khoản" },
@@ -42,24 +30,32 @@ const actionOptions = [
 ];
 
 const AdminAudit = () => {
-  const { auditLog } = useAdmin();
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
-  const [page, setPage] = useState(1);
 
-  const auditLogData = auditLog.length ? auditLog : mockAuditLog;
-  const sortedAuditLog = [...auditLogData].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  // GET /Admin/audit-logs — server-paged. DTO exposes only actor/action/target/timestamp.
+  const { logs, data, isLoading, isError } = useAuditLogs(page);
+  const auditLogData = data?.items ?? logs;
+  const totalPages = Math.max(1, data?.totalPages ?? 1);
+  const total = data?.total ?? auditLogData.length;
+
+  // Sort + client-side filter over the current server page.
+  const sortedAuditLog = [...auditLogData].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
   const filteredAuditLog = sortedAuditLog.filter(log => {
     const matchesAction = actionFilter === "all" || log.action === actionFilter;
     const q = search.trim().toLowerCase();
-    const matchesSearch = !q || log.actor.toLowerCase().includes(q) || log.target.toLowerCase().includes(q) || log.action.toLowerCase().includes(q);
+    const matchesSearch =
+      !q ||
+      log.actor.toLowerCase().includes(q) ||
+      log.target.toLowerCase().includes(q) ||
+      log.action.toLowerCase().includes(q);
     return matchesAction && matchesSearch;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filteredAuditLog.length / ITEMS_PER_PAGE));
-  const paginatedAuditLog = filteredAuditLog.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
-
-  const totalLog = auditLogData.length;
+  const totalLog = total;
   const approved = auditLogData.filter(l => l.action.includes("Duyệt")).length;
   const deleted = auditLogData.filter(l => l.action.includes("Xóa")).length;
 
@@ -92,14 +88,14 @@ const AdminAudit = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            onChange={e => setSearch(e.target.value)}
             placeholder="Tìm theo người thực hiện, hành động, đối tượng..."
             className="w-full pl-10 h-10 rounded-2xl border border-border bg-card text-sm"
           />
         </div>
         <select
           value={actionFilter}
-          onChange={e => { setActionFilter(e.target.value); setPage(1); }}
+          onChange={e => setActionFilter(e.target.value)}
           className="w-full md:w-48 h-10 rounded-2xl border border-border bg-card px-3 text-sm"
         >
           {actionOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -119,32 +115,51 @@ const AdminAudit = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedAuditLog.map(log => (
-                <TableRow key={log.id} className="hover:bg-muted/20 transition-colors">
-                  <TableCell>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span className="font-mono text-xs">{log.timestamp}</span>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-12">
+                    <div className="flex items-center justify-center text-muted-foreground">
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải nhật ký...
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <User className="w-3.5 h-3.5 text-primary" />
-                      </div>
-                      <span className="text-sm font-medium text-foreground">{log.actor}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${actionColor[log.action] || "bg-muted text-muted-foreground"}`}>
-                      {log.action}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{log.target}</TableCell>
                 </TableRow>
-              ))}
-              {filteredAuditLog.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-12">Chưa có log nào phù hợp</TableCell></TableRow>
+              ) : isError && auditLogData.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-12">
+                    Không tải được nhật ký. Vui lòng thử lại.
+                  </TableCell>
+                </TableRow>
+              ) : filteredAuditLog.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-12">
+                    Chưa có log nào phù hợp
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredAuditLog.map(log => (
+                  <TableRow key={log.id} className="hover:bg-muted/20 transition-colors">
+                    <TableCell>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span className="font-mono text-xs">{log.timestamp}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <User className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">{log.actor}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${actionColor[log.action] || "bg-muted text-muted-foreground"}`}>
+                        {log.action}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{log.target}</TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>
@@ -153,7 +168,7 @@ const AdminAudit = () => {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-3">
-          <p className="text-sm text-muted-foreground">Hiển thị {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, filteredAuditLog.length)} / {filteredAuditLog.length}</p>
+          <p className="text-sm text-muted-foreground">Trang {page} / {totalPages}</p>
           <div className="flex gap-1">
             {Array.from({ length: totalPages }, (_, i) => (
               <button

@@ -1,5 +1,4 @@
-import { useOffice } from "@/contexts/OfficeContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,10 +7,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Eye, XCircle, BookOpen, Users, CheckCircle2, Search, Clock } from "lucide-react";
+import { Plus, Eye, XCircle, BookOpen, Users, CheckCircle2, Search, Clock, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { useClasses, useCreateClass } from "@/hooks/useClasses";
+import { useAdminUsers } from "@/hooks/useAdmin";
+import { useSubjects } from "@/hooks/useSubjects";
+import type { ClassItem, WeeklySlotDto } from "@/types/api";
 
 const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   active: { label: "Đang học", variant: "default" },
@@ -21,8 +24,17 @@ const statusMap: Record<string, { label: string; variant: "default" | "secondary
   cancelled: { label: "Đã hủy", variant: "destructive" },
 };
 
+const dayLabels = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+// Build a human-readable schedule string from the class's weekly slots.
+const buildSchedule = (slots: WeeklySlotDto[]): string => {
+  if (!slots || slots.length === 0) return "Chưa xếp";
+  const days = slots.map(s => dayLabels[s.dayOfWeek] ?? "").filter(Boolean).join(", ");
+  const time = slots[0]?.startTime ? slots[0].startTime.slice(0, 5) : "";
+  return time ? `${days} - ${time}` : days;
+};
+
 const OfficeClasses = () => {
-  const { classes, addClass } = useOffice();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -30,30 +42,64 @@ const OfficeClasses = () => {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
-  const [newClass, setNewClass] = useState({ name: "", subject: "", fee: "", tutor: "", student: "", schedule: "", totalSessions: "", description: "", startDate: "", endDate: "", level: "" });
+  const [newClass, setNewClass] = useState({ name: "", subjectId: "", fee: "", tutorId: "", studentId: "", schedule: "", totalSessions: "", description: "", startDate: "", endDate: "", level: "" });
 
-  const filtered = classes.filter(c => {
-    const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.tutor.toLowerCase().includes(search.toLowerCase()) || c.student.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || c.status === statusFilter;
-    return matchSearch && matchStatus;
+  const { classes, isLoading, isError } = useClasses(
+    statusFilter === "all" ? {} : { Status: statusFilter }
+  );
+  const createClass = useCreateClass();
+  // Real pickers backed by GUIDs (CreateClassRequest needs studentId/tutorId/subjectId).
+  const { subjects } = useSubjects();
+  const { users } = useAdminUsers();
+  const tutorOptions = users.filter((u) => u.role === "tutor" || u.role === "teacher");
+  const studentOptions = users.filter((u) => u.role === "student");
+  const canCreate = !!(newClass.name && newClass.subjectId && newClass.tutorId && newClass.studentId);
+
+  const filtered = classes.filter((c: ClassItem) => {
+    const matchSearch =
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.tutorName.toLowerCase().includes(search.toLowerCase()) ||
+      c.studentName.toLowerCase().includes(search.toLowerCase());
+    return matchSearch;
   });
 
-  const detail = classes.find(c => c.id === detailId);
-  const activeCount = classes.filter(c => c.status === "active").length;
-  const completedCount = classes.filter(c => c.status === "completed").length;
-  const searchingCount = classes.filter(c => c.status === "searching").length;
-  const totalFee = classes.filter(c => c.status === "active").reduce((s, c) => s + c.fee, 0);
+  const detail = classes.find((c: ClassItem) => c.id === detailId);
+  const activeCount = classes.filter((c: ClassItem) => c.status === "active").length;
+  const completedCount = classes.filter((c: ClassItem) => c.status === "completed").length;
+  const searchingCount = classes.filter((c: ClassItem) => c.status === "searching").length;
+  const totalFee = classes.filter((c: ClassItem) => c.status === "active").reduce((s, c) => s + c.fee, 0);
 
   const handleCreate = () => {
-    if (!newClass.name || !newClass.subject) return;
-    addClass({
-      id: `c${Date.now()}`, name: newClass.name, tutor: newClass.tutor || "Chưa phân công", tutorAvatar: "", student: newClass.student || "Chưa có", studentAvatar: "",
-      schedule: newClass.schedule || "Chưa xếp", fee: parseInt(newClass.fee) || 0, status: "searching", subject: newClass.subject,
-      totalSessions: parseInt(newClass.totalSessions) || 0, completedSessions: 0,
-    });
-    setNewClass({ name: "", subject: "", fee: "", tutor: "", student: "", schedule: "", totalSessions: "", description: "", startDate: "", endDate: "", level: "" });
-    setShowCreate(false);
-    toast({ title: "Tạo lớp thành công" });
+    if (!canCreate) {
+      toast({ title: "Vui lòng chọn môn học, gia sư và học sinh", variant: "destructive" });
+      return;
+    }
+    // The backend requires >=1 weekly slot. There's no slot picker yet, so default to
+    // one Mon 19:00-21:00 slot. TODO(BE): add a structured weekly-slot picker contract.
+    const defaultSlots: WeeklySlotDto[] = [{ dayOfWeek: 1, startTime: "19:00:00", endTime: "21:00:00" }];
+    createClass.mutate(
+      {
+        studentId: newClass.studentId,
+        tutorId: newClass.tutorId,
+        subjectId: newClass.subjectId,
+        name: newClass.name,
+        startDate: newClass.startDate || new Date().toISOString().slice(0, 10),
+        totalSessions: parseInt(newClass.totalSessions) || 0,
+        weeklySlots: defaultSlots,
+        format: "online",
+        fee: parseInt(newClass.fee) || 0,
+      },
+      {
+        onSuccess: () => {
+          setNewClass({ name: "", subjectId: "", fee: "", tutorId: "", studentId: "", schedule: "", totalSessions: "", description: "", startDate: "", endDate: "", level: "" });
+          setShowCreate(false);
+          toast({ title: "Tạo lớp thành công" });
+        },
+        onError: () => {
+          toast({ title: "Tạo lớp thất bại", variant: "destructive" });
+        },
+      }
+    );
   };
 
   const handleCancel = () => {
@@ -146,9 +192,9 @@ const OfficeClasses = () => {
               <div><Label>Tên lớp <span className="text-destructive">*</span></Label><Input value={newClass.name} onChange={e => setNewClass(p => ({ ...p, name: e.target.value }))} placeholder="VD: Toán 12 - Nâng cao" className="rounded-xl mt-1" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Môn học <span className="text-destructive">*</span></Label>
-                  <Select value={newClass.subject} onValueChange={v => setNewClass(p => ({ ...p, subject: v }))}>
+                  <Select value={newClass.subjectId} onValueChange={v => setNewClass(p => ({ ...p, subjectId: v }))}>
                     <SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Chọn môn" /></SelectTrigger>
-                    <SelectContent>{["Toán","Văn","Anh","Lý","Hóa","Sinh","Sử","Địa","IELTS","SAT"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div><Label>Trình độ</Label>
@@ -163,8 +209,18 @@ const OfficeClasses = () => {
                 <div><Label>Tổng buổi</Label><Input type="number" value={newClass.totalSessions} onChange={e => setNewClass(p => ({ ...p, totalSessions: e.target.value }))} placeholder="24" className="rounded-xl mt-1" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Gia sư / Giáo viên</Label><Input value={newClass.tutor} onChange={e => setNewClass(p => ({ ...p, tutor: e.target.value }))} placeholder="Tên gia sư" className="rounded-xl mt-1" /></div>
-                <div><Label>Học sinh</Label><Input value={newClass.student} onChange={e => setNewClass(p => ({ ...p, student: e.target.value }))} placeholder="Tên học sinh" className="rounded-xl mt-1" /></div>
+                <div><Label>Gia sư / Giáo viên <span className="text-destructive">*</span></Label>
+                  <Select value={newClass.tutorId} onValueChange={v => setNewClass(p => ({ ...p, tutorId: v }))}>
+                    <SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Chọn gia sư" /></SelectTrigger>
+                    <SelectContent>{tutorOptions.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Học sinh <span className="text-destructive">*</span></Label>
+                  <Select value={newClass.studentId} onValueChange={v => setNewClass(p => ({ ...p, studentId: v }))}>
+                    <SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Chọn học sinh" /></SelectTrigger>
+                    <SelectContent>{studentOptions.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
               </div>
               <div><Label>Lịch học</Label><Input value={newClass.schedule} onChange={e => setNewClass(p => ({ ...p, schedule: e.target.value }))} placeholder="VD: T2, T4, T6 - 19:00" className="rounded-xl mt-1" /></div>
               <div className="grid grid-cols-2 gap-3">
@@ -172,7 +228,7 @@ const OfficeClasses = () => {
                 <div><Label>Ngày kết thúc (dự kiến)</Label><Input type="date" value={newClass.endDate} onChange={e => setNewClass(p => ({ ...p, endDate: e.target.value }))} className="rounded-xl mt-1" /></div>
               </div>
               <div><Label>Ghi chú</Label><Textarea value={newClass.description} onChange={e => setNewClass(p => ({ ...p, description: e.target.value }))} placeholder="Yêu cầu đặc biệt, mục tiêu học tập..." className="rounded-xl mt-1" rows={3} /></div>
-              <Button onClick={handleCreate} className="w-full rounded-xl">Tạo lớp</Button>
+              <Button onClick={handleCreate} className="w-full rounded-xl" disabled={!canCreate || createClass.isPending}>{createClass.isPending ? "Đang tạo..." : "Tạo lớp"}</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -181,6 +237,20 @@ const OfficeClasses = () => {
       {/* Table */}
       <Card className="border-border">
         <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải danh sách lớp học...
+            </div>
+          ) : isError ? (
+            <div className="text-center py-20 text-muted-foreground">
+              Không tải được danh sách lớp học. Vui lòng thử lại.
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <Users className="w-10 h-10 mb-2 opacity-40" />
+              Không tìm thấy lớp học phù hợp.
+            </div>
+          ) : (
           <Table>
             <TableHeader><TableRow>
               <TableHead>Lớp học</TableHead><TableHead>Gia sư</TableHead><TableHead>Học sinh</TableHead><TableHead>Lịch học</TableHead><TableHead>Học phí</TableHead><TableHead>Tiến độ</TableHead><TableHead>Trạng thái</TableHead><TableHead></TableHead>
@@ -189,12 +259,13 @@ const OfficeClasses = () => {
               {filtered.map(c => {
                 const cfg = statusMap[c.status] || statusMap.active;
                 const progress = c.totalSessions > 0 ? Math.round((c.completedSessions / c.totalSessions) * 100) : 0;
+                const schedule = buildSchedule(c.weeklySlots);
                 return (
                   <TableRow key={c.id}>
                     <TableCell><div><p className="font-medium text-foreground">{c.name}</p><p className="text-xs text-muted-foreground">{c.subject}</p></div></TableCell>
-                    <TableCell><div className="flex items-center gap-2">{c.tutorAvatar && <img src={c.tutorAvatar} alt="" className="w-6 h-6 rounded-full object-cover" />}<span className="text-sm">{c.tutor}</span></div></TableCell>
-                    <TableCell><div className="flex items-center gap-2">{c.studentAvatar && <img src={c.studentAvatar} alt="" className="w-6 h-6 rounded-full object-cover" />}<span className="text-sm">{c.student}</span></div></TableCell>
-                    <TableCell className="text-sm">{c.schedule}</TableCell>
+                    <TableCell><div className="flex items-center gap-2">{c.tutorAvatar && <img src={c.tutorAvatar} alt="" className="w-6 h-6 rounded-full object-cover" />}<span className="text-sm">{c.tutorName}</span></div></TableCell>
+                    <TableCell><div className="flex items-center gap-2"><span className="text-sm">{c.studentName}</span></div></TableCell>
+                    <TableCell className="text-sm">{schedule}</TableCell>
                     <TableCell className="text-sm font-medium">{c.fee.toLocaleString("vi-VN")}đ</TableCell>
                     <TableCell><div className="w-24"><Progress value={progress} className="h-2" /><p className="text-[10px] text-muted-foreground mt-1">{c.completedSessions}/{c.totalSessions} buổi</p></div></TableCell>
                     <TableCell><Badge variant={cfg.variant}>{cfg.label}</Badge></TableCell>
@@ -209,6 +280,7 @@ const OfficeClasses = () => {
               })}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -222,9 +294,9 @@ const OfficeClasses = () => {
                 <Badge variant={(statusMap[detail.status] || statusMap.active).variant}>{(statusMap[detail.status] || statusMap.active).label}</Badge>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Gia sư</Label><p className="text-sm font-medium text-foreground">{detail.tutor}</p></div>
-                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Học sinh</Label><p className="text-sm font-medium text-foreground">{detail.student}</p></div>
-                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Lịch học</Label><p className="text-sm font-medium text-foreground">{detail.schedule}</p></div>
+                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Gia sư</Label><p className="text-sm font-medium text-foreground">{detail.tutorName}</p></div>
+                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Học sinh</Label><p className="text-sm font-medium text-foreground">{detail.studentName}</p></div>
+                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Lịch học</Label><p className="text-sm font-medium text-foreground">{buildSchedule(detail.weeklySlots)}</p></div>
                 <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Học phí</Label><p className="text-sm font-medium text-foreground">{detail.fee.toLocaleString("vi-VN")}đ</p></div>
               </div>
               <div className="p-3 bg-muted/50 rounded-xl">

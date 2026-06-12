@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   Search,
   Star,
@@ -34,8 +36,16 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Megaphone } from "lucide-react";
 import Header from "@/components/Header";
 import FooterSection from "@/components/FooterSection";
+import PostClassRequestDialog from "@/components/search/PostClassRequestDialog";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTutors } from "@/hooks/useTutors";
+import { useMySchedule } from "@/hooks/useSchedule";
+import { DAYS, SLOTS, slotKey, busySlotKeys } from "@/lib/scheduleUtils";
+import { AlertTriangle } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import tutor1 from "@/assets/tutor-1.jpg";
 import tutor2 from "@/assets/tutor-2.jpg";
@@ -57,201 +67,41 @@ const allSubjects = [
   "Tin học",
 ];
 
-const tutorListings = [
-  {
-    id: "t1",
-    name: "Nguyễn Văn An",
-    avatar: tutor1,
-    subjects: ["Toán", "Lý"],
-    rating: 4.8,
-    totalReviews: 47,
-    totalSessions: 312,
-    yearsExperience: 5,
-    hourlyRate: 250000,
-    location: "Quận 3, TP.HCM",
-    verified: true,
-    bio: "Gia sư Toán - Lý với 5 năm kinh nghiệm dạy ôn thi đại học. Phương pháp giảng dạy hiện đại, tập trung vào tư duy logic.",
-    school: "ĐH Sư Phạm TP.HCM",
-    degree: "Cử nhân Sư phạm Toán",
-    type: "tutor",
-    certificates: ["Chứng chỉ Sư phạm", "TESOL (Cambridge)"],
-    introVideoUrl: "https://example.com/intro-an.mp4",
-    teachingStyle:
-      "Tập trung tư duy logic, giải bài từ cơ bản đến nâng cao. Sử dụng bảng trắng online và bài tập tương tác.",
-    achievements: [
-      "Top 10 gia sư Toán TP.HCM 2025",
-      "100% học sinh đạt 7+ THPTQG",
-    ],
-    availableSlots: [
-      { day: "Thứ 2", time: "19:00-21:00" },
-      { day: "Thứ 4", time: "19:00-21:00" },
-      { day: "Thứ 6", time: "19:00-21:00" },
-    ],
-  },
-  {
-    id: "t2",
-    name: "Trần Thị Bích Ngọc",
-    avatar: tutor2,
-    subjects: ["Hóa", "Sinh"],
-    rating: 4.9,
-    totalReviews: 62,
-    totalSessions: 450,
-    yearsExperience: 12,
-    hourlyRate: 300000,
-    location: "Quận 1, TP.HCM",
-    verified: true,
-    bio: "Giáo viên trường Lê Hồng Phong, thạc sĩ Hóa hữu cơ. 12 năm kinh nghiệm giảng dạy chuyên.",
-    school: "THPT Lê Hồng Phong",
-    degree: "Thạc sĩ Hóa học",
-    type: "teacher",
-    certificates: [
-      "Thạc sĩ Hóa Hữu cơ - ĐH KHTN",
-      "Giáo viên Giỏi cấp Thành phố 2024",
-      "Chứng chỉ Nghiệp vụ Sư phạm",
-    ],
-    introVideoUrl: "https://example.com/intro-ngoc.mp4",
-    teachingStyle:
-      "Giảng dạy có hệ thống, kết hợp thí nghiệm minh họa qua video. Kiểm tra đầu giờ mỗi buổi.",
-    achievements: [
-      "Giáo viên Giỏi cấp TP 3 năm liên tiếp",
-      "15 học sinh đạt giải HSG Quốc gia",
-    ],
-    availableSlots: [
-      { day: "Thứ 3", time: "17:00-18:30" },
-      { day: "Thứ 5", time: "19:00-20:30" },
-    ],
-  },
-  {
-    id: "t3",
-    name: "Phạm Đức Huy",
-    avatar: tutor3,
-    subjects: ["Anh văn", "IELTS"],
-    rating: 4.7,
-    totalReviews: 35,
-    totalSessions: 198,
-    yearsExperience: 4,
-    hourlyRate: 350000,
-    location: "Quận 7, TP.HCM",
-    verified: true,
-    bio: "IELTS 8.5, chuyên luyện thi IELTS cho học sinh cấp 3. Phương pháp immersion hiệu quả.",
-    school: "ĐH Ngoại Thương",
-    degree: "Cử nhân Anh văn",
-    type: "tutor",
-    certificates: [
-      "IELTS 8.5 (British Council)",
-      "CELTA (Cambridge)",
-      "TKT Module 1-3",
-    ],
-    introVideoUrl: "https://example.com/intro-huy.mp4",
-    teachingStyle:
-      "100% tiếng Anh trong giờ học, tập trung kỹ năng Writing & Speaking. Chấm bài và feedback chi tiết trong 24h.",
-    achievements: [
-      "95% học sinh đạt IELTS 6.5+",
-      "Mentor chương trình English Camp 2025",
-    ],
-    availableSlots: [
-      { day: "Thứ 7", time: "9:00-10:30" },
-      { day: "Chủ nhật", time: "9:00-10:30" },
-    ],
-  },
-  {
-    id: "t4",
-    name: "Lê Thị Hồng Nhung",
-    avatar: tutor4,
-    subjects: ["Văn", "Sử"],
-    rating: 4.6,
-    totalReviews: 28,
-    totalSessions: 156,
-    yearsExperience: 6,
-    hourlyRate: 200000,
-    location: "Quận Bình Thạnh, TP.HCM",
-    verified: false,
-    bio: "Giáo viên Văn - Sử, đam mê truyền cảm hứng cho học sinh yêu thích văn chương.",
-    school: "ĐH KHXH&NV",
-    degree: "Cử nhân Ngữ Văn",
-    type: "teacher",
-    certificates: [
-      "Cử nhân Ngữ Văn - ĐH KHXH&NV",
-      "Chứng chỉ Tâm lý Giáo dục",
-    ],
-    teachingStyle:
-      "Kết hợp phân tích tác phẩm với bối cảnh lịch sử. Luyện viết essay mỗi buổi.",
-    achievements: ["5 học sinh đạt 9+ môn Văn THPTQG"],
-    availableSlots: [
-      { day: "Thứ 2", time: "17:00-18:30" },
-      { day: "Thứ 4", time: "17:00-18:30" },
-    ],
-  },
-  {
-    id: "t5",
-    name: "Võ Minh Tuấn",
-    avatar: tutor5,
-    subjects: ["Toán", "Tin học"],
-    rating: 4.9,
-    totalReviews: 55,
-    totalSessions: 380,
-    yearsExperience: 8,
-    hourlyRate: 280000,
-    location: "Quận Tân Bình, TP.HCM",
-    verified: true,
-    bio: "Chuyên gia lập trình và toán ứng dụng, 8 năm kinh nghiệm giảng dạy.",
-    school: "ĐH Bách Khoa",
-    degree: "Kỹ sư CNTT",
-    type: "tutor",
-    certificates: [
-      "Kỹ sư CNTT - ĐH Bách Khoa",
-      "AWS Cloud Practitioner",
-      "Google Data Analytics",
-    ],
-    introVideoUrl: "https://example.com/intro-tuan.mp4",
-    teachingStyle:
-      "Giảng dạy qua dự án thực tế, kết hợp coding và toán ứng dụng. Sử dụng Jupyter Notebook.",
-    achievements: [
-      "3 học sinh đạt giải Tin học Quốc gia",
-      "Top 5 gia sư Tin học 2025",
-    ],
-    availableSlots: [
-      { day: "Thứ 3", time: "17:00-18:30" },
-      { day: "Thứ 5", time: "17:00-18:30" },
-    ],
-  },
-  {
-    id: "t6",
-    name: "Nguyễn Thị Mai Anh",
-    avatar: tutor6,
-    subjects: ["Toán", "Hóa"],
-    rating: 4.5,
-    totalReviews: 19,
-    totalSessions: 95,
-    yearsExperience: 3,
-    hourlyRate: 180000,
-    location: "Quận 9, TP.HCM",
-    verified: false,
-    bio: "Sinh viên năm cuối ĐH Sư Phạm, nhiệt tình và kiên nhẫn với từng học sinh.",
-    school: "ĐH Sư Phạm TP.HCM",
-    degree: "SV Sư phạm Toán",
-    type: "tutor",
-    certificates: [
-      "SV năm 4 Sư phạm Toán",
-      "Giải 3 Olympic Toán SV 2024",
-    ],
-    teachingStyle:
-      "Giảng dạy nhẹ nhàng, kiên nhẫn. Chia nhỏ bài tập, luyện từng dạng.",
-    achievements: ["Giải 3 Olympic Toán SV 2024"],
-    availableSlots: [
-      { day: "Thứ 2", time: "18:00-20:00" },
-      { day: "Thứ 6", time: "18:00-20:00" },
-    ],
-  },
-];
 
 const FindTutor = () => {
-  const [search, setSearch] = useState("");
-  const [subjectFilter, setSubjectFilter] = useState("Tất cả");
-  const [typeFilter, setTypeFilter] = useState<"all" | "tutor" | "teacher">(
-    "all"
+  const { role, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const canPostRequest = role === "student" || role === "parent";
+  const [postOpen, setPostOpen] = useState(false);
+
+  // Gate any action behind login: not authenticated → send to /login first.
+  const requireAuth = (action: () => void) => {
+    if (!isAuthenticated) {
+      toast.info("Vui lòng đăng nhập để tiếp tục.");
+      navigate("/login", { state: { from: "/find-tutor" } });
+      return;
+    }
+    action();
+  };
+  const { tutors, isLoading, isError } = useTutors();
+  // Live tutors from the API only — no fake fallback. On error the page shows an
+  // empty/error state instead of fabricated tutors.
+  const tutorListings = tutors;
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("search") || "");
+  const [subjectFilter, setSubjectFilter] = useState(
+    () => searchParams.get("subject") || "Tất cả"
   );
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 500000]);
+  const [typeFilter, setTypeFilter] = useState<"all" | "tutor" | "teacher">(
+    () => {
+      const t = searchParams.get("type");
+      return t === "tutor" || t === "teacher" ? t : "all";
+    }
+  );
+  const [priceRange, setPriceRange] = useState<[number, number]>(() => [
+    Number(searchParams.get("minPrice")) || 0,
+    Number(searchParams.get("maxPrice")) || 500000,
+  ]);
   const [showFilters, setShowFilters] = useState(false);
   const [bookedTutors, setBookedTutors] = useState<Set<string>>(new Set());
   const [trialRequested, setTrialRequested] = useState<Set<string>>(new Set());
@@ -264,11 +114,35 @@ const FindTutor = () => {
   const [bookStartDate, setBookStartDate] = useState("");
   const [bookSessions, setBookSessions] = useState(12);
   const [bookSchedule, setBookSchedule] = useState("");
+  // Structured schedule picker + conflict detection against the student's busy sessions.
+  const [bookDays, setBookDays] = useState<string[]>([]);
+  const [bookSlot, setBookSlot] = useState("");
+  const { sessions: mySessions } = useMySchedule();
+  const myBusy = useMemo(() => busySlotKeys(mySessions), [mySessions]);
+  const bookConflicts = useMemo(
+    () => (bookSlot ? bookDays.filter((d) => myBusy.has(slotKey(d, bookSlot))) : []),
+    [bookDays, bookSlot, myBusy]
+  );
+  const composedSchedule = bookDays.length && bookSlot ? `${bookDays.join(", ")} - ${bookSlot}` : "";
   const [selectedTrialSlot, setSelectedTrialSlot] = useState<{
     day: string;
     time: string;
   } | null>(null);
   const [listPage, setListPage] = useState(1);
+
+  // Re-sync filters whenever the URL query changes — e.g. the "Tìm gia sư khác"
+  // popup navigates here with new params while we're already on this page.
+  useEffect(() => {
+    setSearch(searchParams.get("search") || "");
+    setSubjectFilter(searchParams.get("subject") || "Tất cả");
+    const t = searchParams.get("type");
+    setTypeFilter(t === "tutor" || t === "teacher" ? t : "all");
+    setPriceRange([
+      Number(searchParams.get("minPrice")) || 0,
+      Number(searchParams.get("maxPrice")) || 500000,
+    ]);
+    setListPage(1);
+  }, [searchParams]);
 
   const filtered = useMemo(() => {
     return tutorListings.filter((t) => {
@@ -285,7 +159,7 @@ const FindTutor = () => {
       const matchType = typeFilter === "all" || t.type === typeFilter;
       return matchSearch && matchSubject && matchPrice && matchType;
     });
-  }, [search, subjectFilter, priceRange, typeFilter]);
+  }, [tutorListings, search, subjectFilter, priceRange, typeFilter]);
 
   const pageSize = 10;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -296,11 +170,15 @@ const FindTutor = () => {
   );
 
   const handleBook = () => {
-    if (!bookingModal || !bookStartDate || !bookSchedule) return;
+    if (!bookingModal || !bookStartDate || !composedSchedule) return;
+    if (bookConflicts.length > 0) return; // blocked: chosen slot clashes with an existing session
+    setBookSchedule(composedSchedule);
     setBookedTutors((prev) => new Set(prev).add(bookingModal.tutorId));
     setBookingModal(null);
     setBookStartDate("");
     setBookSchedule("");
+    setBookDays([]);
+    setBookSlot("");
   };
 
   const handleTrial = () => {
@@ -329,6 +207,13 @@ const FindTutor = () => {
             <p className="text-muted-foreground text-body-lg">
               Hơn 1,200 gia sư đã được xác thực và sẵn sàng giảng dạy
             </p>
+            {canPostRequest && (
+              <div className="mt-5">
+                <Button onClick={() => setPostOpen(true)} className="rounded-xl">
+                  <Megaphone className="w-4 h-4 mr-2" /> Đăng bài tìm gia sư
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="p-6 space-y-6">
@@ -510,12 +395,42 @@ const FindTutor = () => {
               <label className="text-xs font-medium text-muted-foreground mb-1 block">
                 Lịch học mong muốn
               </label>
-              <Input
-                placeholder="VD: T2, T4, T6 - 19:00-21:00"
-                value={bookSchedule}
-                onChange={(e) => setBookSchedule(e.target.value)}
-                className="rounded-xl"
-              />
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {DAYS.map((d) => {
+                  const active = bookDays.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setBookDays((prev) => (active ? prev.filter((x) => x !== d) : [...prev, d]))}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors",
+                        active ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40"
+                      )}
+                    >
+                      {d.replace("Thứ ", "T").replace("Chủ nhật", "CN")}
+                    </button>
+                  );
+                })}
+              </div>
+              <select
+                value={bookSlot}
+                onChange={(e) => setBookSlot(e.target.value)}
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+              >
+                <option value="">Chọn khung giờ…</option>
+                {SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+
+              {bookConflicts.length > 0 && (
+                <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/15 p-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Trùng lịch! Bạn đã có buổi học vào{" "}
+                    <span className="font-semibold">{bookConflicts.join(", ")} · {bookSlot}</span>. Hãy chọn khung khác.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="p-3 bg-muted/50 rounded-xl">
               <p className="text-xs text-muted-foreground">Tạm tính học phí</p>
@@ -534,9 +449,9 @@ const FindTutor = () => {
             <Button
               className="flex-1 rounded-xl"
               onClick={handleBook}
-              disabled={!bookStartDate || !bookSchedule}
+              disabled={!bookStartDate || !composedSchedule || bookConflicts.length > 0}
             >
-              Xác nhận đăng ký
+              {bookConflicts.length > 0 ? "Trùng lịch — chọn khung khác" : "Xác nhận đăng ký"}
             </Button>
             <Button
               variant="outline"
@@ -811,23 +726,23 @@ const FindTutor = () => {
               <div className="flex gap-3 mt-4">
                 <Button
                   className="flex-1 rounded-xl"
-                  onClick={() => {
+                  onClick={() => requireAuth(() => {
                     setBookingModal({
                       tutorId: profileTutor.id,
                       subject: profileTutor.subjects[0],
                     });
                     setSelectedProfile(null);
-                  }}
+                  })}
                 >
                   Đăng ký học
                 </Button>
                 <Button
                   variant="outline"
                   className="flex-1 rounded-xl"
-                  onClick={() => {
+                  onClick={() => requireAuth(() => {
                     setTrialModal(profileTutor.id);
                     setSelectedProfile(null);
-                  }}
+                  })}
                 >
                   Học thử
                 </Button>
@@ -839,6 +754,19 @@ const FindTutor = () => {
 
       {/* Tutors Grid */}
       <div className="space-y-4">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải danh sách gia sư...
+          </div>
+        ) : isError && tutorListings.length === 0 ? (
+          <div className="text-center py-20 text-muted-foreground">
+            Không tải được danh sách gia sư. Vui lòng thử lại.
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20 text-muted-foreground">
+            Không tìm thấy gia sư phù hợp.
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {pagedTutors.map((tutor) => (
             <div
@@ -933,12 +861,12 @@ const FindTutor = () => {
                   <Button
                     className="flex-1 rounded-xl text-xs"
                     size="sm"
-                    onClick={() =>
+                    onClick={() => requireAuth(() =>
                       setBookingModal({
                         tutorId: tutor.id,
                         subject: tutor.subjects[0],
                       })
-                    }
+                    )}
                   >
                     Đăng ký học
                   </Button>
@@ -957,7 +885,7 @@ const FindTutor = () => {
                     variant="outline"
                     className="rounded-xl text-xs"
                     size="sm"
-                    onClick={() => setTrialModal(tutor.id)}
+                    onClick={() => requireAuth(() => setTrialModal(tutor.id))}
                   >
                     Học thử
                   </Button>
@@ -974,6 +902,7 @@ const FindTutor = () => {
             </div>
           ))}
         </div>
+        )}
 
         {filtered.length > 0 && (
           <Pagination>
@@ -1016,15 +945,22 @@ const FindTutor = () => {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-16">
+        <div className="text-center py-16 space-y-4">
           <p className="text-muted-foreground">
             Không tìm thấy gia sư phù hợp. Hãy thử thay đổi bộ lọc.
           </p>
+          {canPostRequest && (
+            <Button onClick={() => setPostOpen(true)} className="rounded-xl">
+              <Megaphone className="w-4 h-4 mr-2" /> Đăng bài tìm gia sư
+            </Button>
+          )}
         </div>
       )}
           </div>
         </div>
       </div>
+
+      <PostClassRequestDialog open={postOpen} onOpenChange={setPostOpen} />
       <FooterSection />
     </div>
   );

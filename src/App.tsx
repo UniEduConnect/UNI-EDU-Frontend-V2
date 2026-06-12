@@ -3,14 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AdminProvider } from "@/contexts/AdminContext";
-import { TutorProvider } from "@/contexts/TutorContext";
-import { TeacherProvider } from "@/contexts/TeacherContext";
-import { StudentProvider } from "@/contexts/StudentContext";
-import { ParentProvider } from "@/contexts/ParentContext";
-import { OfficeProvider } from "@/contexts/OfficeContext";
-import { FinanceProvider } from "@/contexts/FinanceContext";
-import { ExamManagerProvider } from "@/contexts/ExamManagerContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Register from "./pages/Register";
@@ -36,34 +30,32 @@ import TutorClasses from "./pages/tutor/TutorClasses";
 import TutorWallet from "./pages/tutor/TutorWallet";
 import TutorSchedule from "./pages/tutor/TutorSchedule";
 import TutorStudents from "./pages/tutor/TutorStudents";
+import TutorFindStudents from "./pages/tutor/TutorFindStudents";
 import TutorReviews from "./pages/tutor/TutorReviews";
 import TutorChat from "./pages/tutor/TutorChat";
 import TutorProfile from "./pages/tutor/TutorProfile";
 import TutorClassDetail from "./pages/tutor/TutorClassDetail";
 import OnlineMeeting from "./pages/tutor/OnlineMeeting";
 import TutorPublicProfile from "./pages/TutorPublicProfile";
+import WalletDepositReturn from "./pages/WalletDepositReturn";
 import TeacherLayout from "./components/teacher/TeacherLayout";
 import StudentLayout from "./components/student/StudentLayout";
 import StudentDashboard from "./pages/student/StudentDashboard";
-import StudentFindTutor from "./pages/student/StudentFindTutor";
 import StudentClasses from "./pages/student/StudentClasses";
 import StudentClassDetail from "./pages/student/StudentClassDetail";
 import StudentSchedule from "./pages/student/StudentSchedule";
-import StudentAvailability from "./pages/student/StudentAvailability";
 import StudentTests from "./pages/student/StudentTests";
-import StudentMockExam from "./pages/student/StudentMockExam";
-import StudentResults from "./pages/student/StudentResults";
 import StudentReport from "./pages/student/StudentReport";
 import StudentChat from "./pages/student/StudentChat";
 import StudentWallet from "./pages/student/StudentWallet";
 import StudentReviews from "./pages/student/StudentReviews";
+import StudentFindTutorPosts from "./pages/StudentFindTutorPosts";
 import ParentLayout from "./components/parent/ParentLayout";
 import ParentDashboard from "./pages/parent/ParentDashboard";
 import ParentChat from "./pages/parent/ParentChat";
 import ParentChildren from "./pages/parent/ParentChildren";
 import ParentReports from "./pages/parent/ParentReports";
 import ParentWallet from "./pages/parent/ParentWallet";
-import ParentFindTutor from "./pages/parent/ParentFindTutor";
 import ParentSupport from "./pages/parent/ParentSupport";
 import ParentReviews from "./pages/parent/ParentReviews";
 import OfficeLayout from "./components/office/OfficeLayout";
@@ -94,15 +86,8 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <AuthProvider>
     <TooltipProvider>
-      <AdminProvider>
-        <TutorProvider>
-        <TeacherProvider>
-        <StudentProvider>
-        <ParentProvider>
-        <OfficeProvider>
-        <FinanceProvider>
-        <ExamManagerProvider>
             <Toaster />
             <Sonner />
             <BrowserRouter>
@@ -115,6 +100,8 @@ const App = () => (
                 <Route path="/exam-online" element={<ExamOnline />} />
                 <Route path="/demo/:role" element={<DemoPage />} />
                 <Route path="/tutor-profile" element={<TutorPublicProfile />} />
+                <Route path="/wallet/deposit-return" element={<WalletDepositReturn />} />
+                <Route element={<ProtectedRoute role="admin" />}>
                 <Route path="/admin" element={<AdminLayout />}>
                   <Route index element={<AdminDashboard />} />
                   <Route path="approvals" element={<Navigate to="/admin/users" replace />} />
@@ -126,6 +113,8 @@ const App = () => (
                   <Route path="audit" element={<AdminAudit />} />
                   <Route path="settings" element={<AdminSettings />} />
                 </Route>
+                </Route>
+                <Route element={<ProtectedRoute role="tutor" />}>
                 <Route path="/tutor" element={<TutorLayout />}>
                   <Route index element={<TutorDashboard />} />
                   <Route path="classes" element={<TutorClasses />} />
@@ -133,11 +122,14 @@ const App = () => (
                   <Route path="wallet" element={<TutorWallet />} />
                   <Route path="schedule" element={<TutorSchedule />} />
                   <Route path="students" element={<TutorStudents />} />
+                  <Route path="find-students" element={<TutorFindStudents />} />
                   <Route path="reviews" element={<TutorReviews />} />
                   <Route path="chat" element={<TutorChat />} />
                   <Route path="profile" element={<TutorProfile />} />
                 </Route>
                 <Route path="/tutor/meeting/:sessionId" element={<OnlineMeeting />} />
+                </Route>
+                <Route element={<ProtectedRoute role="teacher" />}>
                 <Route path="/teacher" element={<TeacherLayout />}>
                   <Route index element={<TutorDashboard />} />
                   <Route path="classes" element={<TutorClasses />} />
@@ -145,11 +137,14 @@ const App = () => (
                   <Route path="wallet" element={<TutorWallet />} />
                   <Route path="schedule" element={<TutorSchedule />} />
                   <Route path="students" element={<TutorStudents />} />
+                  <Route path="find-students" element={<TutorFindStudents />} />
                   <Route path="reviews" element={<TutorReviews />} />
                   <Route path="chat" element={<TutorChat />} />
                   <Route path="profile" element={<TutorProfile />} />
                 </Route>
                 <Route path="/teacher/meeting/:sessionId" element={<OnlineMeeting />} />
+                </Route>
+                <Route element={<ProtectedRoute role="student" />}>
                 <Route path="/student" element={<StudentLayout />}>
                   <Route index element={<StudentDashboard />} />
                   <Route path="classes" element={<StudentClasses />} />
@@ -161,14 +156,18 @@ const App = () => (
                   <Route path="results" element={<Navigate to="/student/classes" replace />} />
                   <Route path="report" element={<StudentReport />} />
                   <Route path="find-tutor" element={<Navigate to="/find-tutor" replace />} />
+                  <Route path="tutor-posts" element={<StudentFindTutorPosts />} />
                   <Route path="reviews" element={<StudentReviews />} />
                   <Route path="wallet" element={<StudentWallet />} />
                   <Route path="chat" element={<StudentChat />} />
                 </Route>
                 <Route path="/student/meeting/:sessionId" element={<OnlineMeeting />} />
+                </Route>
+                <Route element={<ProtectedRoute role="parent" />}>
                 <Route path="/parent" element={<ParentLayout />}>
                   <Route index element={<ParentDashboard />} />
                   <Route path="find-tutor" element={<Navigate to="/find-tutor" replace />} />
+                  <Route path="tutor-posts" element={<StudentFindTutorPosts />} />
                   <Route path="chat" element={<ParentChat />} />
                   <Route path="children" element={<ParentChildren />} />
                   <Route path="reports" element={<ParentReports />} />
@@ -176,6 +175,8 @@ const App = () => (
                   <Route path="wallet" element={<ParentWallet />} />
                   <Route path="support" element={<ParentSupport />} />
                 </Route>
+                </Route>
+                <Route element={<ProtectedRoute role="office" />}>
                 <Route path="/office" element={<OfficeLayout />}>
                   <Route index element={<OfficeDashboard />} />
                   <Route path="registrations" element={<OfficeRegistrations />} />
@@ -187,6 +188,8 @@ const App = () => (
                   <Route path="reviews" element={<OfficeReviews />} />
                   <Route path="reports" element={<OfficeReports />} />
                 </Route>
+                </Route>
+                <Route element={<ProtectedRoute role="finance" />}>
                 <Route path="/finance" element={<FinanceLayout />}>
                   <Route index element={<FinanceDashboard />} />
                   <Route path="transactions" element={<FinanceTransactions />} />
@@ -195,12 +198,15 @@ const App = () => (
                   <Route path="reconciliation" element={<FinanceReconciliation />} />
                   <Route path="reports" element={<FinanceReports />} />
                 </Route>
+                </Route>
+                <Route element={<ProtectedRoute role="exam-manager" />}>
                 <Route path="/exam-manager" element={<ExamManagerLayout />}>
                   <Route index element={<ExamManagerDashboard />} />
                   <Route path="exams" element={<ExamManagerExams />} />
                   <Route path="ai-config" element={<ExamManagerAIConfig />} />
                   <Route path="stats" element={<ExamManagerStats />} />
                   <Route path="questions" element={<ExamManagerQuestions />} />
+                </Route>
                 </Route>
                 <Route path="/pricing" element={<PlaceholderPage title="Bảng giá" description="Trang bảng giá đang được cập nhật." />} />
                 <Route path="/help" element={<PlaceholderPage title="Trung tâm trợ giúp" description="Trung tâm trợ giúp đang được xây dựng." />} />
@@ -213,15 +219,8 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
-        </ExamManagerProvider>
-        </FinanceProvider>
-        </OfficeProvider>
-        </ParentProvider>
-        </StudentProvider>
-        </TeacherProvider>
-        </TutorProvider>
-        </AdminProvider>
     </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 
