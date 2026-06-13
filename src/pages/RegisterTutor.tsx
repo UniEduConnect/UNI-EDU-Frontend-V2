@@ -99,7 +99,7 @@ const RegisterTutor = () => {
                 Tuyển gia sư
               </span>
               <h1 className="text-section-lg md:text-hero font-extrabold text-foreground mb-4">
-                Trở thành gia sư <span className="text-primary">EduConnect</span>
+                Trở thành gia sư <span className="text-primary">Uni Education</span>
               </h1>
               <p className="text-muted-foreground text-body-lg mb-8">
                 Tham gia đội ngũ hơn 1,200 gia sư chất lượng và bắt đầu hành trình giảng dạy.

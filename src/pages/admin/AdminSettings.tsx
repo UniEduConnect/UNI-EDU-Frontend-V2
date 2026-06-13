@@ -142,7 +142,7 @@ const AdminSettings = () => {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Email hỗ trợ</Label>
-                  <Input value="support@educonnect.vn" className="rounded-xl h-11" readOnly />
+                  <Input value="support@unieducation.net" className="rounded-xl h-11" readOnly />
                 </div>
               </div>
               <div className="space-y-3">

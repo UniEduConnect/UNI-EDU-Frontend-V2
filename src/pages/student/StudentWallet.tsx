@@ -203,7 +203,7 @@ const StudentWallet = () => {
     toast.success("Đang xuất file lịch sử giao dịch...");
     setTimeout(() => {
       const content = [
-        "LỊCH SỬ GIAO DỊCH - VÍ HỌC PHÍ EDUCONNECT",
+        "LỊCH SỬ GIAO DỊCH - VÍ HỌC PHÍ UNI EDUCATION",
         `Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`,
         `Số dư hiện tại: ${walletBalance.toLocaleString("vi-VN")}đ`,
         "",
