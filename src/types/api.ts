@@ -686,6 +686,18 @@ export interface DepositResponse {
   payUrl: string;
   status: string;
 }
+
+// DEV/DEMO test-deposit flow: no Method field (server forces Method = "test") and no
+// gateway redirect. Two steps — POST /Wallet/deposit-test then confirm — credit the
+// wallet directly so the balance can be exercised without Momo/VNPay sandbox config.
+export interface DepositTestRequest {
+  amount: number;
+}
+export interface TestDepositConfirmResponse {
+  transactionId: string;
+  status: string;
+  balance: number;
+}
 export interface CreateWithdrawalRequest {
   amount: number;
   method: string;

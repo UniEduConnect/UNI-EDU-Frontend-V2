@@ -31,6 +31,19 @@ export function useDeposit() {
   });
 }
 
+// DEV/DEMO helper: runs the two-step test-deposit flow (create Pending → confirm/credit)
+// in one mutation so a single click tops the wallet up without a real payment gateway.
+export function useTestDeposit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (amount: number) => {
+      const created = await walletService.depositTest({ amount });
+      return walletService.confirmDepositTest(created.transactionId);
+    },
+    onSuccess: () => invalidateWallet(qc),
+  });
+}
+
 export function useWithdraw() {
   const qc = useQueryClient();
   return useMutation({
