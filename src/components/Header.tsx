@@ -1,27 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import UniLogo from "@/components/UniLogo";
 import { useAuth } from "@/contexts/AuthContext";
 import { ROLE_ROUTE } from "@/lib/roleRoutes";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
-const demoRoles = [
-  { name: "Admin", path: "/demo/admin" },
-  { name: "Gia sư", path: "/demo/tutor" },
-  { name: "Giáo viên", path: "/demo/teacher" },
-  { name: "Học sinh", path: "/demo/student" },
-  { name: "Phụ huynh", path: "/demo/parent" },
-  { name: "Kế toán", path: "/demo/accountant" },
-  { name: "Văn phòng", path: "/demo/office" },
-  { name: "Quản lý đề", path: "/demo/exam-manager" },
-];
 
 const sectionLinks = [
   { id: "features", label: "Tính năng" },
@@ -88,20 +71,6 @@ const Header = () => {
         </nav>
 
         <div className="hidden lg:flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7] transition-all">
-                Demo <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="rounded-xl">
-              {demoRoles.map((role) => (
-                <DropdownMenuItem key={role.path} asChild>
-                  <Link to={role.path}>{role.name}</Link>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
           {isAuthenticated ? (
             <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7] font-semibold text-sm shadow-neon px-6">
               <Link to={dashboardPath}>Vào trang quản lý</Link>
@@ -142,18 +111,6 @@ const Header = () => {
             <Link to="/find-tutor" className="block w-full text-left py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Tìm gia sư</Link>
           )}
           <Link to="/exam-online" className="block py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Thi thử Online</Link>
-          <details className="group">
-            <summary className="py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white cursor-pointer list-none flex items-center gap-1 rounded-lg hover:bg-[#1E69E7]">
-              Demo <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform" />
-            </summary>
-            <div className="pl-6 space-y-1">
-              {demoRoles.map((role) => (
-                <Link key={role.path} to={role.path} className="block py-2 text-sm text-muted-foreground" onClick={() => setMobileOpen(false)}>
-                  {role.name}
-                </Link>
-              ))}
-            </div>
-          </details>
           <div className="flex gap-2 pt-2">
             {isAuthenticated ? (
               <Button asChild className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7]">
