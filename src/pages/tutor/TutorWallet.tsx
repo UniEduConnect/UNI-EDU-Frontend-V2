@@ -1,7 +1,7 @@
 import { Wallet, ArrowDownLeft, ArrowUpRight, ShieldCheck, DollarSign, Plus, CreditCard, AlertTriangle, Info, Landmark, Smartphone, Building2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import { useWallet, useWalletTransactions, useDeposit, useWithdraw } from "@/hooks/useWallet";
+import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
 import { useRefunds, useRequestRefund } from "@/hooks/useRefunds";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +27,13 @@ const paymentMethods = [
   { id: "bidv", name: "BIDV", icon: Landmark, desc: "****9012" },
 ];
 
+// Deposit dialog list: a demo option (credits the wallet directly via the test-deposit
+// API, no gateway) followed by the real payment methods.
+const depositMethods = [
+  { id: "test", name: "Test (Demo)", icon: Plus, desc: "Nạp thử — cộng ngay vào ví, không qua cổng" },
+  ...paymentMethods,
+];
+
 const refundReasons = [
   "Lớp học bị hủy do học sinh không tham gia",
   "Phụ huynh yêu cầu dừng lớp",
@@ -45,6 +52,7 @@ const TutorWallet = () => {
   // TODO(BE): tutor-scoped GET /me/refunds for a tutor's own refund history
   const { refunds } = useRefunds();
   const depositMutation = useDeposit();
+  const testDepositMutation = useTestDeposit();
   const withdrawMutation = useWithdraw();
   const requestRefundMutation = useRequestRefund();
 
@@ -86,6 +94,12 @@ const TutorWallet = () => {
           onError: (e) => toast.error(e instanceof Error ? e.message : "Rút tiền thất bại."),
         },
       );
+    } else if (selectedMethod === "test") {
+      // Demo path: create + confirm a test deposit, crediting the wallet immediately.
+      testDepositMutation.mutate(amt, {
+        onSuccess: () => { toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví (test)!`); reset(); },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Nạp tiền test thất bại."),
+      });
     } else {
       depositMutation.mutate(
         { amount: amt, method: selectedMethod },
@@ -295,7 +309,7 @@ const TutorWallet = () => {
             <div>
               <label className="text-xs font-medium text-foreground">Phương thức thanh toán</label>
               <div className="space-y-2 mt-2">
-                {paymentMethods.map(m => (
+                {(dialogType === "deposit" ? depositMethods : paymentMethods).map(m => (
                   <button key={m.id} onClick={() => setSelectedMethod(m.id)} className={cn("w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all", selectedMethod === m.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/50")}>
                     <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center"><m.icon className="w-4 h-4 text-muted-foreground" /></div>
                     <div>
@@ -306,7 +320,8 @@ const TutorWallet = () => {
                 ))}
               </div>
             </div>
-            <button onClick={handleSubmit} disabled={!amount || parseInt(amount) <= 0 || !selectedMethod || depositMutation.isPending || withdrawMutation.isPending} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50">
+            <button onClick={handleSubmit} disabled={!amount || parseInt(amount) <= 0 || !selectedMethod || depositMutation.isPending || testDepositMutation.isPending || withdrawMutation.isPending} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+              {(depositMutation.isPending || testDepositMutation.isPending || withdrawMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
               {dialogType === "withdraw" ? "Xác nhận rút tiền" : "Xác nhận nạp tiền"}
             </button>
           </div>

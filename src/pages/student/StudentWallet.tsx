@@ -1,4 +1,4 @@
-import { useWallet, useWalletTransactions, useDeposit, useWithdraw } from "@/hooks/useWallet";
+import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
 import type { DepositResponse, ClassItem } from "@/types/api";
 import {
@@ -60,6 +60,13 @@ const paymentMethods = [
   { id: "techcombank", name: "Techcombank", desc: "Ngân hàng Techcombank" },
 ];
 
+// Methods for the deposit dialog: real gateways + a demo option that credits the wallet
+// directly via the test-deposit API (no Momo/VNPay sandbox required).
+const depositMethods = [
+  { id: "test", name: "Test (Demo)", desc: "Nạp thử — cộng ngay vào ví, không qua cổng" },
+  ...paymentMethods,
+];
+
 const CHART_COLORS = [
   "hsl(224, 76%, 48%)",
   "hsl(142, 71%, 45%)",
@@ -72,6 +79,7 @@ const StudentWallet = () => {
   const { transactions: walletTransactions, isLoading: txLoading } = useWalletTransactions();
   const { classes } = useClasses({ Status: "active" });
   const depositMutation = useDeposit();
+  const testDepositMutation = useTestDeposit();
   const withdrawMutation = useWithdraw();
   const walletBalance = walletData?.balance ?? 0;
 
@@ -147,7 +155,20 @@ const StudentWallet = () => {
     if (!amt || amt <= 0 || !selectedMethod) return;
 
     const methodName =
-      paymentMethods.find((m) => m.id === selectedMethod)?.name || selectedMethod;
+      depositMethods.find((m) => m.id === selectedMethod)?.name || selectedMethod;
+
+    // Demo path: create + confirm a test deposit, crediting the wallet immediately.
+    if (selectedMethod === "test") {
+      testDepositMutation.mutate(amt, {
+        onSuccess: () => {
+          toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví (test)!`);
+          setShowDeposit(false);
+          resetDialogState();
+        },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Nạp tiền test thất bại."),
+      });
+      return;
+    }
 
     depositMutation.mutate(
       { amount: amt, method: selectedMethod },
@@ -589,7 +610,7 @@ const StudentWallet = () => {
                 Phương thức thanh toán
               </label>
               <div className="space-y-2 mt-3">
-                {paymentMethods.map((m) => (
+                {depositMethods.map((m) => (
                   <button
                     key={m.id}
                     onClick={() => setSelectedMethod(m.id)}
@@ -616,10 +637,22 @@ const StudentWallet = () => {
 
             <Button
               onClick={handleDeposit}
-              disabled={!amount || parseInt(amount) <= 0 || !selectedMethod}
+              disabled={
+                !amount ||
+                parseInt(amount) <= 0 ||
+                !selectedMethod ||
+                depositMutation.isPending ||
+                testDepositMutation.isPending
+              }
               className="w-full rounded-xl h-11"
             >
-              Xác nhận nạp tiền
+              {testDepositMutation.isPending || depositMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Đang xử lý...
+                </>
+              ) : (
+                "Xác nhận nạp tiền"
+              )}
             </Button>
           </div>
         </DialogContent>

@@ -3,7 +3,9 @@ import type {
   CreateWithdrawalRequest,
   DepositRequest,
   DepositResponse,
+  DepositTestRequest,
   Paged,
+  TestDepositConfirmResponse,
   Wallet,
   WalletTransactionItem,
 } from "@/types/api";
@@ -20,6 +22,18 @@ export async function getTransactions(page = 1): Promise<Paged<WalletTransaction
 
 export async function deposit(payload: DepositRequest): Promise<DepositResponse> {
   return apiClient.post("/Wallet/deposit", payload) as unknown as Promise<DepositResponse>;
+}
+
+// DEV/DEMO ONLY: creates a Pending "test" transaction (no gateway, no payUrl).
+export async function depositTest(payload: DepositTestRequest): Promise<DepositResponse> {
+  return apiClient.post("/Wallet/deposit-test", payload) as unknown as Promise<DepositResponse>;
+}
+
+// DEV/DEMO ONLY: settles a "test" transaction and credits the wallet (replaces the real IPN).
+export async function confirmDepositTest(transactionId: string): Promise<TestDepositConfirmResponse> {
+  return apiClient.post(
+    `/Wallet/deposit-test/${transactionId}/confirm`,
+  ) as unknown as Promise<TestDepositConfirmResponse>;
 }
 
 export async function withdraw(payload: CreateWithdrawalRequest): Promise<unknown> {

@@ -1,4 +1,4 @@
-import { useWallet, useWalletTransactions, useDeposit, useWithdraw } from "@/hooks/useWallet";
+import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
 import {
   Wallet,
@@ -39,6 +39,13 @@ const paymentMethods = [
   { id: "techcombank", name: "Techcombank", desc: "Ngân hàng Techcombank" },
 ];
 
+// Deposit dialog list: a demo option that credits the wallet directly via the
+// test-deposit API (no gateway), followed by the real payment methods.
+const depositMethods = [
+  { id: "test", name: "Test (Demo)", desc: "Nạp thử — cộng ngay vào ví, không qua cổng" },
+  ...paymentMethods,
+];
+
 const ParentWallet = () => {
   const { data: walletData } = useWallet();
   const { transactions, isLoading: txLoading } = useWalletTransactions();
@@ -46,6 +53,7 @@ const ParentWallet = () => {
   // (GET /classes is role-scoped server-side).
   const { classes } = useClasses({ Status: "active" });
   const depositMutation = useDeposit();
+  const testDepositMutation = useTestDeposit();
   const withdrawMutation = useWithdraw();
 
   const walletBalance = walletData?.balance ?? 0;
@@ -76,7 +84,22 @@ const ParentWallet = () => {
   const handleDeposit = () => {
     const amt = parseInt(depositAmt);
     if (!amt || amt <= 0 || !selectedMethod) return;
-    const methodName = paymentMethods.find(m => m.id === selectedMethod)?.name || selectedMethod;
+    const methodName = depositMethods.find(m => m.id === selectedMethod)?.name || selectedMethod;
+
+    // Demo path: create + confirm a test deposit, crediting the wallet immediately.
+    if (selectedMethod === "test") {
+      testDepositMutation.mutate(amt, {
+        onSuccess: () => {
+          toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví (test)!`);
+          setShowDeposit(false);
+          setDepositAmt("");
+          setSelectedMethod("");
+        },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Nạp tiền test thất bại."),
+      });
+      return;
+    }
+
     depositMutation.mutate(
       { amount: amt, method: selectedMethod },
       {
@@ -433,7 +456,7 @@ const ParentWallet = () => {
             <div>
               <label className="text-xs font-medium text-foreground">Phương thức thanh toán</label>
               <div className="mt-2 space-y-2">
-                {paymentMethods.map(m => (
+                {depositMethods.map(m => (
                   <button
                     key={m.id}
                     onClick={() => setSelectedMethod(m.id)}
@@ -460,10 +483,16 @@ const ParentWallet = () => {
 
             <Button
               onClick={handleDeposit}
-              disabled={!depositAmt || parseInt(depositAmt) <= 0 || !selectedMethod || depositMutation.isPending}
+              disabled={!depositAmt || parseInt(depositAmt) <= 0 || !selectedMethod || depositMutation.isPending || testDepositMutation.isPending}
               className="w-full rounded-xl"
             >
-              Xác nhận nạp tiền
+              {(depositMutation.isPending || testDepositMutation.isPending) ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Đang xử lý...
+                </>
+              ) : (
+                "Xác nhận nạp tiền"
+              )}
             </Button>
           </div>
         </DialogContent>
