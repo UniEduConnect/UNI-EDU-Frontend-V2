@@ -391,6 +391,7 @@ export interface AiTestResponse {
   attemptId: string;
   subjectId: string;
   subject: string;
+  grade?: number | null;
   passThreshold: number;
   questions: AiTestQuestionDto[];
 }

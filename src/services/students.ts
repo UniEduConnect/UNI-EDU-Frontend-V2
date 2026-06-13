@@ -19,8 +19,12 @@ export const updateMyAvailability = (payload: UpdateAvailabilityRequest) =>
 export const getCommonSlots = (tutorId: string) =>
   apiClient.get(`/Students/me/common-slots/${tutorId}`) as unknown as Promise<AvailableSlotDto[]>;
 
-export const getAiSlots = (tutorId: string) =>
-  apiClient.get(`/Students/me/ai-slots/${tutorId}`) as unknown as Promise<AiSlotSuggestion[]>;
+// AI-ranked slots from the tutor∩student free-slot overlap. sessionsPerWeek tells the AI how
+// many sessions/week to schedule (bounded by the overlap).
+export const getAiSlots = (tutorId: string, sessionsPerWeek?: number) =>
+  apiClient.get(`/Students/me/ai-slots/${tutorId}`, {
+    params: sessionsPerWeek ? { sessionsPerWeek } : undefined,
+  }) as unknown as Promise<AiSlotSuggestion[]>;
 export const getMyDashboard = () => apiClient.get("/Students/me/dashboard") as unknown as Promise<StudentDashboard>;
 
 // Parent-link requests addressed to this student (consent-based linking).

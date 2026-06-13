@@ -22,6 +22,8 @@ interface AiTestDialogProps {
   subjectId: string;
   /** Optional subject label for the header before the test loads. */
   subjectName?: string;
+  /** Grade/class level of the class being applied for — levels the AI test. */
+  grade?: number;
   /** Called with the passing attempt id once the tutor scores >= threshold. */
   onPassed: (attemptId: string) => void;
   /** Whether the parent accept-mutation is in flight (disables the confirm button). */
@@ -38,6 +40,7 @@ export function AiTestDialog({
   onOpenChange,
   subjectId,
   subjectName,
+  grade,
   onPassed,
   accepting = false,
 }: AiTestDialogProps) {
@@ -54,12 +57,12 @@ export function AiTestDialog({
     setTest(null);
     setAnswers({});
     setResult(null);
-    generate.mutate(subjectId, {
+    generate.mutate({ subjectId, grade }, {
       onSuccess: (data) => setTest(data),
       onError: () => toast.error("Không tạo được bài test. Vui lòng thử lại."),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, subjectId]);
+  }, [open, subjectId, grade]);
 
   const total = test?.questions.length ?? 0;
   const answeredCount = Object.keys(answers).length;
@@ -86,7 +89,7 @@ export function AiTestDialog({
     setTest(null);
     setAnswers({});
     setResult(null);
-    generate.mutate(subjectId, {
+    generate.mutate({ subjectId, grade }, {
       onSuccess: (data) => setTest(data),
       onError: () => toast.error("Không tạo được bài test. Vui lòng thử lại."),
     });
@@ -102,7 +105,7 @@ export function AiTestDialog({
           </DialogTitle>
           <DialogDescription>
             Bạn cần đạt tối thiểu <span className="font-semibold text-foreground">{threshold}%</span> để được nhận lớp.
-            Đề được tạo bằng AI cho đúng môn này.
+            Đề được tạo bằng AI cho đúng môn này{grade ? `, lớp ${grade}` : ""}.
           </DialogDescription>
         </DialogHeader>
 

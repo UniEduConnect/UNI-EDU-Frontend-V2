@@ -56,6 +56,7 @@ const StudentSchedule = () => {
   const [availEdit, setAvailEdit] = useState(false);
   const [availDraft, setAvailDraft] = useState<AvailableSlotDto[]>([]);
   const [suggestTutorId, setSuggestTutorId] = useState("");
+  const [sessionsPerWeek, setSessionsPerWeek] = useState(2);
 
   const tutorOptions = useMemo(() => {
     const m = new Map<string, string>();
@@ -64,10 +65,11 @@ const StudentSchedule = () => {
   }, [classes]);
 
   const { slots: commonSlots } = useCommonSlots(suggestTutorId || undefined);
-  const { slots: aiSlots, isLoading: aiSlotsLoading } = useAiSlots(suggestTutorId || undefined);
+  const { slots: aiSlots, isLoading: aiSlotsLoading } = useAiSlots(suggestTutorId || undefined, sessionsPerWeek);
+  // Highlight the AI's chosen sessions on the grid when available; otherwise show the raw overlap.
   const suggested = useMemo(
-    () => new Set(commonSlots.map(s => slotKey(normalizeDay(s.day), s.time))),
-    [commonSlots]
+    () => new Set((aiSlots.length > 0 ? aiSlots : commonSlots).map(s => slotKey(normalizeDay(s.day), s.time))),
+    [aiSlots, commonSlots]
   );
 
   const toggleAvailSlot = (day: string, slot: string) =>
@@ -286,6 +288,16 @@ const StudentSchedule = () => {
                 {tutorOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             )}
+            {!availEdit && suggestTutorId && (
+              <select
+                value={sessionsPerWeek}
+                onChange={e => setSessionsPerWeek(Number(e.target.value))}
+                className="text-xs rounded-lg border border-border bg-card px-2 py-1.5"
+                title="Số buổi học mỗi tuần"
+              >
+                {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n} buổi/tuần</option>)}
+              </select>
+            )}
             {availEdit ? (
               <>
                 <button onClick={saveAvail} disabled={updateAvail.isPending} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium disabled:opacity-60"><Save className="w-3 h-3" /> Lưu</button>
@@ -326,7 +338,7 @@ const StudentSchedule = () => {
         {!availEdit && suggestTutorId && (aiSlotsLoading || aiSlots.length > 0) && (
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-              <Sparkles className="w-3.5 h-3.5" /> AI gợi ý lịch học tối ưu
+              <Sparkles className="w-3.5 h-3.5" /> AI sắp xếp {sessionsPerWeek} buổi/tuần tối ưu (lịch rảnh của bạn ∩ gia sư)
             </div>
             {aiSlotsLoading ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang phân tích…</div>
