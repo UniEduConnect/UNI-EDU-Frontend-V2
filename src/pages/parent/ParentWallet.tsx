@@ -118,7 +118,7 @@ const ParentWallet = () => {
     toast.success("Đang xuất lịch sử giao dịch...");
     setTimeout(() => {
       const content = [
-        "LỊCH SỬ GIAO DỊCH - PHỤ HUYNH EDUCONNECT",
+        "LỊCH SỬ GIAO DỊCH - PHỤ HUYNH UNI EDUCATION",
         `Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`,
         `Số dư: ${walletBalance.toLocaleString("vi-VN")}đ`,
         "",

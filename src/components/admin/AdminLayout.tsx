@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useAdminUsers } from "@/hooks/useAdmin";
 import { useNotifications, useUnreadCount, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/useNotifications";
 import { useMe } from "@/hooks/useUsers";
-import EduLogo from "@/components/EduLogo";
+import UniMark from "@/components/UniMark";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { useState, useRef, useEffect } from "react";
 
@@ -74,10 +74,10 @@ const AdminLayout = () => {
       >
         <div className={cn("h-20 flex items-center gap-3 transition-all", collapsed ? "justify-center px-0" : "justify-between px-4")}>
           <div className="flex items-center gap-3">
-            {!collapsed && <EduLogo size={36} />}
+            {!collapsed && <UniMark size={36} />}
             {!collapsed && (
               <div className="min-w-0">
-                <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">EduConnect</h1>
+                <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">Uni Education</h1>
                 <p className="text-xs text-slate-400 leading-tight">Admin Panel</p>
               </div>
             )}

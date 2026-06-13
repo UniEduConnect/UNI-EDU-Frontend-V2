@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Mail, Phone } from "lucide-react";
-import EduLogo from "@/components/EduLogo";
+import UniMark from "@/components/UniMark";
 
 const FooterSection = () => {
   return (
@@ -9,9 +9,9 @@ const FooterSection = () => {
         <div className="grid md:grid-cols-4 gap-10 mb-14">
           <div>
             <div className="flex items-center gap-2.5 mb-5">
-              <EduLogo size={36} />
+              <UniMark size={36} />
               <span className="font-bold text-xl text-primary-foreground">
-                Edu<span className="text-neon">Connect</span>
+                Uni Education
               </span>
             </div>
             <p className="text-primary-foreground/70 text-sm leading-relaxed mb-5">
@@ -19,7 +19,7 @@ const FooterSection = () => {
             </p>
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-primary-foreground/70 text-sm">
-                <Mail className="w-4 h-4" /> support@educonnect.vn
+                <Mail className="w-4 h-4" /> support@unieducation.net
               </div>
               <div className="flex items-center gap-2 text-primary-foreground/70 text-sm">
                 <Phone className="w-4 h-4" /> 1900 1234
@@ -72,7 +72,7 @@ const FooterSection = () => {
 
         <div className="border-t border-primary-foreground/20 pt-8 text-center">
           <p className="text-primary-foreground/60 text-sm">
-            &copy; 2025 EduConnect. All rights reserved.
+            &copy; 2025 Uni Education. All rights reserved.
           </p>
         </div>
       </div>
