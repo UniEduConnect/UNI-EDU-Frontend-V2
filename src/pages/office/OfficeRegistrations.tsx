@@ -17,30 +17,13 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import avatarMale1 from "@/assets/avatar-male-1.jpg";
-import avatarFemale1 from "@/assets/avatar-female-1.jpg";
-import avatarMale2 from "@/assets/avatar-male-2.jpg";
-import avatarFemale2 from "@/assets/avatar-female-2.jpg";
-import avatarMale3 from "@/assets/avatar-male-3.jpg";
-import avatarFemale3 from "@/assets/avatar-female-3.jpg";
-
-type RegStatus = "pending" | "approved" | "rejected";
-
-interface Registration {
-  id: string;
-  name: string;
-  avatar: string;
-  role: "student" | "tutor" | "teacher" | "parent";
-  email: string;
-  phone: string;
-  subject?: string;
-  note: string;
-  date: string;
-  status: RegStatus;
-  rejectReason?: string;
-}
+import {
+  useRegistrations,
+  useApproveRegistration,
+  useRejectRegistration,
+} from "@/hooks/useAppointments";
 
 const roleLabels: Record<string, string> = {
   student: "Học sinh",
@@ -56,86 +39,20 @@ const statusCfg: Record<
   pending: { label: "Chờ duyệt", variant: "outline" },
   approved: { label: "Đã duyệt", variant: "default" },
   rejected: { label: "Từ chối", variant: "destructive" },
+  suspended: { label: "Tạm khóa", variant: "destructive" },
 };
 
-const initialData: Registration[] = [
-  {
-    id: "r1",
-    name: "Phạm Văn Hùng",
-    avatar: avatarMale1,
-    role: "tutor",
-    email: "hung.pv@gmail.com",
-    phone: "0912345678",
-    subject: "Toán, Lý",
-    note: "5 năm kinh nghiệm gia sư, tốt nghiệp ĐH Bách Khoa",
-    date: "03/03/2026",
-    status: "pending",
-  },
-  {
-    id: "r2",
-    name: "Nguyễn Thị Hoa",
-    avatar: avatarFemale1,
-    role: "teacher",
-    email: "hoa.nt@gmail.com",
-    phone: "0987654321",
-    subject: "Văn, Sử",
-    note: "Giáo viên THPT 8 năm, chứng chỉ B2",
-    date: "02/03/2026",
-    status: "pending",
-  },
-  {
-    id: "r3",
-    name: "Trần Đức Anh",
-    avatar: avatarMale2,
-    role: "student",
-    email: "anh.td@gmail.com",
-    phone: "0901234567",
-    subject: "Toán 12",
-    note: "Học sinh lớp 12, cần ôn thi ĐH",
-    date: "01/03/2026",
-    status: "pending",
-  },
-  {
-    id: "r4",
-    name: "Lê Thị Mai",
-    avatar: avatarFemale2,
-    role: "parent",
-    email: "mai.lt@gmail.com",
-    phone: "0934567890",
-    note: "Phụ huynh 2 con, lớp 10 và lớp 12",
-    date: "28/02/2026",
-    status: "approved",
-  },
-  {
-    id: "r5",
-    name: "Võ Quang Hải",
-    avatar: avatarMale3,
-    role: "tutor",
-    email: "hai.vq@gmail.com",
-    phone: "0978901234",
-    subject: "IELTS",
-    note: "IELTS 8.0, 3 năm dạy IELTS",
-    date: "27/02/2026",
-    status: "approved",
-  },
-  {
-    id: "r6",
-    name: "Đinh Thị Ngọc",
-    avatar: avatarFemale3,
-    role: "student",
-    email: "ngoc.dt@gmail.com",
-    phone: "0945678901",
-    subject: "Hóa 11",
-    note: "Cần bổ sung kiến thức Hóa",
-    date: "25/02/2026",
-    status: "rejected",
-    rejectReason: "Thiếu thông tin liên hệ phụ huynh",
-  },
-];
+const formatDate = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("vi-VN");
+};
 
 const OfficeRegistrations = () => {
   const { toast } = useToast();
-  const [regs, setRegs] = useState(initialData);
+  // Live data from GET /api/Office/registrations (AdminUserResponse[]).
+  const { registrations: regs, isLoading, isError } = useRegistrations();
+  const approveMutation = useApproveRegistration();
+  const rejectMutation = useRejectRegistration();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -159,24 +76,27 @@ const OfficeRegistrations = () => {
   const approvedCount = regs.filter(r => r.status === "approved").length;
 
   const approve = (id: string) => {
-    setRegs(prev =>
-      prev.map(r => (r.id === id ? { ...r, status: "approved" as const } : r))
-    );
-    toast({ title: "Đã duyệt đăng ký" });
+    approveMutation.mutate(id, {
+      onSuccess: () => toast({ title: "Đã duyệt đăng ký" }),
+      onError: () =>
+        toast({ title: "Không thể duyệt đăng ký", variant: "destructive" }),
+    });
   };
 
   const reject = () => {
     if (rejectId && rejectReason.trim()) {
-      setRegs(prev =>
-        prev.map(r =>
-          r.id === rejectId
-            ? { ...r, status: "rejected" as const, rejectReason }
-            : r
-        )
+      rejectMutation.mutate(
+        { id: rejectId, note: rejectReason.trim() },
+        {
+          onSuccess: () => {
+            toast({ title: "Đã từ chối đăng ký", variant: "destructive" });
+            setRejectId(null);
+            setRejectReason("");
+          },
+          onError: () =>
+            toast({ title: "Không thể từ chối đăng ký", variant: "destructive" }),
+        }
       );
-      toast({ title: "Đã từ chối đăng ký", variant: "destructive" });
-      setRejectId(null);
-      setRejectReason("");
     }
   };
 
@@ -302,97 +222,111 @@ const OfficeRegistrations = () => {
         <h3 className="mb-4 text-sm font-semibold">Danh sách đăng ký</h3>
 
         <div className="space-y-3">
-          {filtered.map(r => (
-            <div
-              key={r.id}
-              className="rounded-2xl border border-border bg-muted/20 p-4 transition-colors hover:bg-muted/40"
-            >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <img
-                    src={r.avatar}
-                    alt={r.name}
-                    className="h-11 w-11 rounded-full object-cover"
-                  />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-foreground">{r.name}</p>
-                      <Badge variant="outline" className="text-[10px]">
-                        {roleLabels[r.role]}
-                      </Badge>
-                      <Badge variant={statusCfg[r.status].variant}>
-                        {statusCfg[r.status].label}
-                      </Badge>
-                    </div>
-
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>{r.email}</span>
-                      <span>{r.phone}</span>
-                      <span>Ngày đăng ký: {r.date}</span>
-                    </div>
-
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Môn: <strong>{r.subject || "—"}</strong>
-                    </p>
-
-                    <div className="mt-2 rounded-xl bg-muted/60 p-3">
-                      <p className="text-xs text-muted-foreground">
-                        <strong>Ghi chú:</strong> {r.note}
-                      </p>
-                    </div>
-
-                    {r.rejectReason && (
-                      <div className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 p-3">
-                        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                        <div>
-                          <p className="text-xs font-semibold text-destructive">Lý do từ chối</p>
-                          <p className="mt-0.5 text-xs text-destructive/80">{r.rejectReason}</p>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải hồ sơ đăng ký...
+            </div>
+          ) : isError ? (
+            <div className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+              Không tải được hồ sơ đăng ký. Vui lòng thử lại.
+            </div>
+          ) : (
+            <>
+              {filtered.map(r => (
+                <div
+                  key={r.id}
+                  className="rounded-2xl border border-border bg-muted/20 p-4 transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      {r.avatar ? (
+                        <img
+                          src={r.avatar}
+                          alt={r.name}
+                          className="h-11 w-11 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
+                          {r.name.charAt(0).toUpperCase()}
                         </div>
+                      )}
+
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground">{r.name}</p>
+                          <Badge variant="outline" className="text-[10px]">
+                            {roleLabels[r.role] ?? r.role}
+                          </Badge>
+                          <Badge variant={statusCfg[r.status]?.variant ?? "outline"}>
+                            {statusCfg[r.status]?.label ?? r.status}
+                          </Badge>
+                        </div>
+
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span>{r.email}</span>
+                          <span>{r.phone}</span>
+                          <span>Ngày đăng ký: {formatDate(r.createdAt)}</span>
+                        </div>
+
+                        {r.school && (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Trường: <strong>{r.school}</strong>
+                          </p>
+                        )}
+
+                        {r.bio && (
+                          <div className="mt-2 rounded-xl bg-muted/60 p-3">
+                            <p className="text-xs text-muted-foreground">
+                              <strong>Giới thiệu:</strong> {r.bio}
+                            </p>
+                          </div>
+                        )}
+                        {/* TODO(BE): registration application has no documents/verification-detail/reject-reason fields (only the AdminUserResponse user row) */}
                       </div>
-                    )}
+                    </div>
+
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 rounded-xl p-0"
+                        onClick={() => setDetailId(r.id)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+
+                      {r.status === "pending" && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 rounded-xl p-0 text-primary"
+                            onClick={() => approve(r.id)}
+                            disabled={approveMutation.isPending}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 rounded-xl p-0 text-destructive"
+                            onClick={() => setRejectId(r.id)}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
+              ))}
 
-                <div className="flex shrink-0 gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 rounded-xl p-0"
-                    onClick={() => setDetailId(r.id)}
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </Button>
-
-                  {r.status === "pending" && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 w-8 rounded-xl p-0 text-primary"
-                        onClick={() => approve(r.id)}
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 w-8 rounded-xl p-0 text-destructive"
-                        onClick={() => setRejectId(r.id)}
-                      >
-                        <XCircle className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
-                  )}
+              {filtered.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+                  Không có hồ sơ đăng ký phù hợp
                 </div>
-              </div>
-            </div>
-          ))}
-
-          {filtered.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-              Không có hồ sơ đăng ký phù hợp
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -407,14 +341,20 @@ const OfficeRegistrations = () => {
           {detail && (
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-3 rounded-2xl bg-muted/40 p-4">
-                <img
-                  src={detail.avatar}
-                  alt={detail.name}
-                  className="h-14 w-14 rounded-full object-cover"
-                />
+                {detail.avatar ? (
+                  <img
+                    src={detail.avatar}
+                    alt={detail.name}
+                    className="h-14 w-14 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-semibold text-muted-foreground">
+                    {detail.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <p className="text-base font-semibold text-foreground">{detail.name}</p>
-                  <Badge variant="outline">{roleLabels[detail.role]}</Badge>
+                  <Badge variant="outline">{roleLabels[detail.role] ?? detail.role}</Badge>
                 </div>
               </div>
 
@@ -429,33 +369,33 @@ const OfficeRegistrations = () => {
                   <p className="text-sm text-foreground">{detail.phone}</p>
                 </div>
 
-                {detail.subject && (
+                {detail.school && (
                   <div className="rounded-xl bg-muted/40 p-3">
-                    <Label className="text-[10px] text-muted-foreground">Môn học</Label>
-                    <p className="text-sm text-foreground">{detail.subject}</p>
+                    <Label className="text-[10px] text-muted-foreground">Trường</Label>
+                    <p className="text-sm text-foreground">{detail.school}</p>
                   </div>
                 )}
 
                 <div className="rounded-xl bg-muted/40 p-3">
                   <Label className="text-[10px] text-muted-foreground">Ngày đăng ký</Label>
-                  <p className="text-sm text-foreground">{detail.date}</p>
+                  <p className="text-sm text-foreground">{formatDate(detail.createdAt)}</p>
+                </div>
+
+                <div className="rounded-xl bg-muted/40 p-3">
+                  <Label className="text-[10px] text-muted-foreground">Trạng thái</Label>
+                  <p className="text-sm text-foreground">
+                    {statusCfg[detail.status]?.label ?? detail.status}
+                  </p>
                 </div>
               </div>
 
-              <div className="rounded-xl bg-muted/40 p-3">
-                <Label className="text-[10px] text-muted-foreground">Ghi chú</Label>
-                <p className="mt-1 text-sm text-foreground">{detail.note}</p>
-              </div>
-
-              {detail.rejectReason && (
-                <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 p-3">
-                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                  <div>
-                    <p className="text-xs font-semibold text-destructive">Lý do từ chối</p>
-                    <p className="mt-0.5 text-xs text-destructive/80">{detail.rejectReason}</p>
-                  </div>
+              {detail.bio && (
+                <div className="rounded-xl bg-muted/40 p-3">
+                  <Label className="text-[10px] text-muted-foreground">Giới thiệu</Label>
+                  <p className="mt-1 text-sm text-foreground">{detail.bio}</p>
                 </div>
               )}
+              {/* TODO(BE): registration application has no documents/verification-detail/reject-reason fields (only the AdminUserResponse user row) */}
 
               {detail.status === "pending" && (
                 <div className="flex gap-2">
@@ -515,7 +455,7 @@ const OfficeRegistrations = () => {
               onClick={reject}
               variant="destructive"
               className="w-full rounded-xl"
-              disabled={!rejectReason.trim()}
+              disabled={!rejectReason.trim() || rejectMutation.isPending}
             >
               Xác nhận từ chối
             </Button>

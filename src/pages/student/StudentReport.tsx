@@ -1,56 +1,36 @@
-import { useStudent } from "@/contexts/StudentContext";
-import { TrendingUp, Target, Clock, Trophy, BookOpen } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Progress } from "@/components/ui/progress";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar, AreaChart, Area, Cell, RadialBarChart, RadialBar, ResponsiveContainer, Legend } from "recharts";
-
-const COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
-  "hsl(var(--muted-foreground))",
-];
+import { TrendingUp, Target, Clock, Trophy, BookOpen, Loader2 } from "lucide-react";
+import { useStudentReport, useMyStudentProfile } from "@/hooks/useStudents";
+import { useMySubmissions } from "@/hooks/useExams";
 
 const StudentReport = () => {
-  const { profile, classes, examResults, monthlyProgress } = useStudent();
+  const { data: report, isLoading: reportLoading } = useStudentReport();
+  const { data: profile, isLoading: profileLoading } = useMyStudentProfile();
+  const { submissions, isLoading: submissionsLoading } = useMySubmissions();
 
-  const totalStudyHours = monthlyProgress.reduce((s, m) => s + m.studyHours, 0);
-  const goalAchieved = Math.round((profile.gpa / profile.goalGpa) * 100);
-  const achievements = [
-    "Hoàn thành 100+ giờ học",
-    "GPA tăng 0.8 trong 6 tháng",
-    `${examResults.filter(r => r.passed).length} bài thi đạt`,
-    "Chuyên cần > 90%",
-  ];
+  const isLoading = reportLoading || profileLoading || submissionsLoading;
 
-  const gpaData = monthlyProgress.map(m => ({ month: m.month.replace("/2025", "").replace("/2026", ""), gpa: m.gpa }));
-  const hoursData = monthlyProgress.map(m => ({ month: m.month.replace("/2025", "").replace("/2026", ""), hours: m.studyHours }));
-  const sessionsData = monthlyProgress.map(m => ({ month: m.month.replace("/2025", "").replace("/2026", ""), sessions: m.sessionsCompleted, tests: m.testsCompleted }));
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải báo cáo...
+      </div>
+    );
+  }
 
-  const tutorComments = [
-    { tutor: "Nguyễn Văn An", subject: "Toán", comment: "Châu tiến bộ rất nhanh trong 3 tháng qua. Phần đạo hàm và tích phân đã vững. Cần cải thiện thêm hình học không gian.", date: "2026-02-28" },
-    { tutor: "Võ Minh Tuấn", subject: "Lý", comment: "Nắm tốt phần cơ học, cần ôn thêm phần điện từ. Tinh thần học tập tốt.", date: "2026-02-25" },
-  ];
-
-  const nextGoals = [
-    "Đạt GPA 8.5 cuối HK2",
-    "Hoàn thành 5 đề thi thử THPTQG",
-    "Cải thiện điểm Hình học lên 8+",
-    "Luyện IELTS Writing đạt 6.5",
-  ];
+  const examsTaken = report?.examsTaken ?? 0;
+  const avgScore = report?.avgScore ?? 0;
+  const activeClasses = report?.activeClasses ?? 0;
+  const completedSessions = report?.completedSessions ?? 0;
 
   return (
     <div className="p-6 space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "GPA hiện tại", value: profile.gpa.toFixed(1), icon: TrendingUp },
-          { label: "% đạt mục tiêu", value: `${goalAchieved}%`, icon: Target },
-          { label: "Tổng giờ học", value: `${totalStudyHours}h`, icon: Clock },
-          { label: "Thành tích", value: achievements.length, icon: Trophy },
+          { label: "Điểm TB", value: avgScore.toFixed(1), icon: TrendingUp },
+          { label: "Bài thi đã làm", value: examsTaken, icon: Target },
+          { label: "Lớp đang học", value: activeClasses, icon: BookOpen },
+          { label: "Buổi đã hoàn thành", value: completedSessions, icon: Clock },
         ].map((s, i) => (
           <div key={i} className="bg-card border border-border rounded-2xl p-5 flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
@@ -66,123 +46,99 @@ const StudentReport = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* GPA Chart - colorful */}
+        {/* TODO(BE): GET /Students/me/progress-series (monthly gpa/study-hours/sessions/tests) */}
         <div className="bg-card border border-border rounded-2xl p-6">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-muted-foreground" /> Tiến độ GPA theo tháng
           </h3>
-          <ChartContainer config={{ gpa: { label: "GPA", color: COLORS[0] } }} className="h-[220px] w-full">
-            <AreaChart data={gpaData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <defs>
-                <linearGradient id="gpaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={COLORS[0]} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={COLORS[0]} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-              <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-              <YAxis domain={[6, 10]} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Area type="monotone" dataKey="gpa" stroke={COLORS[0]} strokeWidth={3} fill="url(#gpaGradient)" dot={{ r: 5, fill: COLORS[0] }} />
-            </AreaChart>
-          </ChartContainer>
+          <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+            Chưa có dữ liệu
+          </div>
         </div>
 
         {/* Study Hours Chart - colorful bars */}
+        {/* TODO(BE): GET /Students/me/progress-series (monthly gpa/study-hours/sessions/tests) */}
         <div className="bg-card border border-border rounded-2xl p-6">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-muted-foreground" /> Giờ học theo tháng
           </h3>
-          <ChartContainer config={{ hours: { label: "Giờ học", color: COLORS[1] } }} className="h-[220px] w-full">
-            <BarChart data={hoursData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-              <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-              <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="hours" radius={[6, 6, 0, 0]}>
-                {hoursData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ChartContainer>
+          <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+            Chưa có dữ liệu
+          </div>
         </div>
       </div>
 
       {/* Sessions & Tests Chart - dual color */}
+      {/* TODO(BE): GET /Students/me/progress-series (monthly gpa/study-hours/sessions/tests) */}
       <div className="bg-card border border-border rounded-2xl p-6">
         <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-muted-foreground" /> Buổi học & Bài test theo tháng
         </h3>
-        <ChartContainer config={{ sessions: { label: "Buổi học", color: COLORS[0] }, tests: { label: "Bài test", color: COLORS[2] } }} className="h-[220px] w-full">
-          <BarChart data={sessionsData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-            <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <Bar dataKey="sessions" fill={COLORS[0]} radius={[6, 6, 0, 0]} />
-            <Bar dataKey="tests" fill={COLORS[2]} radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ChartContainer>
+        <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+          Chưa có dữ liệu
+        </div>
+      </div>
+
+      {/* Exam results */}
+      <div className="bg-card border border-border rounded-2xl p-6">
+        <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+          <Target className="w-4 h-4 text-muted-foreground" /> Kết quả bài thi
+        </h3>
+        {submissions.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Chưa có dữ liệu</p>
+        ) : (
+          <div className="space-y-2">
+            {submissions.map((s) => (
+              <div key={s.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{s.examTitle}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {s.correctCount}/{s.totalQuestions} câu đúng • {s.submissionDate}
+                  </p>
+                </div>
+                <p className="text-sm font-bold text-foreground">
+                  {s.score}/{s.scoreScale}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Tutor Comments */}
+        {/* TODO(BE): tutor comments about the student not modeled */}
         <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6">
           <h3 className="text-sm font-semibold text-foreground mb-4">Nhận xét từ gia sư</h3>
-          <div className="space-y-4">
-            {tutorComments.map((c, i) => (
-              <div key={i} className="p-4 bg-muted/50 rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{c.tutor}</p>
-                    <p className="text-[10px] text-muted-foreground">{c.subject} • {c.date}</p>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground">{c.comment}</p>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm text-muted-foreground text-center py-8">Chưa có dữ liệu</p>
         </div>
 
         {/* Goals & Achievements */}
         <div className="space-y-4">
+          {/* TODO(BE): student achievements/goals not modeled */}
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
               <Target className="w-4 h-4 text-muted-foreground" /> Mục tiêu tháng tới
             </h3>
-            <div className="space-y-2">
-              {nextGoals.map((g, i) => (
-                <div key={i} className="flex items-start gap-2 p-2">
-                  <span className="w-5 h-5 rounded-full bg-muted text-foreground flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</span>
-                  <p className="text-xs text-foreground">{g}</p>
-                </div>
-              ))}
-            </div>
+            <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu</p>
           </div>
 
+          {/* TODO(BE): student achievements/goals not modeled */}
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
               <Trophy className="w-4 h-4 text-muted-foreground" /> Thành tích
             </h3>
-            <div className="space-y-2">
-              {achievements.map((a, i) => (
-                <div key={i} className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
-                  <Trophy className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  <p className="text-xs text-foreground">{a}</p>
-                </div>
-              ))}
-            </div>
+            <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu</p>
           </div>
 
-          {/* GPA Goal Progress */}
+          {/* Student summary */}
           <div className="bg-card border border-border rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Tiến độ GPA</h3>
-            <div className="text-center mb-3">
-              <p className="text-3xl font-bold text-foreground">{profile.gpa}</p>
-              <p className="text-xs text-muted-foreground">Mục tiêu: {profile.goalGpa}</p>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Tổng quan</h3>
+            <div className="text-center mb-1">
+              <p className="text-lg font-bold text-foreground">{profile?.fullName ?? "—"}</p>
             </div>
-            <Progress value={goalAchieved} className="h-3" />
-            <p className="text-[10px] text-muted-foreground text-center mt-2">{goalAchieved}% hoàn thành mục tiêu</p>
+            <p className="text-3xl font-bold text-foreground text-center">{avgScore.toFixed(1)}</p>
+            <p className="text-xs text-muted-foreground text-center mt-1">Điểm trung bình</p>
           </div>
         </div>
       </div>

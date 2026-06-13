@@ -4,75 +4,165 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Calendar, Clock, CheckCircle2, AlertTriangle, Search, Users } from "lucide-react";
-import { useState } from "react";
+import { Calendar, Clock, CheckCircle2, AlertTriangle, Search, User, Loader2, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  useAppointments,
+  useCreateAppointment,
+  useUpdateAppointment,
+  useCancelAppointment,
+  useCompleteAppointment,
+} from "@/hooks/useAppointments";
+import type { AppointmentItem } from "@/types/api";
 
-type AppointmentStatus = "scheduled" | "in-progress" | "completed" | "cancelled";
-interface Appointment {
-  id: string; title: string; type: "complaint" | "dispute" | "consultation" | "matching";
-  participants: string[]; date: string; time: string; status: AppointmentStatus; description: string; resolution?: string;
-}
+// TODO(BE): appointment 'type' (complaint/dispute/consultation/matching) + multi-participant
+// arrays are not modeled by the DTO (only title/description/withName/withUserId/scheduledAt/notes).
+// We render the single counterpart via withName and the resolution via free-text notes.
 
-const typeCfg: Record<string, { label: string }> = {
-  complaint: { label: "Khiếu nại" },
-  dispute: { label: "Tranh chấp" },
-  consultation: { label: "Tư vấn" },
-  matching: { label: "Ghép lớp" },
-};
-
+// Backend status is a free-text string. Normalize for badge styling; unknown values fall through.
 const statusCfg: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   scheduled: { label: "Đã lên lịch", variant: "outline" },
   "in-progress": { label: "Đang xử lý", variant: "default" },
+  inprogress: { label: "Đang xử lý", variant: "default" },
   completed: { label: "Hoàn tất", variant: "secondary" },
   cancelled: { label: "Đã hủy", variant: "destructive" },
+  canceled: { label: "Đã hủy", variant: "destructive" },
 };
 
-const initialAppointments: Appointment[] = [
-  { id: "ap1", title: "Xử lý khiếu nại điểm danh sai", type: "complaint", participants: ["Phạm Hồng Đào (PH)", "Nguyễn Văn An (GS)"], date: "04/03/2026", time: "09:00", status: "scheduled", description: "Phụ huynh phản ánh gia sư không có mặt buổi học ngày 02/03 nhưng hệ thống ghi nhận đã dạy." },
-  { id: "ap2", title: "Ghép lớp Lý 10 cho học sinh mới", type: "matching", participants: ["Trần Đức Anh (HS)", "Hoàng Đức Em (GS)"], date: "04/03/2026", time: "14:00", status: "scheduled", description: "Ghép học sinh Trần Đức Anh vào lớp Lý 10 với GS Hoàng Đức Em, xác nhận lịch học phù hợp." },
-  { id: "ap3", title: "Tư vấn chuyển gia sư cho lớp Văn", type: "consultation", participants: ["Ngô Thị Lan (HS)", "Lý Thị Mai (PH)"], date: "03/03/2026", time: "10:00", status: "in-progress", description: "Học sinh muốn đổi gia sư Văn do phong cách dạy không phù hợp." },
-  { id: "ap4", title: "Giải quyết tranh chấp hoàn tiền", type: "dispute", participants: ["Trương Văn Kiên (HS)", "Đỗ Quang Minh (GS)"], date: "01/03/2026", time: "15:30", status: "completed", description: "Học sinh yêu cầu hoàn tiền 2 buổi IELTS do nội dung không đúng cam kết.", resolution: "Đã hoàn 50% phí 2 buổi, GS cam kết cải thiện chất lượng." },
-  { id: "ap5", title: "Tư vấn đăng ký lớp mới", type: "consultation", participants: ["Lê Thị Mai (PH)"], date: "28/02/2026", time: "11:00", status: "completed", description: "Phụ huynh cần tư vấn lớp Toán cho con lớp 10.", resolution: "Đã giới thiệu 3 gia sư Toán, PH sẽ xem xét." },
-];
+const statusFor = (status: string) =>
+  statusCfg[status?.toLowerCase()] ?? { label: status || "—", variant: "outline" as const };
+
+const isOpen = (status: string) => {
+  const s = status?.toLowerCase();
+  return s !== "completed" && s !== "cancelled" && s !== "canceled";
+};
+
+const fmtDate = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("vi-VN");
+};
+const fmtTime = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+};
 
 const OfficeAppointments = () => {
   const { toast } = useToast();
-  const [appointments, setAppointments] = useState(initialAppointments);
+  const { appointments, isLoading, isError } = useAppointments();
+  const createAppointment = useCreateAppointment();
+  const updateAppointment = useUpdateAppointment();
+  const cancelAppointment = useCancelAppointment();
+  const completeAppointment = useCompleteAppointment();
+
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [resolveId, setResolveId] = useState<string | null>(null);
   const [resolution, setResolution] = useState("");
 
-  const filtered = appointments.filter(a => {
-    const matchSearch = a.title.toLowerCase().includes(search.toLowerCase()) || a.participants.some(p => p.toLowerCase().includes(search.toLowerCase()));
-    const matchType = typeFilter === "all" || a.type === typeFilter;
-    return matchSearch && matchType;
-  });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newWithName, setNewWithName] = useState("");
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("");
+  const [newDescription, setNewDescription] = useState("");
 
-  const detail = appointments.find(a => a.id === detailId);
-  const upcoming = appointments.filter(a => a.status === "scheduled").length;
-  const inProgress = appointments.filter(a => a.status === "in-progress").length;
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return appointments.filter((a: AppointmentItem) => {
+      if (!q) return true;
+      return (
+        a.title.toLowerCase().includes(q) ||
+        (a.withName ?? "").toLowerCase().includes(q) ||
+        (a.description ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [appointments, search]);
+
+  const detail = appointments.find((a: AppointmentItem) => a.id === detailId) ?? null;
+  const upcoming = appointments.filter((a: AppointmentItem) => a.status?.toLowerCase() === "scheduled").length;
+  const inProgress = appointments.filter((a: AppointmentItem) => {
+    const s = a.status?.toLowerCase();
+    return s === "in-progress" || s === "inprogress";
+  }).length;
+  const completedCount = appointments.filter((a: AppointmentItem) => a.status?.toLowerCase() === "completed").length;
+  const openCount = appointments.filter((a: AppointmentItem) => isOpen(a.status)).length;
+
+  const resetCreate = () => {
+    setNewTitle("");
+    setNewWithName("");
+    setNewDate("");
+    setNewTime("");
+    setNewDescription("");
+  };
+
+  const handleCreate = () => {
+    if (!newTitle.trim() || !newDate || !newTime) return;
+    const scheduledAt = new Date(`${newDate}T${newTime}`).toISOString();
+    createAppointment.mutate(
+      {
+        title: newTitle.trim(),
+        description: newDescription.trim() || undefined,
+        // TODO(BE): no participant lookup yet — withName is free-text, withUserId left unset.
+        scheduledAt,
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Đã tạo lịch hẹn" });
+          setCreateOpen(false);
+          resetCreate();
+        },
+        onError: () => toast({ title: "Không tạo được lịch hẹn", variant: "destructive" }),
+      }
+    );
+  };
 
   const handleResolve = () => {
-    if (resolveId && resolution.trim()) {
-      setAppointments(prev => prev.map(a => a.id === resolveId ? { ...a, status: "completed" as const, resolution } : a));
-      toast({ title: "Đã hoàn tất lịch hẹn" });
-      setResolveId(null);
-      setResolution("");
-    }
+    if (!resolveId || !resolution.trim()) return;
+    const target = appointments.find((a: AppointmentItem) => a.id === resolveId);
+    if (!target) return;
+    // Persist the resolution into free-text notes, then mark the appointment complete.
+    updateAppointment.mutate(
+      {
+        id: resolveId,
+        payload: {
+          title: target.title,
+          description: target.description ?? undefined,
+          withUserId: target.withUserId ?? undefined,
+          scheduledAt: target.scheduledAt,
+          notes: resolution.trim(),
+        },
+      },
+      {
+        onSuccess: () => {
+          completeAppointment.mutate(resolveId, {
+            onSuccess: () => {
+              toast({ title: "Đã hoàn tất lịch hẹn" });
+              setResolveId(null);
+              setResolution("");
+            },
+            onError: () => toast({ title: "Không hoàn tất được lịch hẹn", variant: "destructive" }),
+          });
+        },
+        onError: () => toast({ title: "Không lưu được kết quả", variant: "destructive" }),
+      }
+    );
   };
+
+  const handleCancel = (id: string) => {
+    cancelAppointment.mutate(id, {
+      onSuccess: () => toast({ title: "Đã hủy lịch hẹn" }),
+      onError: () => toast({ title: "Không hủy được lịch hẹn", variant: "destructive" }),
+    });
+  };
+
+  const resolving = updateAppointment.isPending || completeAppointment.isPending;
 
   return (
     <div className="px-6 pt-2 pb-6 space-y-4">
-      {/* <div>
-        <h1 className="text-2xl font-bold text-foreground">Quản lý lịch hẹn</h1>
-        <p className="text-muted-foreground text-sm">Theo dõi và xử lý các cuộc hẹn với phụ huynh và gia sư</p>
-      </div> */}
-
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Card 1: Sắp tới */}
         <Card className="border-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg">
@@ -104,7 +194,7 @@ const OfficeAppointments = () => {
         <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xl font-bold">{appointments.filter(a => a.status === "completed").length}</p>
+              <p className="text-xl font-bold">{completedCount}</p>
               <p className="text-xs text-white/80 mt-1">Hoàn tất</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -113,12 +203,12 @@ const OfficeAppointments = () => {
           </CardContent>
         </Card>
 
-        {/* Card 4: Khiếu nại/Tranh chấp */}
+        {/* Card 4: Chưa xử lý */}
         <Card className="border-0 bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xl font-bold">{appointments.filter(a => a.type === "complaint" || a.type === "dispute").length}</p>
-              <p className="text-xs text-white/80 mt-1">Khiếu nại/Tranh chấp</p>
+              <p className="text-xl font-bold">{openCount}</p>
+              <p className="text-xs text-white/80 mt-1">Chưa xử lý</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
               <AlertTriangle className="w-5 h-5 text-white" />
@@ -132,56 +222,111 @@ const OfficeAppointments = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="Tìm kiếm lịch hẹn..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 text-sm rounded-xl" />
         </div>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-36 h-9 text-sm rounded-xl"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả loại</SelectItem>
-            <SelectItem value="complaint">Khiếu nại</SelectItem>
-            <SelectItem value="dispute">Tranh chấp</SelectItem>
-            <SelectItem value="consultation">Tư vấn</SelectItem>
-            <SelectItem value="matching">Ghép lớp</SelectItem>
-          </SelectContent>
-        </Select>
+        <Button size="sm" className="h-9 rounded-xl gap-1" onClick={() => setCreateOpen(true)}>
+          <Plus className="w-4 h-4" /> Tạo lịch hẹn
+        </Button>
       </div>
 
       <div className="space-y-3">
-        {filtered.map(a => {
-          const tCfg = typeCfg[a.type];
-          const sCfg = statusCfg[a.status];
-          return (
-            <Card key={a.id} className="border-border">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline" className="text-[10px]">{tCfg.label}</Badge>
-                      <Badge variant={sCfg.variant}>{sCfg.label}</Badge>
-                    </div>
-                    <p className="text-sm font-semibold text-foreground">{a.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{a.description}</p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {a.date}</span>
-                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {a.time}</span>
-                      <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {a.participants.length} người</span>
-                    </div>
-                    {a.resolution && (
-                      <div className="mt-2 p-2 bg-muted/50 border border-border rounded-lg">
-                        <p className="text-xs text-foreground"><span className="font-medium">Kết quả:</span> {a.resolution}</p>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải danh sách lịch hẹn...
+          </div>
+        ) : isError ? (
+          <div className="text-center py-20 text-muted-foreground">
+            Không tải được danh sách lịch hẹn. Vui lòng thử lại.
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20 text-muted-foreground">
+            Chưa có lịch hẹn nào.
+          </div>
+        ) : (
+          filtered.map((a: AppointmentItem) => {
+            const sCfg = statusFor(a.status);
+            return (
+              <Card key={a.id} className="border-border">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant={sCfg.variant}>{sCfg.label}</Badge>
                       </div>
-                    )}
+                      <p className="text-sm font-semibold text-foreground">{a.title}</p>
+                      {a.description && <p className="text-xs text-muted-foreground mt-1">{a.description}</p>}
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {fmtDate(a.scheduledAt)}</span>
+                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {fmtTime(a.scheduledAt)}</span>
+                        {a.withName && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {a.withName}</span>}
+                      </div>
+                      {a.notes && (
+                        <div className="mt-2 p-2 bg-muted/50 border border-border rounded-lg">
+                          <p className="text-xs text-foreground"><span className="font-medium">Kết quả:</span> {a.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setDetailId(a.id)}>Chi tiết</Button>
+                      {isOpen(a.status) && (
+                        <>
+                          <Button size="sm" className="rounded-xl" onClick={() => setResolveId(a.id)}>Hoàn tất</Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="rounded-xl"
+                            onClick={() => handleCancel(a.id)}
+                            disabled={cancelAppointment.isPending}
+                          >
+                            Hủy
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setDetailId(a.id)}>Chi tiết</Button>
-                    {(a.status === "scheduled" || a.status === "in-progress") && (
-                      <Button size="sm" className="rounded-xl" onClick={() => setResolveId(a.id)}>Hoàn tất</Button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
       </div>
+
+      {/* Create */}
+      <Dialog open={createOpen} onOpenChange={open => { if (!open) { setCreateOpen(false); resetCreate(); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Tạo lịch hẹn</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Tiêu đề</Label>
+              <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="VD: Xử lý khiếu nại điểm danh" className="rounded-xl mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Người liên quan</Label>
+              {/* TODO(BE): withUserId lookup not wired — captured as free-text only, not sent. */}
+              <Input value={newWithName} onChange={e => setNewWithName(e.target.value)} placeholder="VD: Phụ huynh Phạm Hồng Đào" className="rounded-xl mt-1" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Ngày</Label>
+                <Input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="rounded-xl mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Giờ</Label>
+                <Input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} className="rounded-xl mt-1" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Nội dung</Label>
+              <Textarea value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder="Mô tả chi tiết..." className="rounded-xl mt-1" rows={3} />
+            </div>
+            <Button
+              onClick={handleCreate}
+              className="w-full rounded-xl"
+              disabled={!newTitle.trim() || !newDate || !newTime || createAppointment.isPending}
+            >
+              {createAppointment.isPending ? "Đang tạo..." : "Tạo lịch hẹn"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Detail */}
       <Dialog open={!!detailId} onOpenChange={() => setDetailId(null)}>
@@ -190,21 +335,24 @@ const OfficeAppointments = () => {
           {detail && (
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-2">
-                <Badge variant="outline">{typeCfg[detail.type].label}</Badge>
-                <Badge variant={statusCfg[detail.status].variant}>{statusCfg[detail.status].label}</Badge>
+                <Badge variant={statusFor(detail.status).variant}>{statusFor(detail.status).label}</Badge>
               </div>
               <p className="text-base font-semibold text-foreground">{detail.title}</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Ngày</Label><p className="text-sm text-foreground">{detail.date}</p></div>
-                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Giờ</Label><p className="text-sm text-foreground">{detail.time}</p></div>
+                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Ngày</Label><p className="text-sm text-foreground">{fmtDate(detail.scheduledAt)}</p></div>
+                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Giờ</Label><p className="text-sm text-foreground">{fmtTime(detail.scheduledAt)}</p></div>
               </div>
-              <div className="p-3 bg-muted/50 rounded-xl">
-                <Label className="text-[10px] text-muted-foreground">Người tham gia</Label>
-                <div className="mt-1 space-y-1">{detail.participants.map(p => <p key={p} className="text-sm text-foreground">{p}</p>)}</div>
-              </div>
-              <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Nội dung</Label><p className="text-sm text-foreground mt-1">{detail.description}</p></div>
-              {detail.resolution && (
-                <div className="p-3 bg-muted/50 border border-border rounded-xl"><Label className="text-[10px] text-muted-foreground">Kết quả xử lý</Label><p className="text-sm text-foreground mt-1">{detail.resolution}</p></div>
+              {detail.withName && (
+                <div className="p-3 bg-muted/50 rounded-xl">
+                  <Label className="text-[10px] text-muted-foreground">Người liên quan</Label>
+                  <p className="text-sm text-foreground mt-1">{detail.withName}</p>
+                </div>
+              )}
+              {detail.description && (
+                <div className="p-3 bg-muted/50 rounded-xl"><Label className="text-[10px] text-muted-foreground">Nội dung</Label><p className="text-sm text-foreground mt-1">{detail.description}</p></div>
+              )}
+              {detail.notes && (
+                <div className="p-3 bg-muted/50 border border-border rounded-xl"><Label className="text-[10px] text-muted-foreground">Kết quả xử lý</Label><p className="text-sm text-foreground mt-1">{detail.notes}</p></div>
               )}
             </div>
           )}
@@ -218,7 +366,9 @@ const OfficeAppointments = () => {
           <div className="space-y-4 pt-2">
             <p className="text-sm text-muted-foreground">Nhập kết quả xử lý:</p>
             <Textarea value={resolution} onChange={e => setResolution(e.target.value)} placeholder="VD: Đã thống nhất hoàn 50% phí, gia sư cam kết cải thiện..." className="rounded-xl" rows={4} />
-            <Button onClick={handleResolve} className="w-full rounded-xl" disabled={!resolution.trim()}>Xác nhận hoàn tất</Button>
+            <Button onClick={handleResolve} className="w-full rounded-xl" disabled={!resolution.trim() || resolving}>
+              {resolving ? "Đang xử lý..." : "Xác nhận hoàn tất"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

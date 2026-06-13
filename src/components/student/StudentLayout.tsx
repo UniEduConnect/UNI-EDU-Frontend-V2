@@ -1,9 +1,13 @@
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import MessageBubble from "@/components/MessageBubble";
 import {
   LayoutDashboard,
   BookOpen,
   ClipboardCheck,
+  UserSearch,
+  Megaphone,
+  Home,
   LogOut,
   PanelLeftClose,
   PanelLeft,
@@ -20,15 +24,23 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useStudent } from "@/contexts/StudentContext";
-import EduLogo from "@/components/EduLogo";
+import UniMark from "@/components/UniMark";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { useState, useRef, useEffect } from "react";
+import {
+  useNotifications,
+  useUnreadCount,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+} from "@/hooks/useNotifications";
+import { useMyStudentProfile } from "@/hooks/useStudents";
+import { useConversations } from "@/hooks/useConversations";
 
 const navGroups = [
   {
     items: [
       { to: "/student", icon: LayoutDashboard, label: "Tổng quan", end: true },
+      { to: "/student/tutor-posts", icon: Megaphone, label: "GS tìm học sinh" },
       { to: "/student/classes", icon: BookOpen, label: "Học tập" },
       { to: "/student/tests", icon: ClipboardCheck, label: "Bài tập & Kiểm tra" },
       { to: "/student/wallet", icon: Wallet, label: "Ví học phí" },
@@ -51,7 +63,7 @@ const pageTitles: Record<string, string> = {
   "/parent/support": "Hỗ Trợ",
 };
 
-const notifIcon: Record<string, JSX.Element> = {
+const notifIcon: Record<string, React.ReactNode> = {
   warning: <AlertTriangle className="w-4 h-4 text-warning" />,
   info: <Info className="w-4 h-4 text-info" />,
   success: <CheckCircle2 className="w-4 h-4 text-success" />,
@@ -60,23 +72,21 @@ const notifIcon: Record<string, JSX.Element> = {
 
 const StudentLayout = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const location = useLocation();
-  const {
-    profile,
-    notifications,
-    markNotificationRead,
-    markAllNotificationsRead,
-    chatMessages,
-  } = useStudent();
+
+  const { data: profile } = useMyStudentProfile();
+  const { notifications } = useNotifications();
+  const { count: unreadNotif } = useUnreadCount();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+  const { conversations } = useConversations();
 
   const [collapsed, setCollapsed] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unreadNotif = notifications.filter((n) => !n.read).length;
-  const unreadChat = chatMessages.filter(
-    (m) => !m.read && m.sender !== "student"
-  ).length;
+  const unreadChat = conversations.reduce((n, c) => n + c.unreadCount, 0);
   const currentTitle = pageTitles[location.pathname] || "Học sinh";
 
   useEffect(() => {
@@ -105,11 +115,11 @@ const StudentLayout = () => {
           )}
         >
           <div className="flex items-center gap-3">
-            {!collapsed && <EduLogo size={36} />}
+            {!collapsed && <UniMark size={36} />}
             {!collapsed && (
               <div className="min-w-0">
                 <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">
-                  EduConnect
+                  Uni Education
                 </h1>
                 <p className="text-xs text-slate-400 leading-tight">Học sinh</p>
               </div>
@@ -171,9 +181,20 @@ const StudentLayout = () => {
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-sidebar-border/40">
+        <div className="px-3 py-3 border-t border-sidebar-border/40 space-y-1">
+          <NavLink
+            to="/"
+            title={collapsed ? "Trang chủ" : undefined}
+            className={cn(
+              "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white w-full transition-all duration-300",
+              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+            )}
+          >
+            <Home className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span>Trang chủ</span>}
+          </NavLink>
           <button
-            onClick={() => navigate("/")}
+            onClick={async () => { await logout(); navigate("/login"); }}
             title={collapsed ? "Đăng xuất" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-red-500 hover:text-white w-full transition-all duration-300",
@@ -222,7 +243,7 @@ const StudentLayout = () => {
                       </h3>
                       {unreadNotif > 0 && (
                         <button
-                          onClick={() => markAllNotificationsRead()}
+                          onClick={() => markAllRead.mutate()}
                           className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-500 font-medium"
                         >
                           <Check className="w-3 h-3" /> Đọc tất cả
@@ -240,8 +261,13 @@ const StudentLayout = () => {
                           <button
                             key={n.id}
                             onClick={() => {
-                              markNotificationRead(n.id);
+                              if (!n.read) markRead.mutate(n.id);
                               setShowNotif(false);
+
+                              if (n.link) {
+                                navigate(n.link);
+                                return;
+                              }
 
                               if (
                                 n.title.includes("bài tập") ||
@@ -301,7 +327,7 @@ const StudentLayout = () => {
                                 {n.message}
                               </p>
                               <p className="text-[10px] text-slate-400 mt-1">
-                                {n.timestamp}
+                                {n.createdAt}
                               </p>
                             </div>
                           </button>
@@ -325,9 +351,9 @@ const StudentLayout = () => {
               </div>
 
               <UserAvatarDropdown
-                avatar={profile.avatar}
-                name={profile.name}
-                role={profile.grade}
+                avatar=""
+                name={profile?.fullName ?? ""}
+                role={profile?.grade ?? ""}
               />
             </div>
           </header>

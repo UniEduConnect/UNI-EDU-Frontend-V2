@@ -1,0 +1,63 @@
+{
+  "title": "Finance portal — backend endpoints/fields the frontend still needs",
+  "generatedFor": "UNI-EDU backend team",
+  "context": "The Finance portal pages were migrated from mock (FinanceContext + TutorContext, both now deleted) to real API calls. The Finance portal maps to the backend Admin role. Everything below is data the UI renders but the backend does NOT currently expose. Until these ship, the affected UI shows an empty/'Chưa có dữ liệu' state or a current-page-only aggregate.",
+  "swaggerBase": "http://localhost:5115 — all routes under /api",
+  "reusedEndpoints": "GET /Finance/dashboard, /Finance/transactions, /Finance/withdrawals (+approve/reject), /Finance/refunds (+approve/reject), /Finance/reports, /Notifications, /Users/me.",
+  "gaps": [
+    {
+      "id": "F-GAP-1",
+      "priority": "high",
+      "title": "List endpoints don't return total/totalPages",
+      "affectedPages": ["FinanceTransactions", "FinancePayouts", "FinanceReconciliation"],
+      "currentState": "GET /Finance/transactions and /Finance/withdrawals return a page of items but no total count, so the UI replaced numbered pagination with prev/next (infers 'has next' from a full page). PagedResult<T> in other endpoints already has Total/TotalPages — these Finance list responses appear to omit them.",
+      "proposedChanges": ["Return the standard PagedResult shape { items, total, page, pageSize, totalPages } from /Finance/transactions and /Finance/withdrawals."]
+    },
+    {
+      "id": "F-GAP-2",
+      "priority": "high",
+      "title": "No transactions-summary endpoint (cards aggregate only the current page)",
+      "affectedPages": ["FinanceTransactions", "FinanceReconciliation"],
+      "currentState": "Summary cards (Tổng thu / Tổng chi / Lợi nhuận / Chờ xử lý) are computed over the currently-loaded page of transactions only. /Finance/reports gives portfolio totals (totalRevenue/Withdrawn/Refunded/Escrow) but not an inflow/outflow/profit/pending breakdown for the transaction list view.",
+      "proposedEndpoint": "GET /api/Finance/transactions/summary?from=&to= -> { inflow, outflow, profit, pendingCount, pendingAmount }"
+    },
+    {
+      "id": "F-GAP-3",
+      "priority": "medium",
+      "title": "Per-tutor earned/escrow-available missing on withdrawal rows",
+      "affectedPages": ["FinancePayouts"],
+      "currentState": "WithdrawalAdminResponse has totalWithdrawn but no totalEarned / available-escrow, so the 'available balance' and 'escrow' stats on a payout row can't be shown (they were replaced with method + totalWithdrawn).",
+      "proposedChanges": ["Add totalEarned (and/or availableBalance) to WithdrawalAdminResponse."]
+    },
+    {
+      "id": "F-GAP-4",
+      "priority": "medium",
+      "title": "No bank-statement reconciliation source",
+      "affectedPages": ["FinanceReconciliation"],
+      "currentState": "There is no external bank-statement feed to reconcile against. The 'matched / cần kiểm tra' status is derived client-side from transaction.status (completed = matched), and the per-row 'đã kiểm tra' checkmark is local-only (NOT persisted).",
+      "proposedEndpoints": [
+        "POST /api/Finance/reconciliation/import (bank statement) + GET /api/Finance/reconciliation -> per-transaction { matched, bankRef, discrepancy }",
+        "PATCH /api/Finance/transactions/{id}/reviewed { reviewed: bool } to persist the manual check state"
+      ]
+    },
+    {
+      "id": "F-GAP-5",
+      "priority": "low",
+      "title": "Finance report has no category/role breakdown or expense lines",
+      "affectedPages": ["FinanceReports"],
+      "currentState": "GET /Finance/reports returns only { totalRevenue, totalWithdrawn, totalRefunded, totalEscrow, monthlyRevenue[] }. Revenue-by-category/role and expense breakdowns have no source and render empty.",
+      "proposedChanges": ["Add revenueByCategory / revenueByRole / monthlyExpense series to FinanceReportResponse if those breakdowns are needed."]
+    },
+    {
+      "id": "F-GAP-6",
+      "priority": "low",
+      "title": "Dashboard 'today transactions' and 'growth %' have no source; no export endpoint",
+      "affectedPages": ["FinanceDashboard", "FinanceTransactions"],
+      "currentState": "FinanceDashboard returns { totalRevenue, pendingWithdrawals, totalEscrow, refundsPending } — no 'transactions today' count or 'growth %' (those two cards were repurposed to surface totalEscrow + refundsPending). The PDF/Excel export buttons only toast (no backend export endpoint).",
+      "proposedChanges": [
+        "Add transactionsToday + revenueGrowthPct to FinanceDashboard if those KPIs are wanted.",
+        "Add GET /api/Finance/transactions/export?format=pdf|xlsx if server-side export is wanted."
+      ]
+    }
+  ]
+}

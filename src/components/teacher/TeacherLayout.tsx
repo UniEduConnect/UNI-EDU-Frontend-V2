@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard,
   BookOpen,
@@ -8,6 +9,8 @@ import {
   Star,
   MessageSquare,
   UserCircle,
+  UserSearch,
+  Home,
   LogOut,
   PanelLeftClose,
   PanelLeft,
@@ -21,12 +24,18 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTeacher } from "@/contexts/TeacherContext";
-import { TutorContext } from "@/contexts/TutorContext";
-import EduLogo from "@/components/EduLogo";
+import UniMark from "@/components/UniMark";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { useState, useRef, useEffect } from "react";
 import MessageBubble from "@/components/MessageBubble";
+import {
+  useNotifications,
+  useUnreadCount,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+} from "@/hooks/useNotifications";
+import { useMyTutorProfile } from "@/hooks/useTutors";
+import { useConversations } from "@/hooks/useConversations";
 
 const navItems = [
   { to: "/teacher", icon: LayoutDashboard, label: "Tổng quan", end: true },
@@ -43,6 +52,7 @@ const pageTitles: Record<string, string> = {
   "/teacher": "Tổng Quan",
   "/teacher/classes": "Quản Lý Lớp Học",
   "/teacher/students": "Tiến Độ Học Sinh",
+  "/teacher/find-students": "Tìm Học Sinh",
   "/teacher/wallet": "Thu Nhập",
   "/teacher/schedule": "Lịch Dạy",
   "/teacher/reviews": "Đánh Giá",
@@ -50,59 +60,7 @@ const pageTitles: Record<string, string> = {
   "/teacher/profile": "Hồ Sơ Cá Nhân",
 };
 
-interface Notification {
-  id: string;
-  type: "warning" | "info" | "success" | "error";
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-}
-
-const seedNotifications: Notification[] = [
-  {
-    id: "tcn1",
-    type: "success",
-    title: "Buổi dạy hoàn thành",
-    message: "Buổi Hóa 12 ngày 01/03 đã được phụ huynh xác nhận.",
-    timestamp: "01/03/2026 21:00",
-    read: false,
-  },
-  {
-    id: "tcn2",
-    type: "info",
-    title: "Học sinh mới đăng ký",
-    message: "Học sinh Lê Thị D đã đăng ký lớp Sinh 11.",
-    timestamp: "02/03/2026 14:20",
-    read: false,
-  },
-  {
-    id: "tcn3",
-    type: "warning",
-    title: "Lịch dạy sắp tới",
-    message: "Bạn có buổi dạy Hóa 12 lúc 18:00 hôm nay.",
-    timestamp: "03/03/2026 07:30",
-    read: false,
-  },
-  {
-    id: "tcn4",
-    type: "success",
-    title: "Thanh toán đã nhận",
-    message: "Bạn đã nhận 700.000đ từ buổi dạy Sinh 11.",
-    timestamp: "28/02/2026 16:00",
-    read: true,
-  },
-  {
-    id: "tcn5",
-    type: "info",
-    title: "Yêu cầu học thử",
-    message: "Phụ huynh Hoàng E yêu cầu học thử Hóa 10 cho con.",
-    timestamp: "27/02/2026 09:45",
-    read: true,
-  },
-];
-
-const notifIcon: Record<Notification["type"], JSX.Element> = {
+const notifIcon: Record<string, React.ReactNode> = {
   warning: <AlertTriangle className="w-4 h-4 text-warning" />,
   info: <Info className="w-4 h-4 text-info" />,
   success: <CheckCircle2 className="w-4 h-4 text-success" />,
@@ -111,20 +69,22 @@ const notifIcon: Record<Notification["type"], JSX.Element> = {
 
 const TeacherLayout = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const location = useLocation();
-  const teacherCtx = useTeacher();
+
+  const { data: profile } = useMyTutorProfile();
+  const { notifications } = useNotifications();
+  const { count: unreadNotif } = useUnreadCount();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+  const { conversations } = useConversations();
 
   const [collapsed, setCollapsed] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
-  const [notifications, setNotifications] =
-    useState<Notification[]>(seedNotifications);
 
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unreadChat = teacherCtx.chatMessages.filter(
-    (m) => !m.read && m.sender !== "tutor"
-  ).length;
-  const unreadNotif = notifications.filter((n) => !n.read).length;
+  const unreadChat = conversations.reduce((n, c) => n + c.unreadCount, 0);
   const currentTitle = pageTitles[location.pathname] || "Giáo viên";
 
   useEffect(() => {
@@ -138,19 +98,8 @@ const TeacherLayout = () => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const markNotificationRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-  };
-
-  const markAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
-
   return (
-    <TutorContext.Provider value={teacherCtx}>
-      <div className="relative min-h-screen bg-slate-100">
+    <div className="relative min-h-screen bg-slate-100">
         <aside
           className={cn(
             "fixed top-4 left-4 h-[calc(100%-2rem)] rounded-3xl bg-gradient-to-b from-[#0b2e6a] via-[#052861] to-[#0a2160] shadow-2xl border border-white/15 text-slate-200 z-20 transition-all duration-300 overflow-hidden flex flex-col",
@@ -164,11 +113,11 @@ const TeacherLayout = () => {
             )}
           >
             <div className="flex items-center gap-3">
-              {!collapsed && <EduLogo size={36} />}
+              {!collapsed && <UniMark size={36} />}
               {!collapsed && (
                 <div className="min-w-0">
                   <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">
-                    EduConnect
+                    Uni Education
                   </h1>
                   <p className="text-xs text-slate-400 leading-tight flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5" />
@@ -229,9 +178,20 @@ const TeacherLayout = () => {
             ))}
           </nav>
 
-          <div className="px-3 py-3 border-t border-sidebar-border/40">
+          <div className="px-3 py-3 border-t border-sidebar-border/40 space-y-1">
+            <NavLink
+              to="/"
+              title={collapsed ? "Trang chủ" : undefined}
+              className={cn(
+                "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white w-full transition-all duration-300",
+                collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+              )}
+            >
+              <Home className="w-[18px] h-[18px] shrink-0" />
+              {!collapsed && <span>Trang chủ</span>}
+            </NavLink>
             <button
-              onClick={() => navigate("/")}
+              onClick={async () => { await logout(); navigate("/login"); }}
               title={collapsed ? "Đăng xuất" : undefined}
               className={cn(
                 "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-red-500 hover:text-white w-full transition-all duration-300",
@@ -280,7 +240,7 @@ const TeacherLayout = () => {
                         </h3>
                         {unreadNotif > 0 && (
                           <button
-                            onClick={markAllNotificationsRead}
+                            onClick={() => markAllRead.mutate()}
                             className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-500 font-medium"
                           >
                             <Check className="w-3 h-3" /> Đọc tất cả
@@ -298,8 +258,13 @@ const TeacherLayout = () => {
                             <button
                               key={n.id}
                               onClick={() => {
-                                markNotificationRead(n.id);
+                                if (!n.read) markRead.mutate(n.id);
                                 setShowNotif(false);
+
+                                if (n.link) {
+                                  navigate(n.link);
+                                  return;
+                                }
 
                                 if (n.title.includes("Thanh toán")) {
                                   navigate("/teacher/wallet");
@@ -347,7 +312,7 @@ const TeacherLayout = () => {
                                   {n.message}
                                 </p>
                                 <p className="text-[10px] text-slate-400 mt-1">
-                                  {n.timestamp}
+                                  {n.createdAt}
                                 </p>
                               </div>
                             </button>
@@ -371,8 +336,8 @@ const TeacherLayout = () => {
                 </div>
 
                 <UserAvatarDropdown
-                  avatar={teacherCtx.profile.avatar}
-                  name={teacherCtx.profile.name}
+                  avatar={profile?.avatar ?? ""}
+                  name={profile?.name ?? ""}
                   role="Giáo viên"
                   profilePath="/teacher/profile"
                 />
@@ -387,7 +352,6 @@ const TeacherLayout = () => {
 
         <MessageBubble to="/teacher/chat" unreadCount={unreadChat} />
       </div>
-    </TutorContext.Provider>
   );
 };
 

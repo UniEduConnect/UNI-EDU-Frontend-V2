@@ -1,8 +1,11 @@
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, BookOpen, CreditCard, ScrollText, Settings, LogOut, Bell, Check, ChevronRight, AlertTriangle, Info, CheckCircle2, XCircle, PanelLeftClose, PanelLeft } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { LayoutDashboard, Users, BookOpen, CreditCard, ScrollText, Settings, Home, LogOut, Bell, Check, ChevronRight, AlertTriangle, Info, CheckCircle2, XCircle, PanelLeftClose, PanelLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAdmin } from "@/contexts/AdminContext";
-import EduLogo from "@/components/EduLogo";
+import { useAdminUsers } from "@/hooks/useAdmin";
+import { useNotifications, useUnreadCount, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/useNotifications";
+import { useMe } from "@/hooks/useUsers";
+import UniMark from "@/components/UniMark";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { useState, useRef, useEffect } from "react";
 
@@ -33,14 +36,23 @@ const notifIcon: Record<string, React.ReactNode> = {
 
 const AdminLayout = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const location = useLocation();
-  const { users, notifications, markNotificationRead, markAllNotificationsRead } = useAdmin();
+  // Live data: current user (header profile) + users (pending badge) + notifications from the API.
+  const { data: me } = useMe();
+  const { users } = useAdminUsers();
+  const { notifications: apiNotifications } = useNotifications();
+  const { count: unreadCount } = useUnreadCount();
+  const markReadMutation = useMarkNotificationRead();
+  const markAllMutation = useMarkAllNotificationsRead();
+  const markNotificationRead = (id: string) => markReadMutation.mutate(id);
+  const markAllNotificationsRead = () => markAllMutation.mutate();
+  const notifications = apiNotifications;
   const [showNotif, setShowNotif] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
   const pendingCount = users.filter(u => u.status === "pending").length;
-  const unreadCount = notifications.filter(n => !n.read).length;
   const currentTitle = pageTitles[location.pathname] || "Admin";
 
   useEffect(() => {
@@ -62,10 +74,10 @@ const AdminLayout = () => {
       >
         <div className={cn("h-20 flex items-center gap-3 transition-all", collapsed ? "justify-center px-0" : "justify-between px-4")}>
           <div className="flex items-center gap-3">
-            {!collapsed && <EduLogo size={36} />}
+            {!collapsed && <UniMark size={36} />}
             {!collapsed && (
               <div className="min-w-0">
-                <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">EduConnect</h1>
+                <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">Uni Education</h1>
                 <p className="text-xs text-slate-400 leading-tight">Admin Panel</p>
               </div>
             )}
@@ -112,9 +124,17 @@ const AdminLayout = () => {
           ))}
         </nav>
 
-         <div className="px-3 py-3 border-t border-sidebar-border/40">
+         <div className="px-3 py-3 border-t border-sidebar-border/40 space-y-1">
+          <NavLink
+            to="/"
+            title={collapsed ? "Trang chủ" : undefined}
+            className={cn("flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white w-full transition-all duration-300", collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5")}
+          >
+            <Home className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span>Trang chủ</span>}
+          </NavLink>
           <button
-            onClick={() => navigate("/")}
+            onClick={async () => { await logout(); navigate("/login"); }}
             title={collapsed ? "Đăng xuất" : undefined}
             className={cn("flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-red-500 hover:text-white w-full transition-all duration-300", collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5")}
           >
@@ -171,10 +191,14 @@ const AdminLayout = () => {
                           <button
                             key={n.id}
                             onClick={() => {
-                              markNotificationRead(n.id);
+                              if (!n.read) markNotificationRead(n.id);
+                              setShowNotif(false);
+                              if (n.link) {
+                                navigate(n.link);
+                                return;
+                              }
                               if (n.type === "warning" && n.title.includes("chờ duyệt")) {
                                 navigate("/admin/users");
-                                setShowNotif(false);
                               }
                             }}
                             className={cn(
@@ -189,7 +213,7 @@ const AdminLayout = () => {
                                 {!n.read && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
                               </div>
                               <p className="text-xs text-slate-500 mt-0.5 truncate">{n.message}</p>
-                              <p className="text-[10px] text-slate-400 mt-1">{n.timestamp}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">{n.createdAt}</p>
                             </div>
                           </button>
                         ))
@@ -207,7 +231,7 @@ const AdminLayout = () => {
                 )}
               </div>
 
-              <UserAvatarDropdown name="Quản trị viên" role="Admin" />
+              <UserAvatarDropdown avatar="" name={me?.fullname ?? ""} role="Quản trị viên" />
             </div>
           </header>
 

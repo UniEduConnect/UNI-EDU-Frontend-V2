@@ -1,46 +1,89 @@
-import { useExamManager } from "@/contexts/ExamManagerContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, DollarSign, TrendingUp, Users } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, Legend } from "recharts";
+import { FileText, TrendingUp, Users, Loader2, BookOpen } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { useState } from "react";
-
-const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted-foreground))"];
+import { useExamDashboard } from "@/hooks/useDashboard";
+import { useExams, useExamStats, useExamAttempts } from "@/hooks/useExams";
 
 const ExamManagerStats = () => {
-  const { exams, attempts } = useExamManager();
+  const { data: dashboard, isLoading: dashLoading } = useExamDashboard();
+  const { exams, isLoading: examsLoading } = useExams();
+  // GET /Exams/stats is untyped on the wire; render defensively.
+  const { data: stats } = useExamStats();
+  const aggregateStats = (stats ?? {}) as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+
   const [selectedSubject, setSelectedSubject] = useState("all");
+  const [selectedExamId, setSelectedExamId] = useState<number | "all">("all");
 
-  const filteredExams = selectedSubject === "all" ? exams : exams.filter(e => e.subject === selectedSubject);
-  const subjects = [...new Set(exams.map(e => e.subject))];
+  const isLoading = dashLoading || examsLoading;
 
-  const subjectData = subjects.map(s => {
-    const subExams = exams.filter(e => e.subject === s);
-    return { name: s, attempts: subExams.reduce((sum, e) => sum + e.attempts, 0), revenue: subExams.reduce((sum, e) => sum + e.revenue, 0) };
+  const subjects = [...new Set(exams.map((e) => e.subject))];
+  const filteredExams = selectedSubject === "all" ? exams : exams.filter((e) => e.subject === selectedSubject);
+
+  // Per-subject attempt counts come straight off each exam item.
+  const subjectData = subjects.map((s) => {
+    const subExams = exams.filter((e) => e.subject === s);
+    return { name: s, attempts: subExams.reduce((sum, e) => sum + (e.attempts ?? 0), 0) };
   });
 
-  const completionData = filteredExams.filter(e => e.attempts > 0).map(e => ({ name: e.subject, completionRate: e.completionRate, aboveAvg: e.aboveAverageRate }));
+  // Drill into one exam's attempts (GET /Exams/{id}/attempts) when a subject is picked.
+  const drillExamId = selectedExamId === "all" ? undefined : selectedExamId;
+  const { data: attemptsPage, isLoading: attemptsLoading } = useExamAttempts(drillExamId);
+  const attempts = ((attemptsPage?.items ?? []) as Record<string, unknown>[]);
 
-  const monthlyRevenue = [
-    { month: "T10", revenue: 15000000 }, { month: "T11", revenue: 22000000 }, { month: "T12", revenue: 28000000 },
-    { month: "T1", revenue: 35000000 }, { month: "T2", revenue: 42000000 }, { month: "T3", revenue: 56000000 },
-  ];
+  const totalAttempts =
+    num(aggregateStats.totalAttempts) ??
+    dashboard?.totalAttempts ??
+    filteredExams.reduce((s, e) => s + (e.attempts ?? 0), 0);
+  const totalExams = dashboard?.totalExams ?? exams.length;
+  const totalQuestions = dashboard?.totalQuestions ?? filteredExams.reduce((s, e) => s + (e.questionCount ?? 0), 0);
+  const avgScore = num(aggregateStats.avgScore) ?? dashboard?.avgScore ?? 0;
+
+  // TODO(BE): type /Exams/stats + add score-distribution/time-series
+  const scoreDistribution: { name: string; value: number }[] = [];
+  const monthlyTrend: { month: string; attempts: number }[] = [];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải thống kê...
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 pt-2 pb-6 space-y-4">
       <div className="flex items-center gap-3">
-        <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+        <Select
+          value={selectedSubject}
+          onValueChange={(v) => {
+            setSelectedSubject(v);
+            setSelectedExamId("all");
+          }}
+        >
           <SelectTrigger className="w-48 rounded-xl"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">Tất cả môn</SelectItem>{subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+          <SelectContent>
+            <SelectItem value="all">Tất cả môn</SelectItem>
+            {subjects.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={String(selectedExamId)} onValueChange={(v) => setSelectedExamId(v === "all" ? "all" : Number(v))}>
+          <SelectTrigger className="w-56 rounded-xl"><SelectValue placeholder="Chọn đề thi" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả đề thi</SelectItem>
+            {filteredExams.map((e) => <SelectItem key={e.id} value={String(e.id)}>{e.title}</SelectItem>)}
+          </SelectContent>
         </Select>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Tổng lượt thi", value: filteredExams.reduce((s, e) => s + e.attempts, 0).toLocaleString("vi-VN"), icon: FileText },
-          { label: "Doanh thu", value: `${(filteredExams.reduce((s, e) => s + e.revenue, 0) / 1000000).toFixed(1)}M`, icon: DollarSign },
-          { label: "TB hoàn thành", value: `${(filteredExams.filter(e => e.attempts > 0).reduce((s, e) => s + e.completionRate, 0) / (filteredExams.filter(e => e.attempts > 0).length || 1)).toFixed(0)}%`, icon: TrendingUp },
-          { label: "TB trên TB", value: `${(filteredExams.filter(e => e.attempts > 0).reduce((s, e) => s + e.aboveAverageRate, 0) / (filteredExams.filter(e => e.attempts > 0).length || 1)).toFixed(0)}%`, icon: Users },
+          { label: "Tổng lượt thi", value: totalAttempts.toLocaleString("vi-VN"), icon: FileText },
+          { label: "Tổng đề thi", value: totalExams.toLocaleString("vi-VN"), icon: BookOpen },
+          { label: "Tổng câu hỏi", value: totalQuestions.toLocaleString("vi-VN"), icon: Users },
+          { label: "Điểm TB", value: avgScore.toFixed(1), icon: TrendingUp },
         ].map((s, i) => (
           <Card key={s.label} className="border-0 text-white shadow-lg" style={{ backgroundImage: ["linear-gradient(to right, #2563eb, #3b82f6)", "linear-gradient(to right, #10b981, #14b8a6)", "linear-gradient(to right, #f59e0b, #f97316)", "linear-gradient(to right, #a855f7, #d946ef)"][i % 4] }}>
             <CardContent className="p-4 flex items-center justify-between">
@@ -60,62 +103,79 @@ const ExamManagerStats = () => {
         <Card className="border-border">
           <CardHeader className="pb-2"><CardTitle className="text-base">Lượt thi theo môn</CardTitle></CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={subjectData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip />
-                <Bar dataKey="attempts" name="Lượt thi" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {subjectData.length === 0 ? (
+              <div className="flex items-center justify-center h-[300px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={subjectData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <Tooltip />
+                  <Bar dataKey="attempts" name="Lượt thi" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border-border">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Doanh thu theo môn</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Phân bố điểm</CardTitle></CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={subjectData} cx="50%" cy="50%" outerRadius={100} dataKey="revenue" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                  {subjectData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <Tooltip formatter={(v: number) => `${v.toLocaleString("vi-VN")}đ`} />
-              </PieChart>
-            </ResponsiveContainer>
+            {/* TODO(BE): type /Exams/stats + add score-distribution/time-series */}
+            {scoreDistribution.length === 0 ? (
+              <div className="flex items-center justify-center h-[300px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={scoreDistribution}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Số lượt" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border-border">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Tỷ lệ hoàn thành & Đạt TB</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Số đề thi theo môn</CardTitle></CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={completionData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="completionRate" name="Hoàn thành (%)" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="aboveAvg" name="Trên TB (%)" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {subjects.length === 0 ? (
+              <div className="flex items-center justify-center h-[300px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={subjects.map((s) => ({ name: s, count: exams.filter((e) => e.subject === s).length }))}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <Tooltip />
+                  <Bar dataKey="count" name="Số đề" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border-border">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Doanh thu 6 tháng</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Lượt thi theo thời gian</CardTitle></CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={monthlyRevenue}>
-                <defs><linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} /><stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} /></linearGradient></defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tickFormatter={v => `${(v / 1000000).toFixed(0)}M`} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip formatter={(v: number) => `${v.toLocaleString("vi-VN")}đ`} />
-                <Area type="monotone" dataKey="revenue" stroke="hsl(var(--chart-1))" fill="url(#revGrad)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {/* TODO(BE): type /Exams/stats + add score-distribution/time-series */}
+            {monthlyTrend.length === 0 ? (
+              <div className="flex items-center justify-center h-[300px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={monthlyTrend}>
+                  <defs><linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} /><stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} /></linearGradient></defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="attempts" stroke="hsl(var(--chart-1))" fill="url(#revGrad)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -123,21 +183,34 @@ const ExamManagerStats = () => {
       <Card className="border-border">
         <CardHeader className="pb-3"><CardTitle className="text-base">Lịch sử thi gần đây</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          {attempts.map(a => {
-            const exam = exams.find(e => e.id === a.examId);
-            return (
-              <div key={a.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{a.studentName}</p>
-                  <p className="text-xs text-muted-foreground">{exam?.name}</p>
+          {drillExamId == null ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">Chọn một đề thi để xem lịch sử thi</div>
+          ) : attemptsLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải lịch sử...
+            </div>
+          ) : attempts.length === 0 ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">Chưa có dữ liệu</div>
+          ) : (
+            attempts.map((a, i) => {
+              const studentName = (a.studentName ?? a.userName ?? a.fullname) as string | undefined;
+              const score = num(a.score);
+              const completedAt = (a.completedAt ?? a.submittedAt ?? a.createdAt) as string | undefined;
+              return (
+                <div key={(a.id as string | number) ?? i} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{studentName ?? "—"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${(score ?? 0) >= 5 ? "text-success" : "text-red-600"}`}>
+                      {score != null ? `${score} điểm` : "—"}
+                    </p>
+                    {completedAt && <p className="text-[10px] text-muted-foreground">{completedAt}</p>}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className={`text-sm font-bold ${a.score >= 5 ? "text-success" : "text-red-600"}`}>{a.score} điểm</p>
-                  <p className="text-[10px] text-muted-foreground">{a.completedAt}</p>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </CardContent>
       </Card>
     </div>

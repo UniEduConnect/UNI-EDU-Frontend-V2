@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,19 +7,37 @@ import Header from "@/components/Header";
 import FooterSection from "@/components/FooterSection";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { ROLE_ROUTE } from "@/lib/roleRoutes";
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const { login, isAuthenticated, role } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Already signed in? Go straight to the dashboard instead of asking to log in again.
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(role ? ROLE_ROUTE[role] : "/", { replace: true });
+    }
+  }, [isAuthenticated, role, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const user = await login(formData);
       toast.success("Đăng nhập thành công!");
-      setFormData({ email: "", password: "" });
+      const dest = user.role ? ROLE_ROUTE[user.role] : "/";
+      const from = (location.state as { from?: string } | null)?.from;
+      navigate(from ?? dest, { replace: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Đăng nhập thất bại.");
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -29,7 +47,7 @@ const Login = () => {
         <div className="container mx-auto px-4 max-w-md">
           <div className="text-center mb-8">
             <h1 className="text-section font-extrabold text-foreground mb-2">Đăng nhập</h1>
-            <p className="text-muted-foreground text-body">Chào mừng trở lại EduConnect</p>
+            <p className="text-muted-foreground text-body">Chào mừng trở lại Uni Education</p>
           </div>
 
           <div className="bg-card rounded-3xl p-8 shadow-elevated border border-border">

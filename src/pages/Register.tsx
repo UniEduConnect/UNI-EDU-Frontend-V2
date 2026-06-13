@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,13 +7,22 @@ import Header from "@/components/Header";
 import FooterSection from "@/components/FooterSection";
 import { toast } from "sonner";
 import { Loader2, UserPlus } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { EmailOtpField } from "@/components/auth/EmailOtpField";
 
 const Register = () => {
-  const [formData, setFormData] = useState({ name: "", email: "", phone: "", password: "", confirmPassword: "" });
+  const [formData, setFormData] = useState({ name: "", email: "", phone: "", school: "", grade: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const { registerStudent } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!emailVerified) {
+      toast.error("Vui lòng xác thực email bằng mã OTP trước khi đăng ký.");
+      return;
+    }
     if (formData.password !== formData.confirmPassword) {
       toast.error("Mật khẩu xác nhận không khớp!");
       return;
@@ -23,11 +32,23 @@ const Register = () => {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      toast.success("Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.");
-      setFormData({ name: "", email: "", phone: "", password: "", confirmPassword: "" });
+    try {
+      await registerStudent({
+        email: formData.email,
+        password: formData.password,
+        phoneNumber: formData.phone,
+        fullname: formData.name,
+        school: formData.school,
+        grade: Number(formData.grade) || 0,
+      });
+      toast.success("Đăng ký thành công! Vui lòng đăng nhập.");
+      setFormData({ name: "", email: "", phone: "", school: "", grade: "", password: "", confirmPassword: "" });
+      navigate("/login");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Đăng ký thất bại.");
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -40,7 +61,7 @@ const Register = () => {
               <UserPlus className="w-7 h-7 text-primary" />
             </div>
             <h1 className="text-section font-extrabold text-foreground mb-2">Đăng ký tài khoản</h1>
-            <p className="text-muted-foreground text-body">Tham gia EduConnect ngay hôm nay</p>
+            <p className="text-muted-foreground text-body">Tham gia Uni Education ngay hôm nay</p>
           </div>
 
           <div className="bg-card rounded-3xl p-8 shadow-elevated border border-border">
@@ -49,13 +70,23 @@ const Register = () => {
                 <Label htmlFor="name">Họ và tên</Label>
                 <Input id="name" placeholder="Nguyễn Văn A" className="mt-1.5 rounded-xl h-11" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
               </div>
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="email@example.com" className="mt-1.5 rounded-xl h-11" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
-              </div>
+              <EmailOtpField
+                email={formData.email}
+                onEmailChange={(v) => setFormData({ ...formData, email: v })}
+                verified={emailVerified}
+                onVerifiedChange={setEmailVerified}
+              />
               <div>
                 <Label htmlFor="phone">Số điện thoại</Label>
                 <Input id="phone" type="tel" placeholder="0901234567" className="mt-1.5 rounded-xl h-11" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required />
+              </div>
+              <div>
+                <Label htmlFor="school">Trường học</Label>
+                <Input id="school" placeholder="THPT Chu Văn An" className="mt-1.5 rounded-xl h-11" value={formData.school} onChange={(e) => setFormData({ ...formData, school: e.target.value })} required />
+              </div>
+              <div>
+                <Label htmlFor="grade">Khối lớp</Label>
+                <Input id="grade" type="number" min={1} max={12} placeholder="12" className="mt-1.5 rounded-xl h-11" value={formData.grade} onChange={(e) => setFormData({ ...formData, grade: e.target.value })} required />
               </div>
               <div>
                 <Label htmlFor="password">Mật khẩu</Label>
@@ -68,8 +99,8 @@ const Register = () => {
 
               <p className="text-[11px] text-muted-foreground">Sau khi đăng ký, Admin sẽ xác minh và phân quyền tài khoản cho bạn (Học sinh, Phụ huynh, Gia sư,...).</p>
 
-              <Button type="submit" disabled={loading} className="w-full h-12 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-base font-bold">
-                {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Đang xử lý...</> : "Đăng ký"}
+              <Button type="submit" disabled={loading || !emailVerified} className="w-full h-12 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-base font-bold disabled:opacity-60">
+                {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Đang xử lý...</> : emailVerified ? "Đăng ký" : "Xác thực email để đăng ký"}
               </Button>
             </form>
 

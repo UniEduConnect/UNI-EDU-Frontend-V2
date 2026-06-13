@@ -1,4 +1,3 @@
-import { useParent } from "@/contexts/ParentContext";
 import {
   Wallet,
   Users,
@@ -8,37 +7,86 @@ import {
   MessageSquare,
   HelpCircle,
   BookOpen,
-  CheckCircle2,
   BarChart3,
   UserRoundSearch,
   ArrowUpRight,
+  Loader2,
+  CalendarClock,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
+import { useParentDashboard } from "@/hooks/useDashboard";
+import { useParentChildren } from "@/hooks/useParentChildren";
+import { useWallet, useWalletTransactions } from "@/hooks/useWallet";
+import { useMe } from "@/hooks/useUsers";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useClasses } from "@/hooks/useClasses";
+import { useMySchedule } from "@/hooks/useSchedule";
+
+const formatSessionDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+
+const formatSessionTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 const ParentDashboard = () => {
-  const { profile, children, notifications, walletBalance, transactions, childProgress } = useParent();
   const navigate = useNavigate();
 
-  const unreadNotifs = notifications.filter(n => !n.read).length;
+  const { data: dashboard, isLoading: dashLoading } = useParentDashboard();
+  const { children, isLoading: childrenLoading } = useParentChildren();
+  const { data: wallet } = useWallet();
+  const { transactions } = useWalletTransactions();
+  const { data: me } = useMe();
+  const { notifications } = useNotifications();
+  // Parent-scoped: backend filters these to the parent's children
+  // (Class.Student.ParentID == caller). May 403 for seed-data parents
+  // (known role bug) — the hooks return empty arrays in that case.
+  const { classes, isLoading: classesLoading } = useClasses({ Status: "active" });
+  const { sessions, isLoading: sessionsLoading } = useMySchedule();
 
-  const totalSpent = Math.abs(
-    transactions
-      .filter(t => t.type === "tuition_payment" && t.status === "completed")
-      .reduce((s, t) => s + t.amount, 0)
+  const walletBalance = wallet?.balance ?? dashboard?.walletBalance ?? 0;
+  const unreadNotifs = notifications.filter((n) => !n.read).length;
+
+  // Per-child progress: group the children's active classes by studentName.
+  const progressByChild = classes.reduce<Record<string, typeof classes>>(
+    (acc, c) => {
+      const key = c.studentName || "Con";
+      (acc[key] ??= []).push(c);
+      return acc;
+    },
+    {}
   );
 
-  const avgGpa =
-    children.length > 0
-      ? (children.reduce((s, c) => s + c.gpa, 0) / children.length).toFixed(1)
-      : "0";
+  // Upcoming sessions: join class/tutor names onto sessions via classId map.
+  const classMap = new Map(classes.map((c) => [c.id, c]));
+  const upcomingSessions = [...sessions]
+    .filter((s) => s.status === "scheduled")
+    .sort((a, b) => a.startAt.localeCompare(b.startAt))
+    .slice(0, 5)
+    .map((s) => {
+      const cls = classMap.get(s.classId);
+      return {
+        id: s.id,
+        studentName: cls?.studentName ?? "",
+        className: cls?.name ?? "Buổi học",
+        subject: cls?.subject ?? "",
+        tutorName: cls?.tutorName ?? "",
+        date: formatSessionDate(s.startAt),
+        time: `${formatSessionTime(s.startAt)} - ${formatSessionTime(s.endAt)}`,
+      };
+    });
 
-  const totalClasses = children.reduce((s, c) => s + c.totalClasses, 0);
-
-  const avgAttendance =
-    children.length > 0
-      ? Math.round(children.reduce((s, c) => s + c.attendance, 0) / children.length)
-      : 0;
+  // Total spent = sum of outflow transactions (negative amounts on the wallet).
+  const totalSpent = Math.abs(
+    transactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0)
+  );
 
   const quickActions = [
     { label: "Con em & tiến độ", icon: Users, action: () => navigate("/parent/children"), desc: "Theo dõi lớp học" },
@@ -47,10 +95,6 @@ const ParentDashboard = () => {
     { label: "Hỗ trợ", icon: HelpCircle, action: () => navigate("/parent/support"), desc: "Khiếu nại & hỗ trợ" },
     { label: "Tìm gia sư", icon: UserRoundSearch, action: () => navigate("/find-tutor"), desc: "Tìm gia sư phù hợp" },
   ];
-
-  const latestReports = Object.values(childProgress)
-    .map(series => series[series.length - 1])
-    .filter(Boolean);
 
   return (
     <div className="px-6 pt-2 pb-6 space-y-4">
@@ -63,7 +107,7 @@ const ParentDashboard = () => {
         <div className="relative flex flex-col lg:flex-row justify-between gap-5">
           <div>
             <h2 className="text-2xl font-bold">
-              Xin chào {profile.name}
+              Xin chào {me?.fullname ?? "Phụ huynh"}
             </h2>
             <p className="text-sm text-white/80 mt-1">
               Theo dõi tình hình học tập và tài chính của con bạn
@@ -88,8 +132,8 @@ const ParentDashboard = () => {
         {[
           {
             label: "Số con",
-            value: children.length,
-            sub: `${totalClasses} lớp`,
+            value: dashboard?.childrenCount ?? children.length,
+            sub: `${dashboard?.activeClasses ?? 0} lớp đang học`,
             color: "from-blue-500 to-indigo-500",
             icon: Users,
           },
@@ -101,9 +145,9 @@ const ParentDashboard = () => {
             icon: Bell,
           },
           {
-            label: "GPA TB",
-            value: avgGpa,
-            sub: `Chuyên cần ${avgAttendance}%`,
+            label: "Chờ xác nhận",
+            value: dashboard?.pendingConfirmations ?? 0,
+            sub: "Cần xử lý",
             color: "from-emerald-500 to-teal-500",
             icon: Star,
           },
@@ -127,7 +171,7 @@ const ParentDashboard = () => {
             </div>
             <div>
               <p className="text-xs text-white/80">{s.label}</p>
-              <p className="text-xl font-bold">{s.value}</p>
+              <p className="text-xl font-bold">{dashLoading ? "…" : s.value}</p>
               <p className="text-[10px] text-white/80">{s.sub}</p>
             </div>
             <ArrowUpRight className="ml-auto h-4 w-4" />
@@ -139,76 +183,177 @@ const ParentDashboard = () => {
       <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
         <h3 className="mb-4 text-sm font-semibold">Con em</h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {children.map(child => (
-            <div
-              key={child.id}
-              onClick={() => navigate("/parent/children")}
-              className="flex items-center gap-4 p-4 rounded-2xl bg-muted/40 hover:bg-muted/70 transition"
-            >
-              <img src={child.avatar} className="w-12 h-12 rounded-full object-cover" />
+        {childrenLoading ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải...
+          </div>
+        ) : children.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Chưa có dữ liệu
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {children.map((child) => (
+              <div
+                key={child.id}
+                onClick={() => navigate("/parent/children")}
+                className="flex items-center gap-4 p-4 rounded-2xl bg-muted/40 hover:bg-muted/70 transition cursor-pointer"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
+                  {child.fullName.charAt(0)}
+                </div>
 
-              <div className="flex-1">
-                <p className="text-sm font-semibold">{child.name}</p>
-                <p className="text-xs text-muted-foreground">{child.grade}</p>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">{child.fullName}</p>
+                  <p className="text-xs text-muted-foreground">Lớp {child.grade}</p>
 
-                <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <BookOpen className="w-3 h-3" /> {child.totalClasses}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> {child.attendance}%
-                  </span>
+                  <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <BookOpen className="w-3 h-3" /> {child.school}
+                    </span>
+                  </div>
                 </div>
               </div>
-
-              <div className="text-right">
-                <p className="text-lg font-bold">{child.gpa}</p>
-                <p className="text-[10px] text-muted-foreground">GPA</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* REPORT */}
+      {/* CHILD PROGRESS */}
       <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
         <h3 className="mb-4 text-sm font-semibold flex items-center gap-2">
           <BarChart3 className="w-4 h-4 text-primary" />
-          Báo cáo gần nhất
+          Tiến độ học tập của con
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {latestReports.map((r, i) => (
-            <div key={i} className="p-3 rounded-2xl bg-muted/30">
-              <p className="text-xs text-muted-foreground">{r.month}</p>
-              <p className="text-lg font-bold">GPA {r.gpa}</p>
-              <p className="text-xs text-muted-foreground">
-                {r.attendance}% • {r.sessionsCompleted} buổi
-              </p>
-            </div>
-          ))}
-        </div>
+        {classesLoading ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải...
+          </div>
+        ) : classes.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Chưa có lớp học nào đang diễn ra
+          </p>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(progressByChild).map(([studentName, childClasses]) => (
+              <div key={studentName}>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                    {studentName.charAt(0)}
+                  </div>
+                  <p className="text-sm font-semibold">{studentName}</p>
+                  <span className="text-xs text-muted-foreground">
+                    {childClasses.length} lớp
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {childClasses.map((c) => {
+                    const pct =
+                      c.totalSessions > 0
+                        ? Math.round((c.completedSessions / c.totalSessions) * 100)
+                        : 0;
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => navigate(`/parent/children`)}
+                        className="rounded-2xl bg-muted/40 p-4 hover:bg-muted/70 transition cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{c.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {c.subject} · GV {c.tutorName}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-xs font-semibold text-primary">
+                            {c.completedSessions}/{c.totalSessions} buổi
+                          </span>
+                        </div>
+                        <div className="mt-3 flex items-center gap-3">
+                          <Progress value={pct} className="h-2 flex-1" />
+                          <span className="text-xs text-muted-foreground w-9 text-right">
+                            {pct}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* UPCOMING SESSIONS */}
+      <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+        <h3 className="mb-4 text-sm font-semibold flex items-center gap-2">
+          <CalendarClock className="w-4 h-4 text-primary" />
+          Buổi học sắp tới
+        </h3>
+
+        {sessionsLoading || classesLoading ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải...
+          </div>
+        ) : upcomingSessions.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Chưa có buổi học nào sắp tới
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {upcomingSessions.map((s) => (
+              <div
+                key={s.id}
+                onClick={() => navigate("/parent/children")}
+                className="flex items-center gap-4 p-3 rounded-2xl bg-muted/40 hover:bg-muted/70 transition cursor-pointer"
+              >
+                <div className="flex h-11 w-11 flex-col items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <CalendarClock className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{s.className}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {s.studentName ? `${s.studentName} · ` : ""}
+                    {s.subject ? `${s.subject} · ` : ""}GV {s.tutorName}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-semibold">{s.date}</p>
+                  <p className="text-xs text-muted-foreground">{s.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* NOTIFICATIONS */}
       <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
         <h3 className="mb-4 text-sm font-semibold">Thông báo</h3>
 
-        <div className="space-y-2">
-          {notifications.slice(0, 5).map(n => (
-            <div
-              key={n.id}
-              className={cn(
-                "p-3 rounded-2xl",
-                !n.read ? "bg-primary/5" : "hover:bg-muted/50"
-              )}
-            >
-              <p className="text-sm font-medium">{n.title}</p>
-              <p className="text-xs text-muted-foreground">{n.message}</p>
-            </div>
-          ))}
-        </div>
+        {notifications.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Chưa có thông báo
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {notifications.slice(0, 5).map((n) => (
+              <div
+                key={n.id}
+                className={cn(
+                  "p-3 rounded-2xl",
+                  !n.read ? "bg-primary/5" : "hover:bg-muted/50"
+                )}
+              >
+                <p className="text-sm font-medium">{n.title}</p>
+                <p className="text-xs text-muted-foreground">{n.message}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* QUICK ACTION */}

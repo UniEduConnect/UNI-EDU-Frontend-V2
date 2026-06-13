@@ -1,25 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import EduLogo from "@/components/EduLogo";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
-const demoRoles = [
-  { name: "Admin", path: "/demo/admin" },
-  { name: "Gia sư", path: "/demo/tutor" },
-  { name: "Giáo viên", path: "/demo/teacher" },
-  { name: "Học sinh", path: "/demo/student" },
-  { name: "Phụ huynh", path: "/demo/parent" },
-  { name: "Kế toán", path: "/demo/accountant" },
-  { name: "Văn phòng", path: "/demo/office" },
-  { name: "Quản lý đề", path: "/demo/exam-manager" },
-];
+import UniLogo from "@/components/UniLogo";
+import { useAuth } from "@/contexts/AuthContext";
+import { ROLE_ROUTE } from "@/lib/roleRoutes";
 
 const sectionLinks = [
   { id: "features", label: "Tính năng" },
@@ -32,6 +17,10 @@ const Header = () => {
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAuthenticated, role } = useAuth();
+  const dashboardPath = role ? ROLE_ROUTE[role] : "/";
+  const isTutorRole = role === "tutor" || role === "teacher";
+  const headerSearchBtn = "px-4 py-2 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7] transition-all";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -54,11 +43,8 @@ const Header = () => {
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-background/80 backdrop-blur-xl border-b border-border/50 shadow-soft" : "bg-background/50 backdrop-blur-md"}`}>
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
-        <Link to="/" className="flex items-center gap-2.5">
-          <EduLogo size={36} />
-          <span className="font-bold text-xl text-foreground">
-            Edu<span className="text-gradient">Connect</span>
-          </span>
+        <Link to="/" className="flex items-center" aria-label="Uni Education">
+          <UniLogo className="h-9 w-auto" />
         </Link>
 
         <nav className="hidden lg:flex items-center gap-1">
@@ -71,12 +57,11 @@ const Header = () => {
               {link.label}
             </button>
           ))}
-          <Link
-            to="/find-tutor"
-            className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7] transition-all"
-          >
-            Tìm gia sư
-          </Link>
+          {isTutorRole ? (
+            <Link to={`${dashboardPath}/find-students`} className={headerSearchBtn}>Tìm học sinh</Link>
+          ) : (
+            <Link to="/find-tutor" className={headerSearchBtn}>Tìm gia sư</Link>
+          )}
           {/* <Link
             to="/exam-online"
             className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/50 transition-all"
@@ -86,26 +71,20 @@ const Header = () => {
         </nav>
 
         <div className="hidden lg:flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7] transition-all">
-                Demo <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="rounded-xl">
-              {demoRoles.map((role) => (
-                <DropdownMenuItem key={role.path} asChild>
-                  <Link to={role.path}>{role.name}</Link>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button variant="ghost" asChild className="rounded-full text-sm px-6">
-            <Link to="/login">Đăng nhập</Link>
-          </Button>
-          <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7] font-semibold text-sm shadow-neon px-6">
-            <Link to="/register">Đăng ký</Link>
-          </Button>
+          {isAuthenticated ? (
+            <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7] font-semibold text-sm shadow-neon px-6">
+              <Link to={dashboardPath}>Vào trang quản lý</Link>
+            </Button>
+          ) : (
+            <>
+              <Button variant="ghost" asChild className="rounded-full text-sm px-6">
+                <Link to="/login">Đăng nhập</Link>
+              </Button>
+              <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7] font-semibold text-sm shadow-neon px-6">
+                <Link to="/register">Đăng ký</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         <div className="flex lg:hidden items-center gap-2">
@@ -126,27 +105,27 @@ const Header = () => {
               {link.label}
             </button>
           ))}
-          <Link to="/find-tutor" className="block py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Tìm gia sư</Link>
+          {isTutorRole ? (
+            <Link to={`${dashboardPath}/find-students`} className="block w-full text-left py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Tìm học sinh</Link>
+          ) : (
+            <Link to="/find-tutor" className="block w-full text-left py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Tìm gia sư</Link>
+          )}
           <Link to="/exam-online" className="block py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Thi thử Online</Link>
-          <details className="group">
-            <summary className="py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white cursor-pointer list-none flex items-center gap-1 rounded-lg hover:bg-[#1E69E7]">
-              Demo <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform" />
-            </summary>
-            <div className="pl-6 space-y-1">
-              {demoRoles.map((role) => (
-                <Link key={role.path} to={role.path} className="block py-2 text-sm text-muted-foreground" onClick={() => setMobileOpen(false)}>
-                  {role.name}
-                </Link>
-              ))}
-            </div>
-          </details>
           <div className="flex gap-2 pt-2">
-            <Button variant="ghost" asChild className="flex-1 rounded-full">
-              <Link to="/login" onClick={() => setMobileOpen(false)}>Đăng nhập</Link>
-            </Button>
-            <Button asChild className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7]">
-              <Link to="/register" onClick={() => setMobileOpen(false)}>Đăng ký</Link>
-            </Button>
+            {isAuthenticated ? (
+              <Button asChild className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7]">
+                <Link to={dashboardPath} onClick={() => setMobileOpen(false)}>Vào trang quản lý</Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" asChild className="flex-1 rounded-full">
+                  <Link to="/login" onClick={() => setMobileOpen(false)}>Đăng nhập</Link>
+                </Button>
+                <Button asChild className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7]">
+                  <Link to="/register" onClick={() => setMobileOpen(false)}>Đăng ký</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -1,7 +1,9 @@
-import { useTutor } from "@/contexts/TutorContext";
-import { Wallet, ArrowDownLeft, ArrowUpRight, ShieldCheck, DollarSign, Plus, CreditCard, AlertTriangle, Info, Landmark, Smartphone, Building2 } from "lucide-react";
+import { Wallet, ArrowDownLeft, ArrowUpRight, ShieldCheck, DollarSign, Plus, CreditCard, AlertTriangle, Info, Landmark, Smartphone, Building2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
+import { useClasses } from "@/hooks/useClasses";
+import { useRefunds, useRequestRefund } from "@/hooks/useRefunds";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -12,14 +14,24 @@ const typeLabels: Record<string, string> = {
   refund: "Hoàn tiền",
   platform_fee: "Phí nền tảng",
   deposit: "Nạp tiền",
+  transfer_in: "Nhận tiền",
+  transfer_out: "Chuyển đi",
 };
 
 const paymentMethods = [
   { id: "momo", name: "MoMo", icon: Smartphone, desc: "Ví điện tử MoMo" },
   { id: "vnpay", name: "VNPay", icon: CreditCard, desc: "Cổng thanh toán VNPay" },
+  { id: "payos", name: "PayOS", icon: CreditCard, desc: "Cổng thanh toán PayOS" },
   { id: "vietcombank", name: "Vietcombank", icon: Landmark, desc: "****1234" },
   { id: "techcombank", name: "Techcombank", icon: Building2, desc: "****5678" },
   { id: "bidv", name: "BIDV", icon: Landmark, desc: "****9012" },
+];
+
+// Deposit dialog list: a demo option (credits the wallet directly via the test-deposit
+// API, no gateway) followed by the real payment methods.
+const depositMethods = [
+  { id: "test", name: "Test (Demo)", icon: Plus, desc: "Nạp thử — cộng ngay vào ví, không qua cổng" },
+  ...paymentMethods,
 ];
 
 const refundReasons = [
@@ -31,7 +43,22 @@ const refundReasons = [
 ];
 
 const TutorWallet = () => {
-  const { wallet, walletBalance, escrowBalance, classes, refundRequests, requestRefund, requestWithdrawal, requestDeposit } = useTutor();
+  const { data: walletData } = useWallet();
+  const { transactions, isLoading: txLoading } = useWalletTransactions();
+  // ClassItem has no escrow fields — show session-based progress only.
+  // TODO(BE): add escrowAmount/escrowReleased/escrowStatus to ClassListItemResponse
+  const { classes } = useClasses({ Status: "active" });
+  // GET /Finance/refunds may be Admin/Finance-only; a tutor without access just sees an empty list.
+  // TODO(BE): tutor-scoped GET /me/refunds for a tutor's own refund history
+  const { refunds } = useRefunds();
+  const depositMutation = useDeposit();
+  const testDepositMutation = useTestDeposit();
+  const withdrawMutation = useWithdraw();
+  const requestRefundMutation = useRequestRefund();
+
+  const walletBalance = walletData?.balance ?? 0;
+  const escrowBalance = walletData?.escrowBalance ?? 0;
+
   const [dialogType, setDialogType] = useState<"withdraw" | "deposit" | null>(null);
   const [amount, setAmount] = useState("");
   const [selectedMethod, setSelectedMethod] = useState("");
@@ -44,29 +71,48 @@ const TutorWallet = () => {
   const [refundAmount, setRefundAmount] = useState("");
   const [refundFullAmount, setRefundFullAmount] = useState(true);
 
-  const filtered = filter === "all" ? wallet : wallet.filter(w => w.type === filter);
-  const totalIncome = wallet.filter(w => w.type === "escrow_release" && w.status === "completed").reduce((s, w) => s + w.amount, 0);
+  const filtered = filter === "all" ? transactions : transactions.filter(w => w.type === filter);
+  const totalIncome = transactions.filter(w => w.type === "escrow_release" && w.status === "completed").reduce((s, w) => s + w.amount, 0);
+  const totalPlatformFee = Math.abs(transactions.filter(w => w.type === "platform_fee").reduce((s, w) => s + w.amount, 0));
 
   const refundClass = classes.find(c => c.id === refundClassId);
-  const refundMax = refundClass ? refundClass.escrowAmount - refundClass.escrowReleased : 0;
+  const refundMax = refundClass ? refundClass.fee : 0;
 
-  const hasExistingRefund = (classId: string) => refundRequests.some(r => r.classId === classId && r.status === "pending");
+  const hasExistingRefund = (classId: string) => refunds.some(r => r.classId === classId && r.status === "pending");
 
   const handleSubmit = () => {
     const amt = parseInt(amount);
     if (!amt || amt <= 0 || !selectedMethod) return;
-    const method = paymentMethods.find(m => m.id === selectedMethod)?.name || selectedMethod;
+    const methodName = paymentMethods.find(m => m.id === selectedMethod)?.name || selectedMethod;
+    const reset = () => { setDialogType(null); setAmount(""); setSelectedMethod(""); };
     if (dialogType === "withdraw") {
       if (amt > walletBalance) { toast.error("Số tiền vượt quá số dư!"); return; }
-      requestWithdrawal(amt, method);
-      toast.success(`Yêu cầu rút ${amt.toLocaleString("vi-VN")}đ qua ${method} đã được gửi`);
+      withdrawMutation.mutate(
+        { amount: amt, method: selectedMethod, bankAccount: "", bankName: methodName, note: "" },
+        {
+          onSuccess: () => { toast.success(`Yêu cầu rút ${amt.toLocaleString("vi-VN")}đ qua ${methodName} đã được gửi`); reset(); },
+          onError: (e) => toast.error(e instanceof Error ? e.message : "Rút tiền thất bại."),
+        },
+      );
+    } else if (selectedMethod === "test") {
+      // Demo path: create + confirm a test deposit, crediting the wallet immediately.
+      testDepositMutation.mutate(amt, {
+        onSuccess: () => { toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví (test)!`); reset(); },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Nạp tiền test thất bại."),
+      });
     } else {
-      requestDeposit(amt, method);
-      toast.success(`Nạp ${amt.toLocaleString("vi-VN")}đ từ ${method} thành công!`);
+      depositMutation.mutate(
+        { amount: amt, method: selectedMethod },
+        {
+          onSuccess: (res) => {
+            if (res?.payUrl) { window.location.href = res.payUrl; return; }
+            toast.success(`Đã tạo yêu cầu nạp ${amt.toLocaleString("vi-VN")}đ từ ${methodName}!`);
+            reset();
+          },
+          onError: (e) => toast.error(e instanceof Error ? e.message : "Nạp tiền thất bại."),
+        },
+      );
     }
-    setDialogType(null);
-    setAmount("");
-    setSelectedMethod("");
   };
 
   const openRefundModal = (classId: string) => {
@@ -75,7 +121,7 @@ const TutorWallet = () => {
     setRefundCustomReason("");
     setRefundFullAmount(true);
     const cls = classes.find(c => c.id === classId);
-    if (cls) setRefundAmount(String(cls.escrowAmount - cls.escrowReleased));
+    if (cls) setRefundAmount(String(cls.fee));
   };
 
   const handleRefundSubmit = () => {
@@ -84,9 +130,13 @@ const TutorWallet = () => {
     if (!finalReason) { toast.error("Vui lòng nhập lý do hoàn tiền"); return; }
     const amt = parseInt(refundAmount);
     if (!amt || amt <= 0 || amt > refundMax) { toast.error("Số tiền không hợp lệ"); return; }
-    requestRefund(refundClassId, finalReason, amt);
-    toast.success("Yêu cầu hoàn tiền đã được gửi đến Kế toán");
-    setRefundClassId(null);
+    requestRefundMutation.mutate(
+      { classId: refundClassId, payload: { amount: amt, reason: finalReason } },
+      {
+        onSuccess: () => { toast.success("Yêu cầu hoàn tiền đã được gửi đến Kế toán"); setRefundClassId(null); },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Gửi yêu cầu hoàn tiền thất bại."),
+      },
+    );
   };
 
   return (
@@ -128,45 +178,49 @@ const TutorWallet = () => {
             <div className="w-10 h-10 rounded-full bg-red-200 text-red-700 flex items-center justify-center"><CreditCard className="w-5 h-5" /></div>
             <span className="text-xs text-red-800 font-semibold">Phí nền tảng</span>
           </div>
-          <p className="text-2xl font-bold text-red-900">{Math.abs(wallet.filter(w => w.type === "platform_fee").reduce((s, w) => s + w.amount, 0)).toLocaleString("vi-VN")}đ</p>
+          <p className="text-2xl font-bold text-red-900">{totalPlatformFee.toLocaleString("vi-VN")}đ</p>
         </div>
       </div>
 
-      {/* Escrow per class */}
+      {/* Escrow per class — session-based progress (no escrow-amount breakdown available) */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-foreground mb-4">Escrow theo lớp</h3>
         <div className="space-y-3">
-          {classes.filter(c => c.escrowStatus !== "refunded").map(c => (
-            <div key={c.id} className="flex items-center gap-4 p-3 bg-muted/50 rounded-xl">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">{c.name}</p>
-                <p className="text-xs text-muted-foreground">{c.completedSessions}/{c.totalSessions} buổi</p>
-              </div>
-              <div className="w-32">
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div className="bg-success/150 rounded-full h-2 transition-all" style={{ width: `${(c.escrowReleased / c.escrowAmount) * 100}%` }} />
+          {classes.map(c => {
+            const progress = c.totalSessions > 0 ? (c.completedSessions / c.totalSessions) * 100 : 0;
+            const isCompleted = c.totalSessions > 0 && c.completedSessions >= c.totalSessions;
+            return (
+              <div key={c.id} className="flex items-center gap-4 p-3 bg-muted/50 rounded-xl">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{c.name}</p>
+                  <p className="text-xs text-muted-foreground">{c.completedSessions}/{c.totalSessions} buổi • {c.fee.toLocaleString("vi-VN")}đ</p>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5 text-right">{c.escrowReleased.toLocaleString("vi-VN")}/{c.escrowAmount.toLocaleString("vi-VN")}đ</p>
-              </div>
-              {c.escrowStatus === "completed" && <span className="text-[10px] font-medium text-success bg-success/15 dark:bg-emerald-900/20 px-2 py-0.5 rounded-lg">Đã giải ngân</span>}
-              {(c.escrowStatus === "pending" || c.escrowStatus === "in_progress") && (
-                hasExistingRefund(c.id) ? (
+                <div className="w-32">
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div className="bg-success/150 rounded-full h-2 transition-all" style={{ width: `${progress}%` }} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 text-right">{Math.round(progress)}%</p>
+                </div>
+                {isCompleted ? (
+                  <span className="text-[10px] font-medium text-success bg-success/15 dark:bg-emerald-900/20 px-2 py-0.5 rounded-lg">Hoàn thành</span>
+                ) : hasExistingRefund(c.id) ? (
                   <span className="text-[10px] font-medium text-warning bg-warning/15 dark:bg-amber-900/20 px-2 py-0.5 rounded-lg">Chờ duyệt</span>
                 ) : (
                   <button onClick={() => openRefundModal(c.id)} className="text-[10px] font-medium text-destructive hover:underline">Hoàn tiền</button>
-                )
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
+          {classes.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Chưa có lớp đang hoạt động</p>}
         </div>
       </div>
 
       {/* Refund Requests History */}
-      {refundRequests.length > 0 && (
+      {refunds.length > 0 && (
         <div className="bg-card border border-border rounded-2xl p-5">
           <h3 className="text-sm font-semibold text-foreground mb-4">Yêu cầu hoàn tiền</h3>
           <div className="space-y-2">
-            {refundRequests.map(r => (
+            {refunds.map(r => (
               <div key={r.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
                 <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
                   <AlertTriangle className="w-4 h-4 text-destructive" />
@@ -200,24 +254,32 @@ const TutorWallet = () => {
           </div>
         </div>
         <div className="space-y-2">
-          {filtered.map(w => (
-            <div key={w.id} className="flex items-center gap-3 p-3 hover:bg-muted/30 rounded-xl transition-colors">
-              <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", w.amount > 0 ? "bg-success/15 dark:bg-emerald-900/20" : "bg-muted")}>
-                {w.amount > 0 ? <ArrowDownLeft className="w-4 h-4 text-success" /> : <ArrowUpRight className="w-4 h-4 text-muted-foreground" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-foreground">{w.description}</p>
-                <p className="text-[11px] text-muted-foreground">{w.date} • {typeLabels[w.type]}{w.paymentMethod ? ` • ${w.paymentMethod}` : ""}</p>
-              </div>
-              <p className={cn("text-sm font-semibold", w.amount > 0 ? "text-success" : "text-foreground")}>
-                {w.amount > 0 ? "+" : ""}{w.amount.toLocaleString("vi-VN")}đ
-              </p>
-              <span className={cn("text-[10px] px-2 py-0.5 rounded-lg", w.status === "completed" ? "bg-success/15 text-success dark:bg-emerald-900/20" : "bg-warning/15 text-warning dark:bg-amber-900/20")}>
-                {w.status === "completed" ? "Hoàn thành" : "Đang xử lý"}
-              </span>
+          {txLoading ? (
+            <div className="flex items-center justify-center py-10 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải giao dịch...
             </div>
-          ))}
-          {filtered.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Không có giao dịch nào</p>}
+          ) : (
+            <>
+              {filtered.map(w => (
+                <div key={w.id} className="flex items-center gap-3 p-3 hover:bg-muted/30 rounded-xl transition-colors">
+                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", w.amount > 0 ? "bg-success/15 dark:bg-emerald-900/20" : "bg-muted")}>
+                    {w.amount > 0 ? <ArrowDownLeft className="w-4 h-4 text-success" /> : <ArrowUpRight className="w-4 h-4 text-muted-foreground" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-foreground">{w.description}</p>
+                    <p className="text-[11px] text-muted-foreground">{w.date} • {typeLabels[w.type] ?? w.type}{w.paymentMethod ? ` • ${w.paymentMethod}` : ""}</p>
+                  </div>
+                  <p className={cn("text-sm font-semibold", w.amount > 0 ? "text-success" : "text-foreground")}>
+                    {w.amount > 0 ? "+" : ""}{w.amount.toLocaleString("vi-VN")}đ
+                  </p>
+                  <span className={cn("text-[10px] px-2 py-0.5 rounded-lg", w.status === "completed" ? "bg-success/15 text-success dark:bg-emerald-900/20" : "bg-warning/15 text-warning dark:bg-amber-900/20")}>
+                    {w.status === "completed" ? "Hoàn thành" : "Đang xử lý"}
+                  </span>
+                </div>
+              ))}
+              {filtered.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Không có giao dịch nào</p>}
+            </>
+          )}
         </div>
       </div>
 
@@ -247,7 +309,7 @@ const TutorWallet = () => {
             <div>
               <label className="text-xs font-medium text-foreground">Phương thức thanh toán</label>
               <div className="space-y-2 mt-2">
-                {paymentMethods.map(m => (
+                {(dialogType === "deposit" ? depositMethods : paymentMethods).map(m => (
                   <button key={m.id} onClick={() => setSelectedMethod(m.id)} className={cn("w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all", selectedMethod === m.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/50")}>
                     <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center"><m.icon className="w-4 h-4 text-muted-foreground" /></div>
                     <div>
@@ -258,7 +320,8 @@ const TutorWallet = () => {
                 ))}
               </div>
             </div>
-            <button onClick={handleSubmit} disabled={!amount || parseInt(amount) <= 0 || !selectedMethod} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50">
+            <button onClick={handleSubmit} disabled={!amount || parseInt(amount) <= 0 || !selectedMethod || depositMutation.isPending || testDepositMutation.isPending || withdrawMutation.isPending} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+              {(depositMutation.isPending || testDepositMutation.isPending || withdrawMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
               {dialogType === "withdraw" ? "Xác nhận rút tiền" : "Xác nhận nạp tiền"}
             </button>
           </div>
@@ -282,7 +345,7 @@ const TutorWallet = () => {
             {refundClass && (
               <div className="p-3 bg-muted/50 rounded-xl">
                 <p className="text-sm font-medium text-foreground">{refundClass.name}</p>
-                <p className="text-xs text-muted-foreground">Học sinh: {refundClass.studentName} • Escrow chưa giải ngân: <strong>{refundMax.toLocaleString("vi-VN")}đ</strong></p>
+                <p className="text-xs text-muted-foreground">Học sinh: {refundClass.studentName} • Học phí lớp: <strong>{refundMax.toLocaleString("vi-VN")}đ</strong></p>
               </div>
             )}
 
@@ -341,7 +404,7 @@ const TutorWallet = () => {
             </div>
 
             <button onClick={handleRefundSubmit}
-              disabled={!refundReason || (refundReason === "custom" && !refundCustomReason.trim()) || !refundAmount || parseInt(refundAmount) <= 0}
+              disabled={!refundReason || (refundReason === "custom" && !refundCustomReason.trim()) || !refundAmount || parseInt(refundAmount) <= 0 || requestRefundMutation.isPending}
               className="w-full py-2.5 bg-destructive text-destructive-foreground rounded-xl font-medium disabled:opacity-50 transition-colors">
               Gửi yêu cầu hoàn tiền
             </button>

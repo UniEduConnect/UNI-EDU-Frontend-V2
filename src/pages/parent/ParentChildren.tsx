@@ -1,48 +1,364 @@
-import { useParent } from "@/contexts/ParentContext";
 import {
   Users,
   BookOpen,
   CheckCircle2,
-  Star,
   CalendarDays,
   ClipboardList,
   Clock,
-  FileText,
-  Check,
-  X,
+  GraduationCap,
+  UserPlus,
+  X as XIcon,
+  Star,
+  Wallet,
   AlertTriangle,
-  ArrowUpRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  useParentChildren,
+  useLinkChild,
+  useChildExams,
+  useFundChild,
+} from "@/hooks/useParentChildren";
+import { useClasses } from "@/hooks/useClasses";
+import { useMySchedule } from "@/hooks/useSchedule";
+import { useConfirmSession, useApproveAbsence, useRejectAbsence } from "@/hooks/useSessions";
+import { useSearchParams } from "react-router-dom";
+import type { ClassItem, SessionResponse } from "@/types/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+// "2026-06-05T19:00:00Z" -> "19:00"
+const hhmm = (iso: string) => {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+// "HH:mm:ss" -> "HH:mm"
+const hm = (t: string) => (t ? t.slice(0, 5) : t);
+
+const slotsLabel = (slots: ClassItem["weeklySlots"]) =>
+  (slots ?? [])
+    .map(s => `${DAY_LABELS[s.dayOfWeek] ?? `?${s.dayOfWeek}`} ${hm(s.startTime)}-${hm(s.endTime)}`)
+    .join(" • ");
+
+const sessionStatusLabel = (status: string) => {
+  switch (status) {
+    case "completed": return "Hoàn thành";
+    case "missed": return "Vắng";
+    case "cancelled": return "Hủy";
+    case "in_progress": return "Đang diễn ra";
+    case "pending_confirm": return "Chờ xác nhận";
+    default: return "Sắp tới";
+  }
+};
+
+const sessionStatusColor = (status: string) => {
+  switch (status) {
+    case "completed": return "bg-muted text-foreground";
+    case "missed": return "bg-destructive/10 text-destructive";
+    case "cancelled": return "bg-muted text-muted-foreground";
+    case "pending_confirm": return "bg-amber-500/10 text-amber-600";
+    default: return "bg-primary/10 text-primary";
+  }
+};
+
+const fmtDate = (iso: string) => {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+};
 
 const ParentChildren = () => {
-  const { children, confirmAttendance, childSchedules, childTests } = useParent();
-  const [selectedChild, setSelectedChild] = useState(children[0]?.id || "");
+  const { children, isLoading, isError } = useParentChildren();
+  const { classes, isLoading: classesLoading } = useClasses();
+  const { sessions, isLoading: sessionsLoading } = useMySchedule();
+  const confirmSession = useConfirmSession();
+  const approveAbsence = useApproveAbsence();
+  const rejectAbsence = useRejectAbsence();
+  const linkChild = useLinkChild();
+  const [params, setParams] = useSearchParams();
+  const absenceId = params.get("absence");
+  const fundChild = useFundChild();
+  const [selectedChild, setSelectedChild] = useState("");
   const [tab, setTab] = useState<"overview" | "schedule" | "tests" | "attendance">("overview");
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkEmail, setLinkEmail] = useState("");
+  const [fundOpen, setFundOpen] = useState(false);
+  const [fundAmount, setFundAmount] = useState("");
 
-  const totalClasses = children.reduce((s, c) => s + c.totalClasses, 0);
-  const avgAttendance =
-    children.length > 0
-      ? Math.round(children.reduce((s, c) => s + c.attendance, 0) / children.length)
-      : 0;
-  const avgGpa =
-    children.length > 0
-      ? (children.reduce((s, c) => s + c.gpa, 0) / children.length).toFixed(1)
-      : "0";
+  // Exam submissions for the currently-selected child (only fetched when a child is selected).
+  const { submissions: childExams, isLoading: examsLoading } = useChildExams(selectedChild || undefined);
+
+  const handleLinkChild = () => {
+    const email = linkEmail.trim();
+    if (!email) {
+      toast.error("Vui lòng nhập email tài khoản học sinh của con.");
+      return;
+    }
+    linkChild.mutate(email, {
+      onSuccess: () => {
+        toast.success("Đã gửi yêu cầu liên kết. Vui lòng chờ con xác nhận.");
+        setLinkOpen(false);
+        setLinkEmail("");
+      },
+      onError: e => toast.error(e instanceof Error ? e.message : "Gửi yêu cầu thất bại"),
+    });
+  };
+
+  const FUND_QUICK_AMOUNTS = [200000, 500000, 1000000, 2000000];
+
+  const handleFundChild = (childId: string) => {
+    const amount = Number(fundAmount);
+    if (!childId) {
+      toast.error("Không xác định được con để nạp tiền.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Vui lòng nhập số tiền hợp lệ (lớn hơn 0).");
+      return;
+    }
+    fundChild.mutate(
+      { childId, amount },
+      {
+        onSuccess: () => {
+          toast.success("Đã nạp tiền cho con thành công.");
+          setFundOpen(false);
+          setFundAmount("");
+        },
+        onError: e =>
+          toast.error(
+            e instanceof Error ? e.message : "Nạp tiền thất bại (kiểm tra số dư ví của bạn)."
+          ),
+      }
+    );
+  };
+
+  // Reusable "connect child" button + dialog, shown both in the empty state and
+  // the populated page header so a parent can always add another child.
+  const linkChildUI = (
+    <>
+      <button
+        type="button"
+        onClick={() => setLinkOpen(true)}
+        className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+      >
+        <UserPlus className="h-4 w-4" />
+        Kết nối con
+      </button>
+
+      <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Kết nối con</DialogTitle>
+            <DialogDescription>
+              Nhập email tài khoản học sinh của con. Con bạn sẽ nhận thông báo để xác nhận liên kết.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            <Input
+              type="email"
+              placeholder="email@example.com"
+              value={linkEmail}
+              onChange={e => setLinkEmail(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") handleLinkChild();
+              }}
+              className="rounded-xl"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={handleLinkChild}
+              disabled={linkChild.isPending || linkEmail.trim().length === 0}
+              className="rounded-xl"
+            >
+              {linkChild.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Gửi yêu cầu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+
+  // Keep the selected child valid as the list loads.
+  useEffect(() => {
+    if (children.length > 0 && !children.some(c => c.id === selectedChild)) {
+      setSelectedChild(children[0].id);
+    }
+  }, [children, selectedChild]);
 
   const child = children.find(c => c.id === selectedChild);
-  const schedule = childSchedules[selectedChild] || [];
-  const tests = childTests[selectedChild] || [];
-  const pendingAttendance = (child?.attendanceConfirmations || []).filter(a => a.status === "pending");
 
-  const handleConfirmAttendance = (confirmId: string, confirmed: boolean) => {
-    confirmAttendance(selectedChild, confirmId, confirmed);
-    toast.success(confirmed ? "Đã xác nhận điểm danh" : "Đã từ chối điểm danh");
+  // classId -> ClassItem, so sessions (which only carry classId) can be joined.
+  const classMap = useMemo(() => {
+    const m = new Map<string, ClassItem>();
+    for (const c of classes) m.set(c.id, c);
+    return m;
+  }, [classes]);
+
+  // studentId -> their classes.
+  const classesByChild = useMemo(() => {
+    const m = new Map<string, ClassItem[]>();
+    for (const c of classes) {
+      const arr = m.get(c.studentId) ?? [];
+      arr.push(c);
+      m.set(c.studentId, arr);
+    }
+    return m;
+  }, [classes]);
+
+  const childClasses = selectedChild ? classesByChild.get(selectedChild) ?? [] : [];
+  const childClassIds = useMemo(() => new Set(childClasses.map(c => c.id)), [childClasses]);
+
+  // Sessions belonging to the selected child's classes, enriched with class info.
+  type ViewSession = SessionResponse & {
+    date: string;
+    time: string;
+    className: string;
+    tutorName: string;
+    subject: string;
   };
+
+  const childSessions: ViewSession[] = useMemo(
+    () =>
+      sessions
+        .filter(s => childClassIds.has(s.classId))
+        .map(s => {
+          const cls = classMap.get(s.classId);
+          return {
+            ...s,
+            date: s.startAt.slice(0, 10),
+            time: `${hhmm(s.startAt)}-${hhmm(s.endAt)}`,
+            className: cls?.name ?? "Lớp học",
+            tutorName: cls?.tutorName ?? "—",
+            subject: cls?.subject ?? "",
+          };
+        })
+        .sort((a, b) => a.startAt.localeCompare(b.startAt)),
+    [sessions, childClassIds, classMap]
+  );
+
+  const upcomingSessions = childSessions.filter(s => s.status === "scheduled" || s.status === "in_progress");
+  const completedSessions = childSessions.filter(s => s.status === "completed");
+  const missedSessions = childSessions.filter(s => s.status === "missed");
+  const pendingSessions = childSessions.filter(s => s.status === "pending_confirm" || s.status === "scheduled");
+  const homeworkSessions = childSessions.filter(s => s.homework && s.homework.trim().length > 0);
+
+  // Tutor-reported absences awaiting this parent's confirmation.
+  const pendingAbsences = childSessions.filter(
+    s =>
+      s.absenceRequestedBy === "tutor" &&
+      (s.absenceApproved === null || s.absenceApproved === undefined)
+  );
+
+  // ---- Header stats (aggregated across all linked children) ----
+  const allChildClassIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of children) {
+      for (const cls of classesByChild.get(c.id) ?? []) ids.add(cls.id);
+    }
+    return ids;
+  }, [children, classesByChild]);
+
+  const allChildSessions = useMemo(
+    () => sessions.filter(s => allChildClassIds.has(s.classId)),
+    [sessions, allChildClassIds]
+  );
+  const totalCompleted = allChildSessions.filter(s => s.status === "completed").length;
+  const totalMissed = allChildSessions.filter(s => s.status === "missed").length;
+  const totalPending = allChildSessions.filter(s => s.status === "pending_confirm").length;
+  const avgAttendance =
+    totalCompleted + totalMissed > 0
+      ? Math.round((totalCompleted / (totalCompleted + totalMissed)) * 100)
+      : null;
+
+  const handleConfirmAttendance = (sessionId: string) => {
+    confirmSession.mutate(sessionId, {
+      onSuccess: () => toast.success("Đã xác nhận buổi học."),
+      onError: e => toast.error(e instanceof Error ? e.message : "Xác nhận thất bại"),
+    });
+  };
+
+  const handleApproveAbsence = (sessionId: string) => {
+    approveAbsence.mutate(sessionId, {
+      onSuccess: () => toast.success("Đã xác nhận báo vắng"),
+      onError: () => toast.error("Thao tác thất bại"),
+    });
+  };
+
+  const handleRejectAbsence = (sessionId: string) => {
+    rejectAbsence.mutate(sessionId, {
+      onSuccess: () => toast.success("Đã từ chối cho vắng"),
+      onError: () => toast.error("Thao tác thất bại"),
+    });
+  };
+
+  // Session targeted by the ?absence=<sessionId> deep link (from the absence
+  // notification). Searches across ALL children's sessions (not just the selected
+  // child) so the popup opens regardless of the current selection. Only surfaces
+  // while it's still a pending tutor request.
+  const absenceSession = useMemo(() => {
+    if (!absenceId) return undefined;
+    const s = sessions.find(
+      x =>
+        x.id === absenceId &&
+        x.absenceRequestedBy === "tutor" &&
+        (x.absenceApproved === null || x.absenceApproved === undefined)
+    );
+    if (!s) return undefined;
+    const cls = classMap.get(s.classId);
+    return {
+      ...s,
+      time: `${hhmm(s.startAt)}-${hhmm(s.endAt)}`,
+      className: cls?.name ?? "Lớp học",
+      tutorName: cls?.tutorName ?? "—",
+      subject: cls?.subject ?? "",
+    };
+  }, [absenceId, sessions, classMap]);
+
+  const closeAbsenceDialog = () => {
+    const next = new URLSearchParams(params);
+    next.delete("absence");
+    setParams(next);
+  };
+
+  const handleApproveAbsenceFromDialog = (sessionId: string) => {
+    approveAbsence.mutate(sessionId, {
+      onSuccess: () => {
+        toast.success("Đã xác nhận báo vắng");
+        closeAbsenceDialog();
+      },
+      onError: () => toast.error("Thao tác thất bại"),
+    });
+  };
+
+  const handleRejectAbsenceFromDialog = (sessionId: string) => {
+    rejectAbsence.mutate(sessionId, {
+      onSuccess: () => {
+        toast.success("Đã từ chối cho vắng");
+        closeAbsenceDialog();
+      },
+      onError: () => toast.error("Thao tác thất bại"),
+    });
+  };
+
+  const absenceMutating = approveAbsence.isPending || rejectAbsence.isPending;
 
   const tabs = [
     { key: "overview", label: "Tổng quan", icon: Users },
@@ -51,33 +367,47 @@ const ParentChildren = () => {
     { key: "attendance", label: "Điểm danh", icon: CheckCircle2 },
   ] as const;
 
+  const noData = (text = "Chưa có dữ liệu") => (
+    <p className="py-8 text-center text-sm text-muted-foreground">{text}</p>
+  );
+
+  const perChildLoading = classesLoading || sessionsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Đang tải danh sách con em...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="px-6 py-20 text-center text-muted-foreground">
+        Không tải được danh sách con em. Vui lòng thử lại.
+      </div>
+    );
+  }
+
+  if (children.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-4 px-6 py-20 text-center text-muted-foreground">
+        <p>Chưa có con em nào được liên kết.</p>
+        {linkChildUI}
+      </div>
+    );
+  }
+
   return (
     <div className="px-6 pt-2 pb-6 space-y-4">
-      {/* HERO */}
-      {/* <div className="relative overflow-hidden rounded-3xl border border-blue-200/40 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 p-6 text-white">
-        <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-cyan-300/10 blur-2xl" />
-
-        <div className="relative flex flex-col lg:flex-row justify-between gap-5">
-          <div>
-            <h2 className="text-2xl font-bold">Con em & tiến độ học tập</h2>
-            <p className="mt-1 text-sm text-white/80">
-              Theo dõi lịch học, bài kiểm tra và xác nhận điểm danh của con bạn
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 lg:w-[360px]">
-            <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
-              <p className="text-xs text-white/80">Tổng lớp học</p>
-              <p className="text-xl font-bold">{totalClasses}</p>
-            </div>
-            <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
-              <p className="text-xs text-white/80">Chờ xác nhận</p>
-              <p className="text-xl font-bold">{pendingAttendance.length}</p>
-            </div>
-          </div>
+      {/* HEADER */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold">Con em của tôi</h2>
+          <p className="text-xs text-muted-foreground">Theo dõi tiến độ học tập của các con</p>
         </div>
-      </div> */}
+        {linkChildUI}
+      </div>
 
       {/* STATS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -85,30 +415,30 @@ const ParentChildren = () => {
           {
             label: "Số con",
             value: children.length,
-            sub: `${totalClasses} lớp`,
+            sub: "Đã liên kết",
             color: "from-blue-500 to-indigo-500",
             icon: Users,
           },
           {
             label: "Chuyên cần TB",
-            value: `${avgAttendance}%`,
-            sub: "Toàn bộ con em",
+            value: avgAttendance === null ? "—" : `${avgAttendance}%`,
+            sub: avgAttendance === null ? "Chưa có buổi học" : `${totalCompleted}/${totalCompleted + totalMissed} buổi`,
             color: "from-amber-500 to-orange-500",
             icon: CheckCircle2,
           },
           {
-            label: "GPA TB",
-            value: avgGpa,
-            sub: "Kết quả học tập",
+            label: "Buổi hoàn thành",
+            value: totalCompleted,
+            sub: `${allChildClassIds.size} lớp đang theo`,
             color: "from-emerald-500 to-teal-500",
-            icon: Star,
+            icon: BookOpen,
           },
           {
             label: "Chờ xác nhận",
-            value: pendingAttendance.length,
+            value: totalPending,
             sub: "Điểm danh",
             color: "from-rose-500 to-pink-500",
-            icon: AlertTriangle,
+            icon: Clock,
           },
         ].map((s, i) => (
           <div
@@ -126,7 +456,6 @@ const ParentChildren = () => {
               <p className="text-xl font-bold">{s.value}</p>
               <p className="text-[10px] text-white/80">{s.sub}</p>
             </div>
-            <ArrowUpRight className="ml-auto h-4 w-4" />
           </div>
         ))}
       </div>
@@ -140,13 +469,6 @@ const ParentChildren = () => {
               Xem chi tiết tiến độ học tập theo từng học sinh
             </p>
           </div>
-
-          {pendingAttendance.length > 0 && (
-            <Badge variant="destructive" className="w-fit gap-1 text-xs rounded-full px-3 py-1">
-              <AlertTriangle className="h-3 w-3" />
-              {pendingAttendance.length} chờ xác nhận
-            </Badge>
-          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -164,29 +486,15 @@ const ParentChildren = () => {
                   : "border-border bg-muted/30 hover:bg-muted/60"
               )}
             >
-              <img src={c.avatar} alt={c.name} className="h-12 w-12 rounded-full object-cover" />
-
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{c.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {c.grade} • {c.school}
-                </p>
-
-                <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <BookOpen className="h-3 w-3" />
-                    {c.totalClasses} lớp
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    {c.attendance}%
-                  </span>
-                </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted shrink-0">
+                <GraduationCap className="h-5 w-5 text-muted-foreground" />
               </div>
 
-              <div className="text-right shrink-0">
-                <p className="text-lg font-bold">{c.gpa}</p>
-                <p className="text-[10px] text-muted-foreground">GPA</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">{c.fullName}</p>
+                <p className="text-xs text-muted-foreground">
+                  Lớp {c.grade} • {c.school}
+                </p>
               </div>
             </button>
           ))}
@@ -208,128 +516,122 @@ const ParentChildren = () => {
           >
             <t.icon className="h-3.5 w-3.5" />
             {t.label}
-            {t.key === "attendance" && pendingAttendance.length > 0 && (
-              <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
-                {pendingAttendance.length}
-              </span>
-            )}
           </button>
         ))}
       </div>
 
-      {/* OVERVIEW */}
+      {/* OVERVIEW — child's classes with progress + recent homework/ratings */}
       {tab === "overview" && child && (
         <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-4">
-            <img src={child.avatar} alt={child.name} className="h-14 w-14 rounded-full object-cover" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted shrink-0">
+              <GraduationCap className="h-6 w-6 text-muted-foreground" />
+            </div>
             <div className="flex-1">
-              <p className="text-base font-bold">{child.name}</p>
+              <p className="text-base font-bold">{child.fullName}</p>
               <p className="text-sm text-muted-foreground">
-                {child.grade} • {child.school}
+                Lớp {child.grade} • {child.school}
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-lg font-bold">GPA: {child.gpa}</p>
-              <p className="text-xs text-muted-foreground">Chuyên cần: {child.attendance}%</p>
+            <Button
+              type="button"
+              onClick={() => {
+                setFundAmount("");
+                setFundOpen(true);
+              }}
+              className="rounded-xl shrink-0"
+            >
+              <Wallet className="mr-2 h-4 w-4" />
+              Nạp tiền cho con
+            </Button>
+          </div>
+
+          {perChildLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải lớp học...
             </div>
-          </div>
-
-          <div className="space-y-3">
-            {child.classes.map(cls => (
-              <div
-                key={cls.id}
-                className="flex items-center gap-3 rounded-2xl border border-border/50 bg-muted/30 p-4 transition hover:bg-muted/50"
-              >
-                <img src={cls.tutorAvatar} alt={cls.tutorName} className="h-10 w-10 rounded-full object-cover" />
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{cls.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {cls.tutorName} • {cls.schedule}
-                  </p>
-                </div>
-
-                <div className="shrink-0 text-right">
-                  <div className="mb-1 flex items-center justify-end gap-1">
-                    <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${(cls.completedSessions / cls.totalSessions) * 100}%` }}
-                      />
+          ) : childClasses.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <BookOpen className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Chưa có lớp học nào</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {childClasses.map(c => {
+                const pct =
+                  c.totalSessions > 0
+                    ? Math.round((c.completedSessions / c.totalSessions) * 100)
+                    : 0;
+                return (
+                  <div key={c.id} className="rounded-2xl border border-border bg-muted/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate">{c.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {c.subject} • GV {c.tutorName}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {slotsLabel(c.weeklySlots) || "Chưa có lịch cố định"}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {c.status}
+                      </span>
                     </div>
-                    <span className="text-[11px] text-muted-foreground">
-                      {cls.completedSessions}/{cls.totalSessions}
-                    </span>
+                    <div className="mt-3">
+                      <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>Tiến độ</span>
+                        <span>
+                          {c.completedSessions}/{c.totalSessions} buổi ({pct}%)
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
-
-                  <Badge
-                    variant={cls.status === "active" ? "default" : "secondary"}
-                    className="text-[10px]"
-                  >
-                    {cls.status === "active" ? "Đang học" : "Hoàn thành"}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* SCHEDULE */}
+      {/* SCHEDULE — upcoming sessions for the child */}
       {tab === "schedule" && (
         <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
             <CalendarDays className="h-4 w-4 text-primary" />
-            Lịch học tuần này - {child?.name}
+            Buổi học sắp tới - {child?.fullName}
           </h3>
-
-          {schedule.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Chưa có lịch học</p>
+          {perChildLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải lịch học...
+            </div>
+          ) : upcomingSessions.length === 0 ? (
+            noData("Không có buổi học sắp tới")
           ) : (
-            <div className="space-y-3">
-              {schedule.map((s, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-center gap-4 rounded-2xl border p-4 transition-all",
-                    s.status === "completed"
-                      ? "border-border bg-muted/20"
-                      : s.status === "upcoming"
-                        ? "border-primary/30 bg-primary/5"
-                        : "border-border bg-card"
-                  )}
-                >
-                  <div className="w-14 shrink-0 text-center">
-                    <p className="text-xs text-muted-foreground">{s.dayOfWeek}</p>
-                    <p className="text-lg font-bold">{s.date.split("/")[0]}</p>
+            <div className="space-y-2">
+              {upcomingSessions.map(s => (
+                <div key={s.id} className="flex items-center gap-4 rounded-xl border border-border p-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+                    <CalendarDays className="h-5 w-5 text-primary" />
                   </div>
-
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">{s.subject}</p>
+                    <p className="text-sm font-medium truncate">{s.className}</p>
                     <p className="text-xs text-muted-foreground">
-                      {s.tutorName} • {s.time}
+                      {s.tutorName}{s.subject ? ` • ${s.subject}` : ""}
                     </p>
-                    {s.topic && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">Chủ đề: {s.topic}</p>
-                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {fmtDate(s.startAt)} • {s.time}
+                    </p>
                   </div>
-
-                  <Badge
-                    variant={
-                      s.status === "completed"
-                        ? "secondary"
-                        : s.status === "upcoming"
-                          ? "default"
-                          : "outline"
-                    }
-                    className="text-[10px]"
-                  >
-                    {s.status === "completed"
-                      ? "Đã học"
-                      : s.status === "upcoming"
-                        ? "Sắp tới"
-                        : "Đã hủy"}
-                  </Badge>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", sessionStatusColor(s.status))}>
+                    {sessionStatusLabel(s.status)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -337,64 +639,37 @@ const ParentChildren = () => {
         </div>
       )}
 
-      {/* TESTS */}
+      {/* TESTS — exam submissions for the child */}
       {tab === "tests" && (
         <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
             <ClipboardList className="h-4 w-4 text-primary" />
-            Bài kiểm tra - {child?.name}
+            Bài kiểm tra - {child?.fullName}
           </h3>
-
-          {tests.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Chưa có bài kiểm tra</p>
+          {examsLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải kết quả...
+            </div>
+          ) : childExams.length === 0 ? (
+            noData("Chưa có bài kiểm tra")
           ) : (
-            <div className="space-y-3">
-              {tests.map((t, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-4 rounded-2xl border border-border bg-muted/20 p-4 transition-colors hover:bg-muted/40"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted shrink-0">
-                    <FileText className="h-4 w-4 text-foreground" />
+            <div className="space-y-2">
+              {childExams.map(sub => (
+                <div key={sub.id} className="flex items-center gap-4 rounded-xl border border-border p-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 shrink-0">
+                    <ClipboardList className="h-5 w-5 text-emerald-600" />
                   </div>
-
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">{t.name}</p>
+                    <p className="text-sm font-medium truncate">{sub.examTitle}</p>
                     <p className="text-xs text-muted-foreground">
-                      {t.subject} • {t.date} • {t.tutorName}
+                      Đúng {sub.correctCount}/{sub.totalQuestions} câu • {fmtDate(sub.submissionDate)}
                     </p>
                   </div>
-
-                  <div className="shrink-0 text-right">
-                    {t.score !== null ? (
-                      <>
-                        <p
-                          className={cn(
-                            "text-lg font-bold",
-                            t.score >= 8
-                              ? "text-foreground"
-                              : t.score >= 5
-                                ? "text-muted-foreground"
-                                : "text-destructive"
-                          )}
-                        >
-                          {t.score}/10
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {t.score >= 8
-                            ? "Giỏi"
-                            : t.score >= 6.5
-                              ? "Khá"
-                              : t.score >= 5
-                                ? "Trung bình"
-                                : "Yếu"}
-                        </p>
-                      </>
-                    ) : (
-                      <Badge variant="outline" className="text-[10px]">
-                        Chưa chấm
-                      </Badge>
-                    )}
+                  <div className="text-right shrink-0">
+                    <p className="text-lg font-bold">
+                      {sub.score}
+                      <span className="text-xs font-normal text-muted-foreground">/{sub.scoreScale}</span>
+                    </p>
                   </div>
                 </div>
               ))}
@@ -403,112 +678,340 @@ const ParentChildren = () => {
         </div>
       )}
 
-      {/* ATTENDANCE */}
+      {/* ATTENDANCE — pending confirmations + completed/missed history + homework */}
       {tab === "attendance" && (
         <div className="space-y-4">
-          {/* Pending */}
-          <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-            <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
-              <Clock className="h-4 w-4 text-primary" />
-              Chờ xác nhận - {child?.name}
-            </h3>
-
-            {pendingAttendance.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Không có điểm danh nào chờ xác nhận.
+          {/* TUTOR-REPORTED ABSENCES awaiting the parent's confirmation */}
+          {!perChildLoading && pendingAbsences.length > 0 && (
+            <div className="rounded-3xl border border-amber-500/40 bg-amber-500/5 p-6 shadow-sm">
+              <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-amber-700">
+                <AlertTriangle className="h-4 w-4" />
+                Gia sư báo vắng - cần xác nhận
+              </h3>
+              <p className="mb-4 text-xs text-muted-foreground">
+                Gia sư đã báo con bạn vắng các buổi sau. Vui lòng xác nhận để cập nhật điểm danh.
               </p>
-            ) : (
-              <div className="space-y-3">
-                {pendingAttendance.map(a => (
+              <div className="space-y-2">
+                {pendingAbsences.map(s => (
                   <div
-                    key={a.id}
-                    className="flex items-center gap-4 rounded-2xl border border-primary/30 bg-primary/5 p-4"
+                    key={s.id}
+                    className="flex items-start gap-4 rounded-xl border border-amber-500/30 bg-card p-4"
                   >
-                    <img src={a.tutorAvatar} alt={a.tutorName} className="h-10 w-10 rounded-full object-cover" />
-
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10">
+                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold">
-                        {a.subject} - Buổi {a.sessionNumber}
+                      <p className="truncate text-sm font-medium">
+                        {s.className}{s.subject ? ` • ${s.subject}` : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {a.tutorName} • {a.date} • {a.time}
+                        {s.tutorName} • {fmtDate(s.startAt)} • {s.time}
                       </p>
-                      {a.note && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">Ghi chú GV: {a.note}</p>
+                      {s.absenceReason && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Lý do: {s.absenceReason}
+                        </p>
                       )}
                     </div>
-
-                    <div className="flex shrink-0 gap-2">
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
                       <Button
                         size="sm"
-                        className="gap-1 rounded-xl text-xs"
-                        onClick={() => handleConfirmAttendance(a.id, true)}
+                        className="rounded-xl bg-amber-600 text-white hover:bg-amber-700"
+                        disabled={absenceMutating}
+                        onClick={() => handleApproveAbsence(s.id)}
                       >
-                        <Check className="h-3 w-3" />
-                        Xác nhận
+                        {approveAbsence.isPending && approveAbsence.variables === s.id && (
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                        )}
+                        Xác nhận báo vắng
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="gap-1 rounded-xl text-xs"
-                        onClick={() => handleConfirmAttendance(a.id, false)}
+                        className="rounded-xl"
+                        disabled={absenceMutating}
+                        onClick={() => handleRejectAbsence(s.id)}
                       >
-                        <X className="h-3 w-3" />
+                        {rejectAbsence.isPending && rejectAbsence.variables === s.id && (
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                        )}
                         Từ chối
                       </Button>
                     </div>
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+            <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+              <Clock className="h-4 w-4 text-primary" />
+              Chờ xác nhận - {child?.fullName}
+            </h3>
+            {perChildLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải...
+              </div>
+            ) : pendingSessions.length === 0 ? (
+              noData("Không có buổi nào cần xác nhận")
+            ) : (
+              <div className="space-y-2">
+                {pendingSessions.map(s => (
+                  <div key={s.id} className="flex items-center gap-4 rounded-xl border border-border p-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{s.className}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {s.tutorName} • {fmtDate(s.startAt)} • {s.time}
+                      </p>
+                    </div>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", sessionStatusColor(s.status))}>
+                      {sessionStatusLabel(s.status)}
+                    </span>
+                    <Button
+                      size="sm"
+                      className="rounded-xl"
+                      disabled={confirmSession.isPending}
+                      onClick={() => handleConfirmAttendance(s.id)}
+                    >
+                      {confirmSession.isPending && confirmSession.variables === s.id && (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      )}
+                      Xác nhận
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* History */}
+          {/* Attendance summary + history */}
           <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-            <h3 className="mb-4 text-sm font-semibold">Lịch sử điểm danh</h3>
-
-            <div className="space-y-2">
-              {(child?.attendanceConfirmations || [])
-                .filter(a => a.status !== "pending")
-                .map(a => (
-                  <div
-                    key={a.id}
-                    className="flex items-center gap-3 rounded-2xl p-3 transition-colors hover:bg-muted/30"
-                  >
-                    <div
-                      className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-lg",
-                        a.status === "confirmed" ? "bg-muted" : "bg-destructive/10"
-                      )}
-                    >
-                      {a.status === "confirmed" ? (
-                        <CheckCircle2 className="h-4 w-4 text-foreground" />
-                      ) : (
-                        <X className="h-4 w-4 text-destructive" />
-                      )}
+            <h3 className="mb-4 text-sm font-semibold">Lịch sử điểm danh - {child?.fullName}</h3>
+            {perChildLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải...
+              </div>
+            ) : completedSessions.length + missedSessions.length === 0 ? (
+              noData("Chưa có buổi học nào diễn ra")
+            ) : (
+              <>
+                <div className="mb-4 grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2 rounded-xl bg-muted/40 p-3">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">Đã hoàn thành</p>
+                      <p className="text-base font-bold">{completedSessions.length} buổi</p>
                     </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-foreground">
-                        {a.subject} - Buổi {a.sessionNumber}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {a.tutorName} • {a.date}
-                      </p>
-                    </div>
-
-                    <Badge
-                      variant={a.status === "confirmed" ? "secondary" : "destructive"}
-                      className="text-[10px]"
-                    >
-                      {a.status === "confirmed" ? "Đã xác nhận" : "Đã từ chối"}
-                    </Badge>
                   </div>
-                ))}
-            </div>
+                  <div className="flex items-center gap-2 rounded-xl bg-muted/40 p-3">
+                    <XIcon className="h-5 w-5 text-destructive" />
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">Vắng mặt</p>
+                      <p className="text-base font-bold">{missedSessions.length} buổi</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {[...completedSessions, ...missedSessions]
+                    .sort((a, b) => b.startAt.localeCompare(a.startAt))
+                    .slice(0, 15)
+                    .map(s => (
+                      <div key={s.id} className="flex items-center gap-4 rounded-xl border border-border p-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">
+                            {s.className}{s.content ? ` - ${s.content}` : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {s.tutorName} • {fmtDate(s.startAt)} • {s.time}
+                          </p>
+                        </div>
+                        {s.rating ? (
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {[...Array(s.rating)].map((_, i) => (
+                              <Star key={i} className="h-3.5 w-3.5 fill-current text-amber-500" />
+                            ))}
+                          </div>
+                        ) : null}
+                        <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", sessionStatusColor(s.status))}>
+                          {sessionStatusLabel(s.status)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Homework assigned across the child's sessions */}
+          <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+            <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+              <BookOpen className="h-4 w-4 text-primary" />
+              Bài tập về nhà - {child?.fullName}
+            </h3>
+            {perChildLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải...
+              </div>
+            ) : homeworkSessions.length === 0 ? (
+              noData("Chưa có bài tập về nhà")
+            ) : (
+              <div className="space-y-2">
+                {homeworkSessions
+                  .sort((a, b) => b.startAt.localeCompare(a.startAt))
+                  .slice(0, 15)
+                  .map(s => (
+                    <div key={s.id} className="rounded-xl border border-border p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium truncate">{s.className}</p>
+                        <p className="text-xs text-muted-foreground shrink-0">{fmtDate(s.startAt)}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground whitespace-pre-line">{s.homework}</p>
+                      {s.homeworkFiles && s.homeworkFiles.length > 0 && (
+                        <p className="mt-1 text-[11px] text-primary">
+                          {s.homeworkFiles.length} tệp đính kèm
+                        </p>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* REMAINING GAP — rich analytics (skills radar, GPA trend chart) not yet available from BE */}
+      {tab === "overview" && child && (
+        <div className="rounded-3xl border border-dashed border-border bg-card/50 p-6 text-center">
+          <p className="text-xs text-muted-foreground">
+            Phân tích kỹ năng & biểu đồ điểm GPA theo thời gian: Chưa có dữ liệu
+          </p>
+        </div>
+      )}
+
+      {/* ABSENCE REQUEST — auto-opens from the ?absence=<sessionId> notification deep link */}
+      <Dialog
+        open={!!absenceSession}
+        onOpenChange={open => {
+          if (!open) closeAbsenceDialog();
+        }}
+      >
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yêu cầu báo vắng từ gia sư</DialogTitle>
+            <DialogDescription>
+              Gia sư đã báo con bạn vắng buổi học dưới đây. Vui lòng quyết định cho phép hoặc từ chối.
+            </DialogDescription>
+          </DialogHeader>
+
+          {absenceSession && (
+            <div className="space-y-3 py-2">
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                <p className="text-sm font-semibold">
+                  {absenceSession.className}
+                  {absenceSession.subject ? ` • ${absenceSession.subject}` : ""}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {absenceSession.tutorName} • {fmtDate(absenceSession.startAt)} • {absenceSession.time}
+                </p>
+                <div className="mt-3 rounded-lg bg-card p-3">
+                  <p className="text-[11px] font-medium text-muted-foreground">Lý do gia sư báo vắng</p>
+                  <p className="mt-0.5 text-sm text-amber-700">
+                    {absenceSession.absenceReason?.trim() || "Gia sư không cung cấp lý do."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            {absenceSession && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl"
+                  disabled={absenceMutating}
+                  onClick={() => handleRejectAbsenceFromDialog(absenceSession.id)}
+                >
+                  {rejectAbsence.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Từ chối
+                </Button>
+                <Button
+                  type="button"
+                  className="rounded-xl bg-amber-600 text-white hover:bg-amber-700"
+                  disabled={absenceMutating}
+                  onClick={() => handleApproveAbsenceFromDialog(absenceSession.id)}
+                >
+                  {approveAbsence.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Cho phép vắng
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* FUND CHILD WALLET — top up the selected child's wallet from the parent's wallet */}
+      <Dialog open={fundOpen} onOpenChange={setFundOpen}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Nạp tiền cho con{child ? ` - ${child.fullName}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Nạp tiền từ ví của bạn vào ví của con để đóng học phí/đặt lớp.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <Input
+              type="number"
+              min={0}
+              inputMode="numeric"
+              placeholder="Số tiền (VND)"
+              value={fundAmount}
+              onChange={e => setFundAmount(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && child) handleFundChild(child.id);
+              }}
+              className="rounded-xl"
+            />
+            <div className="flex flex-wrap gap-2">
+              {FUND_QUICK_AMOUNTS.map(amt => (
+                <button
+                  key={amt}
+                  type="button"
+                  onClick={() => setFundAmount(String(amt))}
+                  className="rounded-xl border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+                >
+                  {amt.toLocaleString("vi-VN")}đ
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={() => child && handleFundChild(child.id)}
+              disabled={
+                fundChild.isPending ||
+                !child ||
+                !(Number(fundAmount) > 0)
+              }
+              className="rounded-xl"
+            >
+              {fundChild.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Nạp tiền
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

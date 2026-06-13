@@ -1,0 +1,54 @@
+{
+  "title": "Admin portal — backend endpoints/fields the frontend still needs",
+  "generatedFor": "UNI-EDU backend team",
+  "context": "The Admin portal pages were migrated from mock (AdminContext, deleted) to real API calls. Reused endpoints: GET /Admin/dashboard, /Admin/reports, /Admin/users (+/{id} GET/PUT/DELETE, approve/reject/suspend), /Admin/audit-logs, GET/PUT /Admin/settings, /Finance/transactions, /Classes (+/{id}), /Exams (+create/update/delete), /Notifications, /Users/me.",
+  "gaps": [
+    {
+      "id": "A-GAP-1",
+      "priority": "medium",
+      "title": "Admin dashboard/report expose only scalar totals — no time-series",
+      "affectedPages": ["AdminDashboard", "AdminReports"],
+      "currentState": "AdminDashboard returns scalar counts; /Admin/reports adds only { totalUsers, totalClasses, totalExams, totalRevenue, monthlyRevenue[] }. Charts that need a user-growth series, revenue-by-category split, or retention have no source and render empty. The 'exams this month' sparkline keeps static decorative bars (only scalar totalExams is real).",
+      "proposedChanges": ["Add user-growth series, revenue-by-category, and (optionally) profit-by-month to /Admin/reports."]
+    },
+    {
+      "id": "A-GAP-2",
+      "priority": "medium",
+      "title": "User row lacks subject/rating; approval lacks documents/verification",
+      "affectedPages": ["AdminUsers", "AdminApprovals"],
+      "currentState": "AdminUserResponse = { id, name, email, phone, role, status, avatar?, school?, bio?, createdAt }. The users table's 'subject' and 'rating' columns and the approvals page's uploaded-documents/verification-checklist have no backend fields — those columns/blocks were repurposed (school) or removed. Reject reason is write-only (not returned on rejected rows).",
+      "proposedChanges": [
+        "Add subject + rating to AdminUserResponse for tutor rows (or a dedicated tutor lookup).",
+        "Expose registration documents + verification detail, and return the stored reject reason."
+      ]
+    },
+    {
+      "id": "A-GAP-3",
+      "priority": "medium",
+      "title": "Finance transactions list (used on AdminTransactions) has no total/summary",
+      "affectedPages": ["AdminTransactions"],
+      "currentState": "Same as finance F-GAP-1/2 — /Finance/transactions returns no total/totalPages (prev/next paging) and no summary endpoint (aggregate cards reflect the current page only). AdminTransactionResponse has no user avatar.",
+      "proposedChanges": ["Return PagedResult total/totalPages; add a transactions-summary endpoint; (optional) add avatar to AdminTransactionResponse."]
+    },
+    {
+      "id": "A-GAP-4",
+      "priority": "low",
+      "title": "Audit log is minimal and unfilterable; no global stats",
+      "affectedPages": ["AdminAudit"],
+      "currentState": "AuditLogResponse = { id, actor, action, target, timestamp }. GET /Admin/audit-logs takes only `page` — no search/action filter (filtering is client-side over the current page), and the summary counts are per-page, not global.",
+      "proposedChanges": ["Accept search/action/date filters on /Admin/audit-logs; add a global audit-stats endpoint."]
+    },
+    {
+      "id": "A-GAP-5",
+      "priority": "low",
+      "title": "System settings missing a few UI fields; classes have no DELETE / structured slot picker",
+      "affectedPages": ["AdminSettings", "AdminClasses", "AdminTests"],
+      "currentState": "SystemSettings lacks examFee, supportEmail, minPasswordLength (kept read-only in the UI). /Classes has no DELETE (delete button is a no-op toast) and create needs structured weeklySlots (a default slot is sent). Exam DTO (ExamListItemResponse) has no test `code`/`level`/per-question type, and only questionCount (full questions need /Exams/{id}).",
+      "proposedChanges": [
+        "Add examFee, supportEmail, minPasswordLength to SystemSettings.",
+        "Add DELETE /Classes/{id}; provide a structured weekly-slot picker contract.",
+        "Add code/level to the exam DTO if those are real fields."
+      ]
+    }
+  ]
+}
