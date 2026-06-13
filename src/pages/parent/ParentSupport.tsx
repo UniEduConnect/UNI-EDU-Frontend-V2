@@ -87,7 +87,7 @@ const ParentSupport = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { icon: Phone, label: "Hotline", value: "1900 1234", sub: "T2-T7: 8:00 - 21:00" },
-            { icon: Mail, label: "Email", value: "support@educonnect.vn", sub: "Phản hồi trong 24h" },
+            { icon: Mail, label: "Email", value: "support@unieducation.net", sub: "Phản hồi trong 24h" },
             { icon: MessageSquare, label: "Chat trực tuyến", value: "Trợ lý AI", sub: "Phản hồi ngay lập tức" },
           ].map((c, i) => (
             <div key={i} className="bg-card border border-border rounded-2xl p-6 text-center">

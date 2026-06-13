@@ -78,7 +78,7 @@ const OnlineMeeting = () => {
       {/* Top bar */}
       <div className="h-14 flex items-center justify-between px-6 bg-[#202124]">
         <div className="flex items-center gap-3">
-          <span className="text-white/80 text-sm font-medium">EduConnect Meeting</span>
+          <span className="text-white/80 text-sm font-medium">Uni Education Meeting</span>
           <span className="text-white/40 text-xs">|</span>
           <span className="text-white/60 text-xs">{className}</span>
         </div>

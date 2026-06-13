@@ -47,7 +47,7 @@ const Login = () => {
         <div className="container mx-auto px-4 max-w-md">
           <div className="text-center mb-8">
             <h1 className="text-section font-extrabold text-foreground mb-2">Đăng nhập</h1>
-            <p className="text-muted-foreground text-body">Chào mừng trở lại EduConnect</p>
+            <p className="text-muted-foreground text-body">Chào mừng trở lại Uni Education</p>
           </div>
 
           <div className="bg-card rounded-3xl p-8 shadow-elevated border border-border">

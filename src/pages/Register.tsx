@@ -61,7 +61,7 @@ const Register = () => {
               <UserPlus className="w-7 h-7 text-primary" />
             </div>
             <h1 className="text-section font-extrabold text-foreground mb-2">Đăng ký tài khoản</h1>
-            <p className="text-muted-foreground text-body">Tham gia EduConnect ngay hôm nay</p>
+            <p className="text-muted-foreground text-body">Tham gia Uni Education ngay hôm nay</p>
           </div>
 
           <div className="bg-card rounded-3xl p-8 shadow-elevated border border-border">

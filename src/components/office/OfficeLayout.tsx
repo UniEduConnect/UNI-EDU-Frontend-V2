@@ -21,7 +21,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import EduLogo from "@/components/EduLogo";
+import UniMark from "@/components/UniMark";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { useState, useRef, useEffect } from "react";
 import {
@@ -102,11 +102,11 @@ const OfficeLayout = () => {
           )}
         >
           <div className="flex items-center gap-3">
-            {!collapsed && <EduLogo size={36} />}
+            {!collapsed && <UniMark size={36} />}
             {!collapsed && (
               <div className="min-w-0">
                 <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">
-                  EduConnect
+                  Uni Education
                 </h1>
                 <p className="text-xs text-slate-400 leading-tight">Văn phòng</p>
               </div>

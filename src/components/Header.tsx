@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import EduLogo from "@/components/EduLogo";
+import UniLogo from "@/components/UniLogo";
 import { useAuth } from "@/contexts/AuthContext";
 import { ROLE_ROUTE } from "@/lib/roleRoutes";
 import {
@@ -60,11 +60,8 @@ const Header = () => {
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-background/80 backdrop-blur-xl border-b border-border/50 shadow-soft" : "bg-background/50 backdrop-blur-md"}`}>
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
-        <Link to="/" className="flex items-center gap-2.5">
-          <EduLogo size={36} />
-          <span className="font-bold text-xl text-foreground">
-            Edu<span className="text-gradient">Connect</span>
-          </span>
+        <Link to="/" className="flex items-center" aria-label="Uni Education">
+          <UniLogo className="h-9 w-auto" />
         </Link>
 
         <nav className="hidden lg:flex items-center gap-1">
