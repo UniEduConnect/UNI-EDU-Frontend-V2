@@ -353,6 +353,7 @@ const AcceptDialog = ({ request, onClose }: AcceptDialogProps) => {
       onOpenChange={(o) => !o && onClose()}
       subjectId={request?.subjectId ?? ""}
       subjectName={request?.subject}
+      grade={request?.grade}
       onPassed={handlePassed}
       accepting={acceptRequest.isPending}
     />

@@ -42,10 +42,10 @@ export function useCommonSlots(tutorId: string | undefined) {
 }
 
 /** GET /Students/me/ai-slots/{tutorId} — AI-ranked study-slot suggestions. */
-export function useAiSlots(tutorId: string | undefined) {
+export function useAiSlots(tutorId: string | undefined, sessionsPerWeek?: number) {
   const result = useQuery({
-    queryKey: ["ai-slots", tutorId],
-    queryFn: () => studentsService.getAiSlots(tutorId as string),
+    queryKey: ["ai-slots", tutorId, sessionsPerWeek],
+    queryFn: () => studentsService.getAiSlots(tutorId as string, sessionsPerWeek),
     enabled: !!tutorId,
   });
   return { ...result, slots: result.data ?? [] };
