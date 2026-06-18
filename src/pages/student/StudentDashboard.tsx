@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   BarChart3,
   Wallet,
+  Flame,
   Sparkles,
   GraduationCap,
   Loader2,
@@ -22,7 +23,7 @@ import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { useStudentDashboard } from "@/hooks/useDashboard";
-import { useWallet } from "@/hooks/useWallet";
+import { useStreak } from "@/hooks/useStreak";
 import { useClasses } from "@/hooks/useClasses";
 import { useMySchedule } from "@/hooks/useSchedule";
 import { useMySubmissions } from "@/hooks/useExams";
@@ -48,7 +49,7 @@ const StudentDashboard = () => {
   const navigate = useNavigate();
 
   const { data: dashboard, isLoading: dashboardLoading } = useStudentDashboard();
-  const { data: wallet } = useWallet();
+  const { data: streak } = useStreak();
   const { classes, isLoading: classesLoading } = useClasses({ Status: "active" });
   const { sessions, isLoading: sessionsLoading } = useMySchedule();
   const { submissions, isLoading: submissionsLoading } = useMySubmissions();
@@ -60,8 +61,9 @@ const StudentDashboard = () => {
   const upcomingSessionsCount = dashboard?.upcomingSessions ?? 0;
   const avgScore = dashboard?.avgScore ?? 0;
   const examsTaken = dashboard?.examsTaken ?? 0;
-  const walletBalance = wallet?.balance ?? 0;
-  const escrowBalance = wallet?.escrowBalance ?? 0;
+  const currentStreak = streak?.currentStreak ?? 0;
+  const longestStreak = streak?.longestStreak ?? 0;
+  const checkedInToday = streak?.checkedInToday ?? false;
 
   // Join class/tutor names onto sessions via a classId -> ClassItem map.
   const classMap = new Map(classes.map((c) => [c.id, c]));
@@ -222,9 +224,13 @@ const StudentDashboard = () => {
               <p className="text-[11px] text-white/70">{examsTaken} bài thi</p>
             </div>
             <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
-              <p className="text-xs text-white/75">Ví học phí</p>
-              <p className="mt-1 text-lg font-bold">{walletBalance.toLocaleString("vi-VN")}đ</p>
-              <p className="text-[11px] text-white/70">Sẵn sàng thanh toán</p>
+              <p className="text-xs text-white/75">Chuỗi học tập</p>
+              <p className="mt-1 flex items-baseline gap-1.5 text-2xl font-bold">
+                <Flame className="h-5 w-5 self-center text-orange-300" />
+                {currentStreak}
+                <span className="text-sm font-medium text-white/80">ngày</span>
+              </p>
+              <p className="text-[11px] text-white/70">Dài nhất {longestStreak} ngày</p>
             </div>
           </div>
         </div>
@@ -338,22 +344,26 @@ const StudentDashboard = () => {
 
         {/* Right column */}
         <div className="space-y-4">
-          <button
-            onClick={() => navigate("/student/wallet")}
-            className="group w-full rounded-3xl border border-emerald-200/40 bg-gradient-to-r from-emerald-500 to-teal-500 p-5 text-left text-white transition-all hover:shadow-lg"
-          >
+          <div className="rounded-3xl border border-orange-200/40 bg-gradient-to-br from-orange-500 to-rose-500 p-5 text-white shadow-sm">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
-                <Wallet className="h-4 w-4 text-white/90" />
-                Ví học phí
+                <Flame className="h-4 w-4 text-white/90" />
+                Chuỗi học tập
               </h3>
-              <ChevronRight className="h-4 w-4 text-white/80 group-hover:text-white" />
+              {checkedInToday && (
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-medium">
+                  Hôm nay ✓
+                </span>
+              )}
             </div>
-            <p className="text-2xl font-bold">{walletBalance.toLocaleString("vi-VN")}đ</p>
-            <p className="mt-1 text-[10px] text-white/80">
-              Tạm giữ: {escrowBalance.toLocaleString("vi-VN")}đ • Nhấn để xem chi tiết
+            <p className="text-3xl font-bold">
+              {currentStreak} <span className="text-base font-medium text-white/80">ngày</span>
             </p>
-          </button>
+            <p className="mt-1 text-[10px] text-white/80">
+              Chuỗi dài nhất: {longestStreak} ngày •{" "}
+              {checkedInToday ? "Đã điểm danh hôm nay" : "Học hôm nay để giữ chuỗi"}
+            </p>
+          </div>
 
           <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">

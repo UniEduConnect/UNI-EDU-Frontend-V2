@@ -1015,6 +1015,8 @@ export interface CreateNotificationRequest {
 
 export interface TutorDashboard { activeClasses: number; upcomingSessions: number; monthlyEarnings: number; walletBalance: number; rating: number; totalReviews: number; pendingTrials: number; }
 export interface StudentDashboard { activeClasses: number; upcomingSessions: number; walletBalance: number; avgScore: number; examsTaken: number; }
+/** Daily learning streak. `currentStreak` reads 0 once the streak lapses; `longestStreak` is kept as an achievement. */
+export interface StreakResponse { currentStreak: number; longestStreak: number; lastActivityDate: string | null; checkedInToday: boolean; }
 export interface ParentDashboard { childrenCount: number; activeClasses: number; walletBalance: number; pendingConfirmations: number; }
 export interface AdminDashboard { totalUsers: number; tutors: number; teachers: number; students: number; parents: number; pendingApprovals: number; totalClasses: number; activeClasses: number; totalExams: number; totalRevenue: number; pendingWithdrawals: number; openIncidents: number; }
 export interface MonthlyCount { month: string; count: number; }
