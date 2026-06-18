@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import UniMark from "@/components/UniMark";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
+import PortalSwitcher from "@/components/PortalSwitcher";
 import { useState, useRef, useEffect } from "react";
 import {
   useNotifications,
@@ -194,6 +195,8 @@ const FinanceLayout = () => {
             </div>
 
             <div className="flex items-center gap-4">
+              <PortalSwitcher />
+
               <div className="relative" ref={notifRef}>
                 <button
                   className="relative p-2.5 rounded-lg hover:bg-slate-100 transition-colors group"

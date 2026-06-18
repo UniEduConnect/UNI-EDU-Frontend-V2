@@ -30,6 +30,7 @@ import {
 import { useMe } from "@/hooks/useUsers";
 import UniMark from "@/components/UniMark";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
+import PortalSwitcher from "@/components/PortalSwitcher";
 import { useState, useRef, useEffect } from "react";
 
 const navItems = [
@@ -109,9 +110,7 @@ const AdminLayout = () => {
                 <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">
                   Uni Education
                 </h1>
-                <p className="text-xs text-slate-400 leading-tight">
-                  Admin Panel
-                </p>
+                <p className="text-xs text-slate-400 leading-tight">Quản trị</p>
               </div>
             )}
           </div>
@@ -210,6 +209,8 @@ const AdminLayout = () => {
               </h1>
             </div>
             <div className="flex items-center gap-4">
+              <PortalSwitcher />
+
               <div className="relative" ref={notifRef}>
                 <button
                   className="relative p-2.5 rounded-lg hover:bg-slate-100 transition-colors group"
@@ -315,7 +316,7 @@ const AdminLayout = () => {
               <UserAvatarDropdown
                 avatar=""
                 name={me?.fullname ?? ""}
-                role="Quản trị viên"
+                role="Quản trị"
               />
             </div>
           </header>
