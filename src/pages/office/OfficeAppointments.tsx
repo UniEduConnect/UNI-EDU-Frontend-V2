@@ -165,7 +165,7 @@ const OfficeAppointments = () => {
     <div className="px-6 pt-2 pb-6 space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Card 1: Sắp tới */}
-        <Card className="border-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{upcoming}</p>
@@ -178,7 +178,7 @@ const OfficeAppointments = () => {
         </Card>
 
         {/* Card 2: Đang xử lý */}
-        <Card className="border-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{inProgress}</p>
@@ -191,7 +191,7 @@ const OfficeAppointments = () => {
         </Card>
 
         {/* Card 3: Hoàn tất */}
-        <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{completedCount}</p>
@@ -204,7 +204,7 @@ const OfficeAppointments = () => {
         </Card>
 
         {/* Card 4: Chưa xử lý */}
-        <Card className="border-0 bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{openCount}</p>

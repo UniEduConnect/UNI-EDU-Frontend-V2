@@ -85,7 +85,7 @@ const ExamManagerStats = () => {
           { label: "Tổng câu hỏi", value: totalQuestions.toLocaleString("vi-VN"), icon: Users },
           { label: "Điểm TB", value: avgScore.toFixed(1), icon: TrendingUp },
         ].map((s, i) => (
-          <Card key={s.label} className="border-0 text-white shadow-lg" style={{ backgroundImage: ["linear-gradient(to right, #2563eb, #3b82f6)", "linear-gradient(to right, #10b981, #14b8a6)", "linear-gradient(to right, #f59e0b, #f97316)", "linear-gradient(to right, #a855f7, #d946ef)"][i % 4] }}>
+          <Card key={s.label} className="border-0 text-white shadow-lg" style={{ backgroundImage: ["linear-gradient(to right, #1d4ed8, #1e3a8a)", "linear-gradient(to right, #1d4ed8, #1e3a8a)", "linear-gradient(to right, #1d4ed8, #1e3a8a)", "linear-gradient(to right, #1d4ed8, #1e3a8a)"][i % 4] }}>
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-xl font-bold">{s.value}</p>

@@ -136,28 +136,28 @@ const OfficeRegistrations = () => {
             value: pendingCount,
             sub: "Hồ sơ cần xử lý",
             icon: UserPlus,
-            color: "from-amber-500 to-orange-500",
+            color: "from-blue-700 to-blue-900",
           },
           {
             label: "GS/GV đăng ký",
             value: teacherTutorCount,
             sub: "Gia sư & giáo viên",
             icon: GraduationCap,
-            color: "from-blue-500 to-indigo-500",
+            color: "from-blue-700 to-blue-900",
           },
           {
             label: "HS đăng ký",
             value: studentCount,
             sub: "Học sinh mới",
             icon: BookOpen,
-            color: "from-emerald-500 to-teal-500",
+            color: "from-blue-700 to-blue-900",
           },
           {
             label: "Đã duyệt",
             value: approvedCount,
             sub: "Hồ sơ hợp lệ",
             icon: Users,
-            color: "from-rose-500 to-pink-500",
+            color: "from-blue-700 to-blue-900",
           },
         ].map((s, i) => (
           <div

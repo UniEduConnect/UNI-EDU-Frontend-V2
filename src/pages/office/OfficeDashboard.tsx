@@ -52,7 +52,7 @@ const OfficeDashboard = () => {
     <div className="px-6 pt-2 pb-6 space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Lớp đang học */}
-        <Card className="border-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{activeClasses}</p>
@@ -65,7 +65,7 @@ const OfficeDashboard = () => {
         </Card>
 
         {/* Card 2: Cảnh báo điểm danh */}
-        <Card className="border-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{pendingAttendance}</p>
@@ -78,7 +78,7 @@ const OfficeDashboard = () => {
         </Card>
 
         {/* Card 3: Tổng số lớp */}
-        <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{totalClasses}</p>
@@ -91,7 +91,7 @@ const OfficeDashboard = () => {
         </Card>
 
         {/* Card 4: Sự cố chờ xử lý */}
-        <Card className="border-0 bg-gradient-to-r from-cyan-500 to-blue-400 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{openIncidents}</p>

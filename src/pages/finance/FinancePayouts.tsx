@@ -15,7 +15,6 @@ import {
   Shield,
   Wallet,
   AlertTriangle,
-  ArrowUpRight,
   Banknote,
   Loader2,
 } from "lucide-react";
@@ -152,51 +151,50 @@ const FinancePayouts = () => {
             label: "Tổng đã rút",
             value: `${totalWithdrawnAll.toLocaleString("vi-VN")}đ`,
             sub: "Lũy kế đã giải ngân",
-            color: "from-blue-500 to-indigo-500",
+            color: "from-blue-700 to-blue-900",
             icon: Shield,
           },
           {
             label: "Chờ duyệt",
             value: pending.length,
             sub: "Yêu cầu đang chờ",
-            color: "from-amber-500 to-orange-500",
+            color: "from-blue-700 to-blue-900",
             icon: Clock,
           },
           {
             label: "Tổng chờ duyệt",
             value: `${totalPending.toLocaleString("vi-VN")}đ`,
             sub: "Số tiền cần xử lý",
-            color: "from-emerald-500 to-teal-500",
+            color: "from-blue-700 to-blue-900",
             icon: Wallet,
           },
           {
             label: "Đã giải ngân",
             value: `${totalApproved.toLocaleString("vi-VN")}đ`,
             sub: "Yêu cầu đã duyệt",
-            color: "from-violet-500 to-fuchsia-500",
+            color: "from-blue-700 to-blue-900",
             icon: CheckCircle2,
           },
           {
             label: "Từ chối",
             value: totalRejected,
             sub: "Yêu cầu không hợp lệ",
-            color: "from-rose-500 to-pink-500",
+            color: "from-blue-700 to-blue-900",
             icon: XCircle,
           },
         ].map((s, i) => (
           <div
             key={i}
-            className={`group flex items-center gap-4 rounded-2xl bg-gradient-to-r p-5 text-white transition-all hover:shadow-lg ${s.color}`}
+            className={`group rounded-2xl bg-gradient-to-r p-4 text-white transition-all hover:shadow-lg ${s.color}`}
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
-              <s.icon className="h-5 w-5" />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-white/80">{s.label}</p>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/20">
+                <s.icon className="h-[18px] w-[18px]" />
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-xs text-white/80">{s.label}</p>
-              <p className="text-xl font-bold">{s.value}</p>
-              <p className="text-[10px] text-white/80">{s.sub}</p>
-            </div>
-            <ArrowUpRight className="ml-auto h-4 w-4 shrink-0" />
+            <p className="mt-2 text-xl font-bold leading-tight break-words">{s.value}</p>
+            <p className="mt-1 text-[10px] text-white/80">{s.sub}</p>
           </div>
         ))}
       </div>

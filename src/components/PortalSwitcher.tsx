@@ -71,7 +71,9 @@ const PortalSwitcher = () => {
         onClick={() => setOpen(!open)}
       >
         <ActiveIcon className="w-4 h-4 text-blue-600" />
-        <span className="hidden sm:inline">{active?.label ?? "Khu vực quản trị"}</span>
+        <span className="hidden sm:inline">
+          {active?.label ?? "Khu vực quản trị"}
+        </span>
         <ChevronDown
           className={cn(
             "w-4 h-4 text-slate-400 transition-transform",

@@ -40,7 +40,7 @@ const FinanceDashboard = () => {
 
      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
   {/* Card 1 */}
-  <Card className="border-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg">
+  <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
     <CardContent className="p-4">
       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-3">
         <DollarSign className="w-5 h-5 text-white" />
@@ -51,7 +51,7 @@ const FinanceDashboard = () => {
   </Card>
 
   {/* Card 2 */}
-  <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
+  <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
     <CardContent className="p-4">
       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-3">
         <Lock className="w-5 h-5 text-white" />
@@ -62,7 +62,7 @@ const FinanceDashboard = () => {
   </Card>
 
   {/* Card 3 */}
-  <Card className="border-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg">
+  <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
     <CardContent className="p-4">
       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-3">
         <Clock className="w-5 h-5 text-white" />
@@ -73,7 +73,7 @@ const FinanceDashboard = () => {
   </Card>
 
   {/* Card 4 */}
-  <Card className="border-0 bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg">
+  <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
     <CardContent className="p-4">
       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-3">
         <Undo2 className="w-5 h-5 text-white" />
