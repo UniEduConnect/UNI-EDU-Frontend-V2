@@ -65,8 +65,8 @@ const AdminAudit = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
           { label: "Tổng log", value: totalLog, icon: ScrollText, bg: "from-blue-700 to-blue-900", iconBg: "bg-blue-100", iconColor: "text-blue-700" },
-          { label: "Phê duyệt", value: approved, icon: Shield, bg: "from-emerald-500 to-teal-500", iconBg: "bg-emerald-100", iconColor: "text-emerald-700" },
-          { label: "Xóa dữ liệu", value: deleted, icon: User, bg: "from-rose-500 to-pink-500", iconBg: "bg-rose-100", iconColor: "text-rose-700" },
+          { label: "Phê duyệt", value: approved, icon: Shield, bg: "from-blue-700 to-blue-900", iconBg: "bg-blue-100", iconColor: "text-blue-700" },
+          { label: "Xóa dữ liệu", value: deleted, icon: User, bg: "from-blue-700 to-blue-900", iconBg: "bg-blue-100", iconColor: "text-blue-700" },
         ].map((s, idx) => (
           <Card key={idx} className={`border-0 shadow-soft bg-gradient-to-br ${s.bg} text-white`}>
             <CardContent className="p-4 flex items-center gap-3">

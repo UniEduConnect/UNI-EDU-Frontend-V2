@@ -137,9 +137,9 @@ const AdminClasses = () => {
 
   const stats = [
     { label: "Tổng lớp", value: classes.length, icon: BookOpen, bg: "from-blue-700 to-blue-900", iconBg: "bg-blue-100", iconColor: "text-blue-700" },
-    { label: "Đang hoạt động", value: activeClasses, icon: Users, bg: "from-emerald-500 to-teal-500", iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-    { label: "Đang tìm gia sư", value: searchingClasses, icon: SearchIcon, bg: "from-amber-500 to-orange-500", iconBg: "bg-amber-100", iconColor: "text-amber-600" },
-    { label: "Buổi học tháng này", value: activeClasses * 8, icon: Calendar, bg: "from-rose-500 to-pink-500", iconBg: "bg-rose-100", iconColor: "text-rose-600" },
+    { label: "Đang hoạt động", value: activeClasses, icon: Users, bg: "from-blue-700 to-blue-900", iconBg: "bg-blue-100", iconColor: "text-blue-700" },
+    { label: "Đang tìm gia sư", value: searchingClasses, icon: SearchIcon, bg: "from-blue-700 to-blue-900", iconBg: "bg-blue-100", iconColor: "text-blue-700" },
+    { label: "Buổi học tháng này", value: activeClasses * 8, icon: Calendar, bg: "from-blue-700 to-blue-900", iconBg: "bg-blue-100", iconColor: "text-blue-700" },
   ];
 
   return (
