@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppRole, ROLE_ROUTE } from "@/lib/roleRoutes";
 
@@ -23,8 +24,18 @@ interface ProtectedRouteProps {
 const ADMIN_PORTALS: AppRole[] = ["admin", "office", "finance", "exam-manager"];
 
 const ProtectedRoute = ({ role }: ProtectedRouteProps) => {
-  const { isAuthenticated, role: userRole } = useAuth();
+  const { isAuthenticated, role: userRole, isLoading } = useAuth();
   const location = useLocation();
+
+  // Wait for the boot-time silent refresh before deciding — otherwise a returning
+  // user whose access token expired would be redirected to /login mid-refresh.
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải...
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;

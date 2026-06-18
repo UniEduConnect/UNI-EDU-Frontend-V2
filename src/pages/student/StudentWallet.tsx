@@ -1,4 +1,10 @@
-import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
+import {
+  useWallet,
+  useWalletTransactions,
+  useDeposit,
+  useTestDeposit,
+  useWithdraw,
+} from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
 import type { DepositResponse, ClassItem } from "@/types/api";
 import {
@@ -63,7 +69,11 @@ const paymentMethods = [
 // Methods for the deposit dialog: real gateways + a demo option that credits the wallet
 // directly via the test-deposit API (no Momo/VNPay sandbox required).
 const depositMethods = [
-  { id: "test", name: "Test (Demo)", desc: "Nạp thử — cộng ngay vào ví, không qua cổng" },
+  {
+    id: "test",
+    name: "Test (Demo)",
+    desc: "Nạp thử — cộng ngay vào ví, không qua cổng",
+  },
   ...paymentMethods,
 ];
 
@@ -76,7 +86,8 @@ const CHART_COLORS = [
 
 const StudentWallet = () => {
   const { data: walletData } = useWallet();
-  const { transactions: walletTransactions, isLoading: txLoading } = useWalletTransactions();
+  const { transactions: walletTransactions, isLoading: txLoading } =
+    useWalletTransactions();
   const { classes } = useClasses({ Status: "active" });
   const depositMutation = useDeposit();
   const testDepositMutation = useTestDeposit();
@@ -94,14 +105,15 @@ const StudentWallet = () => {
   const filtered = walletTransactions
     .filter((t) => typeFilter === "all" || t.type === typeFilter)
     .filter(
-      (t) => !search || t.description.toLowerCase().includes(search.toLowerCase())
+      (t) =>
+        !search || t.description.toLowerCase().includes(search.toLowerCase()),
     )
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const totalSpent = Math.abs(
     walletTransactions
       .filter((t) => t.amount < 0 && t.status === "completed")
-      .reduce((s, t) => s + t.amount, 0)
+      .reduce((s, t) => s + t.amount, 0),
   );
 
   const totalRefunded = walletTransactions
@@ -114,7 +126,7 @@ const StudentWallet = () => {
       value: Math.abs(
         walletTransactions
           .filter((t) => t.type === "tuition_payment")
-          .reduce((s, t) => s + t.amount, 0)
+          .reduce((s, t) => s + t.amount, 0),
       ),
     },
     {
@@ -122,7 +134,7 @@ const StudentWallet = () => {
       value: Math.abs(
         walletTransactions
           .filter((t) => t.type === "mock_exam_purchase")
-          .reduce((s, t) => s + t.amount, 0)
+          .reduce((s, t) => s + t.amount, 0),
       ),
     },
   ].filter((d) => d.value > 0);
@@ -155,17 +167,23 @@ const StudentWallet = () => {
     if (!amt || amt <= 0 || !selectedMethod) return;
 
     const methodName =
-      depositMethods.find((m) => m.id === selectedMethod)?.name || selectedMethod;
+      depositMethods.find((m) => m.id === selectedMethod)?.name ||
+      selectedMethod;
 
     // Demo path: create + confirm a test deposit, crediting the wallet immediately.
     if (selectedMethod === "test") {
       testDepositMutation.mutate(amt, {
         onSuccess: () => {
-          toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví (test)!`);
+          toast.success(
+            `Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví (test)!`,
+          );
           setShowDeposit(false);
           resetDialogState();
         },
-        onError: (e) => toast.error(e instanceof Error ? e.message : "Nạp tiền test thất bại."),
+        onError: (e) =>
+          toast.error(
+            e instanceof Error ? e.message : "Nạp tiền test thất bại.",
+          ),
       });
       return;
     }
@@ -179,11 +197,14 @@ const StudentWallet = () => {
             window.location.href = res.payUrl;
             return;
           }
-          toast.success(`Đã tạo yêu cầu nạp ${amt.toLocaleString("vi-VN")}đ qua ${methodName}!`);
+          toast.success(
+            `Đã tạo yêu cầu nạp ${amt.toLocaleString("vi-VN")}đ qua ${methodName}!`,
+          );
           setShowDeposit(false);
           resetDialogState();
         },
-        onError: (e) => toast.error(e instanceof Error ? e.message : "Nạp tiền thất bại."),
+        onError: (e) =>
+          toast.error(e instanceof Error ? e.message : "Nạp tiền thất bại."),
       },
     );
   };
@@ -198,17 +219,27 @@ const StudentWallet = () => {
     }
 
     const methodName =
-      paymentMethods.find((m) => m.id === selectedMethod)?.name || selectedMethod;
+      paymentMethods.find((m) => m.id === selectedMethod)?.name ||
+      selectedMethod;
 
     withdrawMutation.mutate(
-      { amount: amt, method: selectedMethod, bankAccount: "", bankName: methodName, note: "" },
+      {
+        amount: amt,
+        method: selectedMethod,
+        bankAccount: "",
+        bankName: methodName,
+        note: "",
+      },
       {
         onSuccess: () => {
-          toast.success(`Đã gửi yêu cầu rút ${amt.toLocaleString("vi-VN")}đ qua ${methodName}`);
+          toast.success(
+            `Đã gửi yêu cầu rút ${amt.toLocaleString("vi-VN")}đ qua ${methodName}`,
+          );
           setShowWithdraw(false);
           resetDialogState();
         },
-        onError: (e) => toast.error(e instanceof Error ? e.message : "Rút tiền thất bại."),
+        onError: (e) =>
+          toast.error(e instanceof Error ? e.message : "Rút tiền thất bại."),
       },
     );
   };
@@ -216,7 +247,7 @@ const StudentWallet = () => {
   // TODO(BE): no pay-tuition endpoint (tuition is escrowed at class creation)
   const handlePayTuitionItem = (_cls: ClassItem) => {
     toast.info(
-      "Học phí được giữ trong escrow khi tạo lớp — chưa có luồng thanh toán riêng."
+      "Học phí được giữ trong escrow khi tạo lớp — chưa có luồng thanh toán riêng.",
     );
   };
 
@@ -235,7 +266,7 @@ const StudentWallet = () => {
               t.amount > 0 ? "+" : ""
             }${t.amount.toLocaleString("vi-VN")}đ | ${
               t.status === "completed" ? "Hoàn thành" : "Đang xử lý"
-            }`
+            }`,
         ),
       ].join("\n");
 
@@ -258,55 +289,55 @@ const StudentWallet = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Wallet */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-3xl p-5 sm:p-6 shadow-lg min-h-[180px] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
-                <Wallet className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-white/80">Số dư ví</p>
-                <p className="text-2xl sm:text-3xl font-bold leading-tight">
-                  {walletBalance.toLocaleString("vi-VN")}đ
-                </p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+              <Wallet className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-xs text-white/80">Số dư ví</p>
+              <p className="text-2xl sm:text-3xl font-bold leading-tight">
+                {walletBalance.toLocaleString("vi-VN")}đ
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
+          <div className="mt-4 space-y-2">
             <Button
               onClick={() => setShowDeposit(true)}
-              className="rounded-xl gap-1.5 bg-white text-blue-600 hover:bg-white/90 h-10"
+              className="w-full rounded-xl gap-1.5 bg-white text-blue-600 hover:bg-white/90 h-10"
               size="sm"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 shrink-0" />
               Nạp tiền
             </Button>
 
-            <Button
-              onClick={() => setShowWithdraw(true)}
-              variant="ghost"
-              className="rounded-xl gap-1.5 bg-white/10 hover:bg-white/20 text-white h-10"
-              size="sm"
-            >
-              <ArrowUpRight className="w-4 h-4" />
-              Rút tiền
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                onClick={() => setShowWithdraw(true)}
+                variant="ghost"
+                className="rounded-xl gap-1.5 bg-white/10 hover:bg-white/20 text-white h-10"
+                size="sm"
+              >
+                <ArrowUpRight className="w-4 h-4 shrink-0" />
+                Rút tiền
+              </Button>
 
-            <Button
-              onClick={() => setShowPayTuition(true)}
-              variant="ghost"
-              className="rounded-xl gap-1.5 bg-white/10 hover:bg-white/20 text-white h-10"
-              size="sm"
-            >
-              <Receipt className="w-4 h-4" />
-              Thanh toán
-            </Button>
+              <Button
+                onClick={() => setShowPayTuition(true)}
+                variant="ghost"
+                className="rounded-xl gap-1.5 bg-white/10 hover:bg-white/20 text-white h-10"
+                size="sm"
+              >
+                <Receipt className="w-4 h-4 shrink-0" />
+                Thanh toán
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Total Spent */}
         <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-3xl p-5 sm:p-6 shadow-lg min-h-[180px] flex flex-col justify-between">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
               <ArrowUpRight className="w-5 h-5 text-white" />
             </div>
@@ -317,14 +348,14 @@ const StudentWallet = () => {
               </p>
             </div>
           </div>
-          <p className="text-sm text-white/80">
+          <p className="text-sm text-white/80 mt-4 min-h-[2.5rem]">
             Tổng các giao dịch chi tiêu đã hoàn thành
           </p>
         </div>
 
         {/* Refund */}
         <div className="bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-3xl p-5 sm:p-6 shadow-lg min-h-[180px] flex flex-col justify-between">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
               <CreditCard className="w-5 h-5 text-white" />
             </div>
@@ -335,7 +366,9 @@ const StudentWallet = () => {
               </p>
             </div>
           </div>
-          <p className="text-sm text-white/80">Các khoản hoàn tiền đã xử lý</p>
+          <p className="text-sm text-white/80 mt-4 min-h-[2.5rem]">
+            Các khoản hoàn tiền đã xử lý
+          </p>
         </div>
       </div>
 
@@ -376,7 +409,10 @@ const StudentWallet = () => {
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
                   {monthlyData.map((_, i) => (
-                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    <Cell
+                      key={i}
+                      fill={CHART_COLORS[i % CHART_COLORS.length]}
+                    />
                   ))}
                 </Bar>
               </BarChart>
@@ -429,7 +465,8 @@ const StudentWallet = () => {
                       <div
                         className="w-3 h-3 rounded-full"
                         style={{
-                          backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+                          backgroundColor:
+                            CHART_COLORS[i % CHART_COLORS.length],
                         }}
                       />
                       <p className="text-sm font-medium text-foreground">
@@ -496,7 +533,7 @@ const StudentWallet = () => {
                   "px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors",
                   typeFilter === f.value
                     ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:text-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground",
                 )}
               >
                 {f.label}
@@ -508,49 +545,53 @@ const StudentWallet = () => {
         <div className="space-y-3">
           {txLoading && (
             <div className="flex items-center justify-center py-10 text-muted-foreground">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải giao dịch...
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải giao
+              dịch...
             </div>
           )}
 
-          {!txLoading && filtered.map((t) => (
-            <div
-              key={t.id}
-              className="flex items-center gap-3 sm:gap-4 p-4 border border-border/60 hover:bg-muted/30 rounded-2xl transition-colors"
-            >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-muted shrink-0">
-                {t.amount > 0 ? (
-                  <ArrowDownLeft className="w-4 h-4 text-foreground" />
-                ) : (
-                  <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <p className="text-sm sm:text-[15px] font-medium text-foreground truncate">
-                  {t.description}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t.date} • {typeLabels[t.type]}
-                  {t.paymentMethod ? ` • ${t.paymentMethod}` : ""}
-                </p>
-              </div>
-
-              <div className="text-right shrink-0">
-                <p
-                  className={cn(
-                    "text-sm sm:text-[15px] font-semibold",
-                    t.amount > 0 ? "text-foreground" : "text-muted-foreground"
+          {!txLoading &&
+            filtered.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center gap-3 sm:gap-4 p-4 border border-border/60 hover:bg-muted/30 rounded-2xl transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-muted shrink-0">
+                  {t.amount > 0 ? (
+                    <ArrowDownLeft className="w-4 h-4 text-foreground" />
+                  ) : (
+                    <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
                   )}
-                >
-                  {t.amount > 0 ? "+" : ""}
-                  {t.amount.toLocaleString("vi-VN")}đ
-                </p>
-                <Badge variant="outline" className="text-[10px] mt-1">
-                  {t.status === "completed" ? "Hoàn thành" : "Đang xử lý"}
-                </Badge>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm sm:text-[15px] font-medium text-foreground truncate">
+                    {t.description}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t.date} • {typeLabels[t.type]}
+                    {t.paymentMethod ? ` • ${t.paymentMethod}` : ""}
+                  </p>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <p
+                    className={cn(
+                      "text-sm sm:text-[15px] font-semibold",
+                      t.amount > 0
+                        ? "text-foreground"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {t.amount > 0 ? "+" : ""}
+                    {t.amount.toLocaleString("vi-VN")}đ
+                  </p>
+                  <Badge variant="outline" className="text-[10px] mt-1">
+                    {t.status === "completed" ? "Hoàn thành" : "Đang xử lý"}
+                  </Badge>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
           {!txLoading && filtered.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">
@@ -618,7 +659,7 @@ const StudentWallet = () => {
                       "w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all",
                       selectedMethod === m.id
                         ? "border-primary bg-primary/5"
-                        : "border-border bg-card hover:border-primary/50"
+                        : "border-border bg-card hover:border-primary/50",
                     )}
                   >
                     <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0">
@@ -648,7 +689,8 @@ const StudentWallet = () => {
             >
               {testDepositMutation.isPending || depositMutation.isPending ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Đang xử lý...
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Đang xử
+                  lý...
                 </>
               ) : (
                 "Xác nhận nạp tiền"
@@ -787,7 +829,7 @@ const StudentWallet = () => {
                       "w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all",
                       selectedMethod === m.id
                         ? "border-primary bg-primary/5"
-                        : "border-border bg-card hover:border-primary/50"
+                        : "border-border bg-card hover:border-primary/50",
                     )}
                   >
                     <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0">
