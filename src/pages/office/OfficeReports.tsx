@@ -49,7 +49,7 @@ const OfficeReports = () => {
     <div className="px-6 pt-2 pb-6 space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Card 1: Tổng buổi học */}
-        <Card className="border-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{report?.totalSessions ?? 0}</p>
@@ -62,7 +62,7 @@ const OfficeReports = () => {
         </Card>
 
         {/* Card 2: Buổi đã hoàn thành */}
-        <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{report?.completedSessions ?? 0}</p>
@@ -75,7 +75,7 @@ const OfficeReports = () => {
         </Card>
 
         {/* Card 3: Buổi vắng */}
-        <Card className="border-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{report?.missedSessions ?? 0}</p>
@@ -88,7 +88,7 @@ const OfficeReports = () => {
         </Card>
 
         {/* Card 4: HS đang học */}
-        <Card className="border-0 bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{activeClasses}</p>

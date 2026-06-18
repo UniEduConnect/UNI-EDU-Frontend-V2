@@ -105,10 +105,10 @@ const ExamManagerAIConfig = () => {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Lượt thi", value: exam.attempts, icon: Users, gradient: "linear-gradient(to right, #2563eb, #3b82f6)" },
-          { label: "Số câu hỏi", value: exam.questionCount, icon: FileText, gradient: "linear-gradient(to right, #10b981, #14b8a6)" },
-          { label: "Thời lượng", value: `${exam.duration}'`, icon: Clock, gradient: "linear-gradient(to right, #f59e0b, #f97316)" },
-          { label: "Học phí", value: `${(exam.fee / 1000).toFixed(0)}K`, icon: BarChart3, gradient: "linear-gradient(to right, #a855f7, #d946ef)" },
+          { label: "Lượt thi", value: exam.attempts, icon: Users, gradient: "linear-gradient(to right, #1d4ed8, #1e3a8a)" },
+          { label: "Số câu hỏi", value: exam.questionCount, icon: FileText, gradient: "linear-gradient(to right, #1d4ed8, #1e3a8a)" },
+          { label: "Thời lượng", value: `${exam.duration}'`, icon: Clock, gradient: "linear-gradient(to right, #1d4ed8, #1e3a8a)" },
+          { label: "Học phí", value: `${(exam.fee / 1000).toFixed(0)}K`, icon: BarChart3, gradient: "linear-gradient(to right, #1d4ed8, #1e3a8a)" },
         ].map((s, i) => (
           <Card key={i} className="border-0 text-white shadow-lg" style={{ backgroundImage: s.gradient }}>
             <CardContent className="p-4 flex items-center justify-between">

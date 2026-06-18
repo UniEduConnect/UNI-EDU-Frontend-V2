@@ -118,7 +118,7 @@ const OfficeClasses = () => {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Card 1: Đang hoạt động */}
-        <Card className="border-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{activeCount}</p>
@@ -131,7 +131,7 @@ const OfficeClasses = () => {
         </Card>
 
         {/* Card 2: Hoàn thành */}
-        <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{completedCount}</p>
@@ -144,7 +144,7 @@ const OfficeClasses = () => {
         </Card>
 
         {/* Card 3: Đang tìm GS */}
-        <Card className="border-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{searchingCount}</p>
@@ -157,7 +157,7 @@ const OfficeClasses = () => {
         </Card>
 
         {/* Card 4: Học phí/tháng */}
-        <Card className="border-0 bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{totalFee.toLocaleString("vi-VN")}đ</p>

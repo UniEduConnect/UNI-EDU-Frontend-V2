@@ -18,12 +18,12 @@ const ExamManagerDashboard = () => {
   const draftExams = exams.filter((e) => e.status === "draft").length;
 
   const stats = [
-    { label: "Đề đang mở", value: openExams, icon: FileText, color: "bg-primary/100/10 text-primary" },
-    { label: "Tổng lượt thi", value: (dashboard?.totalAttempts ?? 0).toLocaleString("vi-VN"), icon: Users, color: "bg-success/150/10 text-success" },
-    { label: "Điểm trung bình", value: (dashboard?.avgScore ?? 0).toFixed(1), icon: TrendingUp, color: "bg-warning/150/10 text-warning" },
-    { label: "Tổng đề thi", value: (dashboard?.totalExams ?? exams.length).toLocaleString("vi-VN"), icon: BarChart3, color: "bg-purple-500/10 text-purple-600" },
-    { label: "Ngân hàng câu hỏi", value: (dashboard?.totalQuestions ?? questions.length).toLocaleString("vi-VN"), icon: Database, color: "bg-red-500/10 text-red-600" },
-    { label: "Đề nháp", value: draftExams, icon: Eye, color: "bg-orange-500/10 text-orange-600" },
+    { label: "Đề đang mở", value: openExams, icon: FileText, color: "bg-blue-100 text-blue-700" },
+    { label: "Tổng lượt thi", value: (dashboard?.totalAttempts ?? 0).toLocaleString("vi-VN"), icon: Users, color: "bg-blue-100 text-blue-700" },
+    { label: "Điểm trung bình", value: (dashboard?.avgScore ?? 0).toFixed(1), icon: TrendingUp, color: "bg-blue-100 text-blue-700" },
+    { label: "Tổng đề thi", value: (dashboard?.totalExams ?? exams.length).toLocaleString("vi-VN"), icon: BarChart3, color: "bg-blue-100 text-blue-700" },
+    { label: "Ngân hàng câu hỏi", value: (dashboard?.totalQuestions ?? questions.length).toLocaleString("vi-VN"), icon: Database, color: "bg-blue-100 text-blue-700" },
+    { label: "Đề nháp", value: draftExams, icon: Eye, color: "bg-blue-100 text-blue-700" },
   ];
 
   const quickActions = [
@@ -45,7 +45,7 @@ const ExamManagerDashboard = () => {
     <div className="px-6 pt-2 pb-6 space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {stats.map((s, i) => (
-          <Card key={s.label} className="border-0 bg-gradient-to-r text-white shadow-lg" style={{ backgroundImage: ["linear-gradient(to right, #2563eb, #3b82f6)", "linear-gradient(to right, #10b981, #14b8a6)", "linear-gradient(to right, #f59e0b, #f97316)", "linear-gradient(to right, #8b5cf6, #a855f7)", "linear-gradient(to right, #ef4444, #f43f5e)", "linear-gradient(to right, #0ea5e9, #22d3ee)" ][i % 6] }}>
+          <Card key={s.label} className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-xl font-bold">{s.value}</p>

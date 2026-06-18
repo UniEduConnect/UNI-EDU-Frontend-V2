@@ -99,7 +99,7 @@ const OfficeIncidents = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Card 1: Chờ xử lý */}
-        <Card className="border-0 bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{incidents.filter(i => i.status === "pending").length}</p>
@@ -112,7 +112,7 @@ const OfficeIncidents = () => {
         </Card>
 
         {/* Card 2: Đang điều tra */}
-        <Card className="border-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{incidents.filter(i => i.status === "investigating").length}</p>
@@ -125,7 +125,7 @@ const OfficeIncidents = () => {
         </Card>
 
         {/* Card 3: Đã xử lý */}
-        <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{incidents.filter(i => i.status === "resolved").length}</p>

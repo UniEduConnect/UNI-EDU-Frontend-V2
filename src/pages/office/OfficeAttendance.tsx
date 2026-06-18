@@ -52,7 +52,7 @@ const OfficeAttendance = () => {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Card 1: Chờ xác nhận */}
-        <Card className="border-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{pending}</p>
@@ -65,7 +65,7 @@ const OfficeAttendance = () => {
         </Card>
 
         {/* Card 2: Đã hoàn thành */}
-        <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{completed}</p>
@@ -78,7 +78,7 @@ const OfficeAttendance = () => {
         </Card>
 
         {/* Card 3: Đã báo lỗi */}
-        <Card className="border-0 bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{reported}</p>
@@ -91,7 +91,7 @@ const OfficeAttendance = () => {
         </Card>
 
         {/* Card 4: Tổng buổi học */}
-        <Card className="border-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg">
+        <Card className="border-0 bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-bold">{attendance.length}</p>
