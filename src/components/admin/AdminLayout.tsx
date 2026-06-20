@@ -1,12 +1,36 @@
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Users, BookOpen, CreditCard, ScrollText, Settings, Home, LogOut, Bell, Check, ChevronRight, AlertTriangle, Info, CheckCircle2, XCircle, PanelLeftClose, PanelLeft } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  BookOpen,
+  CreditCard,
+  ScrollText,
+  Settings,
+  Home,
+  LogOut,
+  Bell,
+  Check,
+  ChevronRight,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
+  XCircle,
+  PanelLeftClose,
+  PanelLeft,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminUsers } from "@/hooks/useAdmin";
-import { useNotifications, useUnreadCount, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/useNotifications";
+import {
+  useNotifications,
+  useUnreadCount,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+} from "@/hooks/useNotifications";
 import { useMe } from "@/hooks/useUsers";
 import UniMark from "@/components/UniMark";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
+import PortalSwitcher from "@/components/PortalSwitcher";
 import { useState, useRef, useEffect } from "react";
 
 const navItems = [
@@ -52,12 +76,13 @@ const AdminLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const pendingCount = users.filter(u => u.status === "pending").length;
+  const pendingCount = users.filter((u) => u.status === "pending").length;
   const currentTitle = pageTitles[location.pathname] || "Admin";
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false);
+      if (notifRef.current && !notifRef.current.contains(e.target as Node))
+        setShowNotif(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -69,30 +94,44 @@ const AdminLayout = () => {
       <aside
         className={cn(
           "fixed top-4 left-4 h-[calc(100%-2rem)] rounded-3xl bg-gradient-to-b from-[#0b2e6a] via-[#052861] to-[#0a2160] shadow-2xl border border-white/15 text-slate-200 z-20 transition-all duration-300 overflow-hidden flex flex-col",
-          collapsed ? "w-20" : "w-72"
+          collapsed ? "w-20" : "w-72",
         )}
       >
-        <div className={cn("h-20 flex items-center gap-3 transition-all", collapsed ? "justify-center px-0" : "justify-between px-4")}>
+        <div
+          className={cn(
+            "h-20 flex items-center gap-3 transition-all",
+            collapsed ? "justify-center px-0" : "justify-between px-4",
+          )}
+        >
           <div className="flex items-center gap-3">
             {!collapsed && <UniMark size={36} />}
             {!collapsed && (
               <div className="min-w-0">
-                <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">Uni Education</h1>
-                <p className="text-xs text-slate-400 leading-tight">Admin Panel</p>
+                <h1 className="text-lg font-bold text-slate-100 leading-tight truncate">
+                  Uni Education
+                </h1>
+                <p className="text-xs text-slate-400 leading-tight">Quản trị</p>
               </div>
             )}
           </div>
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className={cn("p-2 rounded-full hover:bg-slate-800 transition-all duration-300 text-slate-300 hover:text-white", collapsed ? "mx-auto" : "ml-auto")}
+            className={cn(
+              "p-2 rounded-full hover:bg-slate-800 transition-all duration-300 text-slate-300 hover:text-white",
+              collapsed ? "mx-auto" : "ml-auto",
+            )}
             title={collapsed ? "Mở rộng" : "Thu gọn"}
           >
-            {collapsed ? <PanelLeft className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+            {collapsed ? (
+              <PanelLeft className="w-5 h-5" />
+            ) : (
+              <PanelLeftClose className="w-5 h-5" />
+            )}
           </button>
         </div>
 
         <nav className="flex-1 px-4 py-4 overflow-y-auto">
-          {navItems.map(item => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -101,10 +140,12 @@ const AdminLayout = () => {
               className={({ isActive }) =>
                 cn(
                   "flex items-center rounded-full text-sm font-medium transition-all duration-300 group relative mb-1",
-                  collapsed ? "px-0 py-2.5 justify-center gap-0" : "px-4 py-3 gap-3",
+                  collapsed
+                    ? "px-0 py-2.5 justify-center gap-0"
+                    : "px-4 py-3 gap-3",
                   isActive
                     ? "bg-white/20 text-white"
-                    : "text-slate-200 hover:bg-slate-800 hover:text-white"
+                    : "text-slate-200 hover:bg-slate-800 hover:text-white",
                 )
               }
             >
@@ -124,19 +165,28 @@ const AdminLayout = () => {
           ))}
         </nav>
 
-         <div className="px-3 py-3 border-t border-sidebar-border/40 space-y-1">
+        <div className="px-3 py-3 border-t border-sidebar-border/40 space-y-1">
           <NavLink
             to="/"
             title={collapsed ? "Trang chủ" : undefined}
-            className={cn("flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white w-full transition-all duration-300", collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5")}
+            className={cn(
+              "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white w-full transition-all duration-300",
+              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5",
+            )}
           >
             <Home className="w-[18px] h-[18px] shrink-0" />
             {!collapsed && <span>Trang chủ</span>}
           </NavLink>
           <button
-            onClick={async () => { await logout(); navigate("/login"); }}
+            onClick={async () => {
+              await logout();
+              navigate("/login");
+            }}
             title={collapsed ? "Đăng xuất" : undefined}
-            className={cn("flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-red-500 hover:text-white w-full transition-all duration-300", collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5")}
+            className={cn(
+              "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-red-500 hover:text-white w-full transition-all duration-300",
+              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5",
+            )}
           >
             <LogOut className="w-[18px] h-[18px] shrink-0" />
             {!collapsed && <span>Đăng xuất</span>}
@@ -148,15 +198,19 @@ const AdminLayout = () => {
       <div
         className={cn(
           "relative min-h-screen transition-all duration-300",
-          collapsed ? "pl-24" : "pl-80"
+          collapsed ? "pl-24" : "pl-80",
         )}
       >
         <div className="m-4 mt-4 rounded-3xl bg-white shadow-2xl border border-slate-200/40 overflow-hidden">
           <header className="h-20 px-8 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/60 shadow-sm">
             <div>
-              <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#1E68E6] to-blue-500">{currentTitle}</h1>
+              <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#1E68E6] to-blue-500">
+                {currentTitle}
+              </h1>
             </div>
             <div className="flex items-center gap-4">
+              <PortalSwitcher />
+
               <div className="relative" ref={notifRef}>
                 <button
                   className="relative p-2.5 rounded-lg hover:bg-slate-100 transition-colors group"
@@ -173,7 +227,9 @@ const AdminLayout = () => {
                 {showNotif && (
                   <div className="absolute right-0 top-12 w-[350px] bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-                      <h3 className="text-sm font-semibold text-slate-900">Thông báo</h3>
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        Thông báo
+                      </h3>
                       {unreadCount > 0 && (
                         <button
                           onClick={() => markAllNotificationsRead()}
@@ -185,9 +241,11 @@ const AdminLayout = () => {
                     </div>
                     <div className="max-h-[360px] overflow-y-auto">
                       {notifications.length === 0 ? (
-                        <p className="text-sm text-slate-500 text-center py-8">Không có thông báo</p>
+                        <p className="text-sm text-slate-500 text-center py-8">
+                          Không có thông báo
+                        </p>
                       ) : (
-                        notifications.map(n => (
+                        notifications.map((n) => (
                           <button
                             key={n.id}
                             onClick={() => {
@@ -197,23 +255,43 @@ const AdminLayout = () => {
                                 navigate(n.link);
                                 return;
                               }
-                              if (n.type === "warning" && n.title.includes("chờ duyệt")) {
+                              if (
+                                n.type === "warning" &&
+                                n.title.includes("chờ duyệt")
+                              ) {
                                 navigate("/admin/users");
                               }
                             }}
                             className={cn(
                               "w-full text-left px-4 py-3 border-b border-slate-200 hover:bg-slate-50 transition-colors flex gap-3",
-                              !n.read && "bg-blue-50"
+                              !n.read && "bg-blue-50",
                             )}
                           >
-                            <div className="mt-0.5 shrink-0">{notifIcon[n.type]}</div>
+                            <div className="mt-0.5 shrink-0">
+                              {notifIcon[n.type]}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <p className={cn("text-sm font-medium", !n.read ? "text-slate-900" : "text-slate-500")}>{n.title}</p>
-                                {!n.read && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
+                                <p
+                                  className={cn(
+                                    "text-sm font-medium",
+                                    !n.read
+                                      ? "text-slate-900"
+                                      : "text-slate-500",
+                                  )}
+                                >
+                                  {n.title}
+                                </p>
+                                {!n.read && (
+                                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                                )}
                               </div>
-                              <p className="text-xs text-slate-500 mt-0.5 truncate">{n.message}</p>
-                              <p className="text-[10px] text-slate-400 mt-1">{n.createdAt}</p>
+                              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                {n.message}
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-1">
+                                {n.createdAt}
+                              </p>
                             </div>
                           </button>
                         ))
@@ -221,17 +299,25 @@ const AdminLayout = () => {
                     </div>
                     <div className="px-4 py-2.5 border-t border-slate-200">
                       <button
-                        onClick={() => { setShowNotif(false); navigate("/admin/audit"); }}
+                        onClick={() => {
+                          setShowNotif(false);
+                          navigate("/admin/audit");
+                        }}
                         className="text-xs text-blue-600 font-medium flex items-center gap-1 hover:text-blue-500"
                       >
-                        Xem tất cả hoạt cả hoạt động <ChevronRight className="w-3 h-3" />
+                        Xem tất cả hoạt cả hoạt động{" "}
+                        <ChevronRight className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
                 )}
               </div>
 
-              <UserAvatarDropdown avatar="" name={me?.fullname ?? ""} role="Quản trị viên" />
+              <UserAvatarDropdown
+                avatar=""
+                name={me?.fullname ?? ""}
+                role="Quản trị"
+              />
             </div>
           </header>
 

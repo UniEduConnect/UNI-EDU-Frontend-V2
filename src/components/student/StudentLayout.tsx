@@ -42,11 +42,15 @@ const navGroups = [
       { to: "/student", icon: LayoutDashboard, label: "Tổng quan", end: true },
       { to: "/student/tutor-posts", icon: Megaphone, label: "GS tìm học sinh" },
       { to: "/student/classes", icon: BookOpen, label: "Học tập" },
-      { to: "/student/tests", icon: ClipboardCheck, label: "Bài tập & Kiểm tra" },
+      {
+        to: "/student/tests",
+        icon: ClipboardCheck,
+        label: "Bài tập & Kiểm tra",
+      },
       { to: "/student/wallet", icon: Wallet, label: "Ví học phí" },
       { to: "/student/reviews", icon: Star, label: "Đánh giá" },
       { to: "/student/chat", icon: MessageSquare, label: "Tin nhắn" },
-        { to: "/parent/support", icon: HelpCircle, label: "Hỗ trợ" },
+      { to: "/parent/support", icon: HelpCircle, label: "Hỗ trợ" },
     ],
   },
 ];
@@ -105,13 +109,13 @@ const StudentLayout = () => {
       <aside
         className={cn(
           "fixed top-4 left-4 h-[calc(100%-2rem)] rounded-3xl bg-gradient-to-b from-[#0b2e6a] via-[#052861] to-[#0a2160] shadow-2xl border border-white/15 text-slate-200 z-20 transition-all duration-300 overflow-hidden flex flex-col",
-          collapsed ? "w-20" : "w-72"
+          collapsed ? "w-20" : "w-72",
         )}
       >
         <div
           className={cn(
             "h-20 flex items-center gap-3 transition-all",
-            collapsed ? "justify-center px-0" : "justify-between px-4"
+            collapsed ? "justify-center px-0" : "justify-between px-4",
           )}
         >
           <div className="flex items-center gap-3">
@@ -130,7 +134,7 @@ const StudentLayout = () => {
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
               "p-2 rounded-full hover:bg-slate-800 transition-all duration-300 text-slate-300 hover:text-white",
-              collapsed ? "mx-auto" : "ml-auto"
+              collapsed ? "mx-auto" : "ml-auto",
             )}
             title={collapsed ? "Mở rộng" : "Thu gọn"}
           >
@@ -154,27 +158,33 @@ const StudentLayout = () => {
                   className={({ isActive }) =>
                     cn(
                       "flex items-center rounded-full text-sm font-medium transition-all duration-300 group relative mb-1",
-                      collapsed ? "px-0 py-2.5 justify-center gap-0" : "px-4 py-3 gap-3",
+                      collapsed
+                        ? "px-0 py-2.5 justify-center gap-0"
+                        : "px-4 py-3 gap-3",
                       isActive
                         ? "bg-white/20 text-white"
-                        : "text-slate-200 hover:bg-slate-800 hover:text-white"
+                        : "text-slate-200 hover:bg-slate-800 hover:text-white",
                     )
                   }
                 >
                   <item.icon className="w-5 h-5 shrink-0" />
                   {!collapsed && <span className="flex-1">{item.label}</span>}
 
-                  {item.to === "/student/chat" && unreadChat > 0 && !collapsed && (
-                    <span className="min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-semibold rounded-full bg-red-500 text-white">
-                      {unreadChat}
-                    </span>
-                  )}
+                  {item.to === "/student/chat" &&
+                    unreadChat > 0 &&
+                    !collapsed && (
+                      <span className="min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-semibold rounded-full bg-red-500 text-white">
+                        {unreadChat}
+                      </span>
+                    )}
 
-                  {collapsed && item.to === "/student/chat" && unreadChat > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-semibold rounded-full bg-red-500 text-white">
-                      {unreadChat}
-                    </span>
-                  )}
+                  {collapsed &&
+                    item.to === "/student/chat" &&
+                    unreadChat > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-semibold rounded-full bg-red-500 text-white">
+                        {unreadChat}
+                      </span>
+                    )}
                 </NavLink>
               ))}
             </div>
@@ -187,18 +197,21 @@ const StudentLayout = () => {
             title={collapsed ? "Trang chủ" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white w-full transition-all duration-300",
-              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5",
             )}
           >
             <Home className="w-[18px] h-[18px] shrink-0" />
             {!collapsed && <span>Trang chủ</span>}
           </NavLink>
           <button
-            onClick={async () => { await logout(); navigate("/login"); }}
+            onClick={async () => {
+              await logout();
+              navigate("/login");
+            }}
             title={collapsed ? "Đăng xuất" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-red-500 hover:text-white w-full transition-all duration-300",
-              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5",
             )}
           >
             <LogOut className="w-[18px] h-[18px] shrink-0" />
@@ -210,7 +223,7 @@ const StudentLayout = () => {
       <div
         className={cn(
           "relative min-h-screen transition-all duration-300",
-          collapsed ? "pl-24" : "pl-80"
+          collapsed ? "pl-24" : "pl-80",
         )}
       >
         <div className="m-4 mt-4 rounded-3xl bg-white shadow-2xl border border-slate-200/40 overflow-hidden min-h-[calc(100vh-2rem)] flex flex-col">
@@ -303,7 +316,7 @@ const StudentLayout = () => {
                             }}
                             className={cn(
                               "w-full text-left px-4 py-3 border-b border-slate-200 hover:bg-slate-50 transition-colors flex gap-3",
-                              !n.read && "bg-blue-50"
+                              !n.read && "bg-blue-50",
                             )}
                           >
                             <div className="mt-0.5 shrink-0">
@@ -314,7 +327,9 @@ const StudentLayout = () => {
                                 <p
                                   className={cn(
                                     "text-sm font-medium",
-                                    !n.read ? "text-slate-900" : "text-slate-500"
+                                    !n.read
+                                      ? "text-slate-900"
+                                      : "text-slate-500",
                                   )}
                                 >
                                   {n.title}
@@ -343,7 +358,8 @@ const StudentLayout = () => {
                         }}
                         className="text-xs text-blue-600 font-medium flex items-center gap-1 hover:text-blue-500"
                       >
-                        Xem tất cả hoạt động <ChevronRight className="w-3 h-3" />
+                        Xem tất cả hoạt động{" "}
+                        <ChevronRight className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
@@ -353,7 +369,7 @@ const StudentLayout = () => {
               <UserAvatarDropdown
                 avatar=""
                 name={profile?.fullName ?? ""}
-                role={profile?.grade ?? ""}
+                role={profile?.grade ? `Lớp ${profile.grade}` : ""}
               />
             </div>
           </header>

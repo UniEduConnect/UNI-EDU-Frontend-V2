@@ -34,6 +34,8 @@ interface AuthContextType {
   user: AuthUser | null;
   role: AppRole | null;
   isAuthenticated: boolean;
+  /** True while the initial silent-refresh attempt is in flight (app boot). */
+  isLoading: boolean;
   login: (payload: LoginRequest) => Promise<AuthUser>;
   registerStudent: (payload: StudentRegister) => Promise<void>;
   registerTutor: (payload: TutorRegister) => Promise<void>;
@@ -67,6 +69,9 @@ function userFromToken(token: string | null): AuthUser | null {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(() => userFromToken(getToken()));
+  // Block route guards until the boot-time silent refresh resolves, so a returning
+  // user with an expired access token but a live refresh cookie isn't bounced to /login.
+  const [isLoading, setIsLoading] = useState(true);
 
   const doLogout = useCallback(async () => {
     try {
@@ -85,6 +90,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
     });
     return () => setOnUnauthorized(null);
+  }, []);
+
+  // On app boot, if there's no valid access token, try a silent refresh against
+  // the httpOnly `refreshToken` cookie. Success → re-establish the session;
+  // failure (no/expired cookie) → stay logged out. Either way, stop blocking.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (userFromToken(getToken())) {
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const { accessToken } = await authService.refreshToken();
+        if (cancelled) return;
+        setToken(accessToken);
+        setUser(userFromToken(accessToken));
+      } catch {
+        if (!cancelled) clearToken();
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = useCallback(async (payload: LoginRequest) => {
@@ -109,12 +140,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user,
       role: user?.role ?? null,
       isAuthenticated: !!user,
+      isLoading,
       login,
       registerStudent,
       registerTutor,
       logout: doLogout,
     }),
-    [user, login, registerStudent, registerTutor, doLogout],
+    [user, isLoading, login, registerStudent, registerTutor, doLogout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -7,7 +7,6 @@ import {
   Clock,
   Search,
   FileText,
-  ArrowUpRight,
   RefreshCcw,
   CheckCircle2,
   XCircle,
@@ -142,47 +141,46 @@ const FinanceRefunds = () => {
             label: "Chờ duyệt",
             value: pendingCount,
             sub: "Yêu cầu cần xử lý",
-            color: "from-amber-500 to-orange-500",
+            color: "from-blue-700 to-blue-900",
             icon: Clock,
           },
           {
             label: "Đã duyệt",
             value: approvedCount,
             sub: "Yêu cầu đã chấp nhận",
-            color: "from-emerald-500 to-teal-500",
+            color: "from-blue-700 to-blue-900",
             icon: CheckCircle2,
           },
           {
             label: "Từ chối",
             value: rejectedCount,
             sub: "Yêu cầu không hợp lệ",
-            color: "from-rose-500 to-pink-500",
+            color: "from-blue-700 to-blue-900",
             icon: XCircle,
           },
           {
             label: "Tổng hoàn tiền",
             value: `${totalRefundAmount.toLocaleString("vi-VN")}đ`,
             sub: "Đã xử lý thành công",
-            color: "from-blue-500 to-indigo-500",
+            color: "from-blue-700 to-blue-900",
             icon: RefreshCcw,
           },
         ].map((s, i) => (
           <div
             key={i}
             className={cn(
-              "group flex items-center gap-4 rounded-2xl bg-gradient-to-r p-5 text-white transition-all hover:shadow-lg",
+              "group rounded-2xl bg-gradient-to-r p-4 text-white transition-all hover:shadow-lg",
               s.color
             )}
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
-              <s.icon className="h-5 w-5" />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-white/80">{s.label}</p>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/20">
+                <s.icon className="h-[18px] w-[18px]" />
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-xs text-white/80">{s.label}</p>
-              <p className="text-xl font-bold">{s.value}</p>
-              <p className="text-[10px] text-white/80">{s.sub}</p>
-            </div>
-            <ArrowUpRight className="ml-auto h-4 w-4 shrink-0" />
+            <p className="mt-2 text-xl font-bold leading-tight break-words">{s.value}</p>
+            <p className="mt-1 text-[10px] text-white/80">{s.sub}</p>
           </div>
         ))}
       </div>

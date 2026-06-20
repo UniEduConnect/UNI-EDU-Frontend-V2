@@ -92,10 +92,10 @@ const ExamManagerQuestions = () => {
     <div className="px-6 pt-2 pb-6 space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Tổng câu hỏi", value: questions.length, icon: Database, gradient: "linear-gradient(to right, #2563eb, #3b82f6)" },
-          { label: "Môn học", value: subjects.length, icon: BookOpen, gradient: "linear-gradient(to right, #10b981, #14b8a6)" },
-          { label: "Chủ đề", value: topics.length, icon: Inbox, gradient: "linear-gradient(to right, #f59e0b, #f97316)" },
-          { label: "Câu hỏi khó", value: questions.filter(q => q.difficulty === "hard").length, icon: AlertTriangle, gradient: "linear-gradient(to right, #ef4444, #f43f5e)" },
+          { label: "Tổng câu hỏi", value: questions.length, icon: Database, gradient: "linear-gradient(to right, #1d4ed8, #1e3a8a)" },
+          { label: "Môn học", value: subjects.length, icon: BookOpen, gradient: "linear-gradient(to right, #1d4ed8, #1e3a8a)" },
+          { label: "Chủ đề", value: topics.length, icon: Inbox, gradient: "linear-gradient(to right, #1d4ed8, #1e3a8a)" },
+          { label: "Câu hỏi khó", value: questions.filter(q => q.difficulty === "hard").length, icon: AlertTriangle, gradient: "linear-gradient(to right, #1d4ed8, #1e3a8a)" },
         ].map((s, i) => (
           <Card key={i} className="border-0 text-white shadow-lg" style={{ backgroundImage: s.gradient }}>
             <CardContent className="p-4 flex items-center justify-between">

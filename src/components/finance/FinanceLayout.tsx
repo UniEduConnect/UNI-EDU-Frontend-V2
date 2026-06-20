@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import UniMark from "@/components/UniMark";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
+import PortalSwitcher from "@/components/PortalSwitcher";
 import { useState, useRef, useEffect } from "react";
 import {
   useNotifications,
@@ -33,12 +34,11 @@ import { useMe } from "@/hooks/useUsers";
 
 const navItems = [
   { to: "/finance", icon: LayoutDashboard, label: "Tổng quan", end: true },
-    { to: "/finance/reports", icon: BarChart3, label: "Báo cáo tài chính" },
+  { to: "/finance/reports", icon: BarChart3, label: "Báo cáo tài chính" },
   { to: "/finance/transactions", icon: ArrowLeftRight, label: "Giao dịch" },
   { to: "/finance/payouts", icon: HandCoins, label: "Chi trả gia sư" },
   { to: "/finance/refunds", icon: RotateCcw, label: "Yêu cầu hoàn tiền" },
   { to: "/finance/reconciliation", icon: Scale, label: "Đối soát" },
-
 ];
 
 const pageTitles: Record<string, string> = {
@@ -89,13 +89,13 @@ const FinanceLayout = () => {
       <aside
         className={cn(
           "fixed top-4 left-4 h-[calc(100%-2rem)] rounded-3xl bg-gradient-to-b from-[#0b2e6a] via-[#052861] to-[#0a2160] shadow-2xl border border-white/15 text-slate-200 z-20 transition-all duration-300 overflow-hidden flex flex-col",
-          collapsed ? "w-20" : "w-72"
+          collapsed ? "w-20" : "w-72",
         )}
       >
         <div
           className={cn(
             "h-20 flex items-center gap-3 transition-all",
-            collapsed ? "justify-center px-0" : "justify-between px-4"
+            collapsed ? "justify-center px-0" : "justify-between px-4",
           )}
         >
           <div className="flex items-center gap-3">
@@ -114,7 +114,7 @@ const FinanceLayout = () => {
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
               "p-2 rounded-full hover:bg-slate-800 transition-all duration-300 text-slate-300 hover:text-white",
-              collapsed ? "mx-auto" : "ml-auto"
+              collapsed ? "mx-auto" : "ml-auto",
             )}
             title={collapsed ? "Mở rộng" : "Thu gọn"}
           >
@@ -136,10 +136,12 @@ const FinanceLayout = () => {
               className={({ isActive }) =>
                 cn(
                   "flex items-center rounded-full text-sm font-medium transition-all duration-300 group relative mb-1",
-                  collapsed ? "px-0 py-2.5 justify-center gap-0" : "px-4 py-3 gap-3",
+                  collapsed
+                    ? "px-0 py-2.5 justify-center gap-0"
+                    : "px-4 py-3 gap-3",
                   isActive
                     ? "bg-white/20 text-white"
-                    : "text-slate-200 hover:bg-slate-800 hover:text-white"
+                    : "text-slate-200 hover:bg-slate-800 hover:text-white",
                 )
               }
             >
@@ -155,18 +157,21 @@ const FinanceLayout = () => {
             title={collapsed ? "Trang chủ" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white w-full transition-all duration-300",
-              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5",
             )}
           >
             <Home className="w-[18px] h-[18px] shrink-0" />
             {!collapsed && <span>Trang chủ</span>}
           </NavLink>
           <button
-            onClick={async () => { await logout(); navigate("/login"); }}
+            onClick={async () => {
+              await logout();
+              navigate("/login");
+            }}
             title={collapsed ? "Đăng xuất" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-full text-[13px] font-semibold text-slate-200 hover:bg-red-500 hover:text-white w-full transition-all duration-300",
-              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+              collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5",
             )}
           >
             <LogOut className="w-[18px] h-[18px] shrink-0" />
@@ -178,7 +183,7 @@ const FinanceLayout = () => {
       <div
         className={cn(
           "relative min-h-screen transition-all duration-300",
-          collapsed ? "pl-24" : "pl-80"
+          collapsed ? "pl-24" : "pl-80",
         )}
       >
         <div className="m-4 mt-4 rounded-3xl bg-white shadow-2xl border border-slate-200/40 overflow-hidden min-h-[calc(100vh-2rem)] flex flex-col">
@@ -190,6 +195,8 @@ const FinanceLayout = () => {
             </div>
 
             <div className="flex items-center gap-4">
+              <PortalSwitcher />
+
               <div className="relative" ref={notifRef}>
                 <button
                   className="relative p-2.5 rounded-lg hover:bg-slate-100 transition-colors group"
@@ -277,7 +284,7 @@ const FinanceLayout = () => {
                             }}
                             className={cn(
                               "w-full text-left px-4 py-3 border-b border-slate-200 hover:bg-slate-50 transition-colors flex gap-3",
-                              !n.read && "bg-blue-50"
+                              !n.read && "bg-blue-50",
                             )}
                           >
                             <div className="mt-0.5 shrink-0">
@@ -289,7 +296,9 @@ const FinanceLayout = () => {
                                 <p
                                   className={cn(
                                     "text-sm font-medium",
-                                    !n.read ? "text-slate-900" : "text-slate-500"
+                                    !n.read
+                                      ? "text-slate-900"
+                                      : "text-slate-500",
                                   )}
                                 >
                                   {n.title}
@@ -318,7 +327,8 @@ const FinanceLayout = () => {
                         }}
                         className="text-xs text-blue-600 font-medium flex items-center gap-1 hover:text-blue-500"
                       >
-                        Xem tất cả hoạt động <ChevronRight className="w-3 h-3" />
+                        Xem tất cả hoạt động{" "}
+                        <ChevronRight className="w-3 h-3" />
                       </button>
                     </div>
                   </div>

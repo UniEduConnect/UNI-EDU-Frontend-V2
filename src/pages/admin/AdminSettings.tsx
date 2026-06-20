@@ -40,19 +40,19 @@ const AdminSettings = () => {
             <p className="text-2xl font-bold">{form.escrowPercent}%</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-soft bg-gradient-to-br from-emerald-500 to-teal-500 text-white">
+        <Card className="border-0 shadow-soft bg-gradient-to-br from-blue-700 to-blue-900 text-white">
           <CardContent className="p-4">
             <p className="text-xs text-white/80">Thời gian giữ tiền</p>
             <p className="text-2xl font-bold">{form.escrowHoldDays} ngày</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-soft bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+        <Card className="border-0 shadow-soft bg-gradient-to-br from-blue-700 to-blue-900 text-white">
           <CardContent className="p-4">
             <p className="text-xs text-white/80">Thi thử</p>
             <p className="text-2xl font-bold">{form.enableExams ? "Bật" : "Tắt"}</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-soft bg-gradient-to-br from-rose-500 to-pink-500 text-white">
+        <Card className="border-0 shadow-soft bg-gradient-to-br from-blue-700 to-blue-900 text-white">
           <CardContent className="p-4">
             <p className="text-xs text-white/80">Thanh toán QR</p>
             <p className="text-2xl font-bold">{form.enablePayments ? "Bật" : "Tắt"}</p>
