@@ -1,10 +1,21 @@
-import { ShieldCheck, Star, BookOpen, Trophy, Video, Edit2, Save, MapPin, Phone, Mail, Calendar, Award, TrendingUp, Users, Loader2, GraduationCap, Briefcase, BadgeCheck } from "lucide-react";
+import { ShieldCheck, Star, BookOpen, Trophy, Video, Edit2, Save, MapPin, Phone, Mail, Calendar, Award, TrendingUp, Users, Loader2, GraduationCap, Briefcase, BadgeCheck, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useMyTutorProfile, useUpdateMyProfile, useMyReviews } from "@/hooks/useTutors";
+import { useUploadImage } from "@/hooks/useUploads";
 import { useClasses } from "@/hooks/useClasses";
 import { useMySchedule } from "@/hooks/useSchedule";
 import type { UpdateTutorProfileRequest } from "@/types/api";
@@ -12,6 +23,7 @@ import type { UpdateTutorProfileRequest } from "@/types/api";
 const TutorProfile = () => {
   const { data: profile, isLoading } = useMyTutorProfile();
   const updateProfile = useUpdateMyProfile();
+  const uploadImage = useUploadImage();
   const { data: rev } = useMyReviews(1);
   const { classes } = useClasses();
   const { classes: activeClassList } = useClasses({ Status: "active" });
@@ -19,8 +31,13 @@ const TutorProfile = () => {
   const { sessions } = useMySchedule();
 
   const [editing, setEditing] = useState(false);
+  // Confirm dialog gates the actual save so the tutor can't update by accident.
+  const [confirmOpen, setConfirmOpen] = useState(false);
   // editable form mirrors the profile fields we expose for editing
   const [form, setForm] = useState({ bio: "", hourlyRate: 0, videoUrl: "", teachingStyle: "", location: "" });
+  // avatar is uploaded to S3 immediately; we keep the resulting URL and persist it on save.
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // certificates/achievements are edited as a plain list of names (no per-doc status from BE)
   const [certificates, setCertificates] = useState<string[]>([]);
   const [achievements, setAchievements] = useState<string[]>([]);
@@ -37,11 +54,37 @@ const TutorProfile = () => {
       teachingStyle: profile.teachingStyle ?? "",
       location: profile.location ?? "",
     });
+    setAvatarUrl(profile.avatar ?? "");
     setCertificates(profile.certificates ?? []);
     setAchievements(profile.achievements ?? []);
   }, [profile]);
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Vui lòng chọn một tệp ảnh.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ảnh phải nhỏ hơn 5MB.");
+      return;
+    }
+    uploadImage.mutate(file, {
+      onSuccess: (url) => {
+        setAvatarUrl(url);
+        toast.success("Đã tải ảnh lên. Nhấn Lưu để cập nhật hồ sơ.");
+      },
+      onError: () => toast.error("Tải ảnh lên thất bại. Vui lòng thử lại."),
+    });
+  };
+
+  // Opens the confirm dialog instead of saving directly.
+  const requestSave = () => setConfirmOpen(true);
+
   const handleSave = () => {
+    setConfirmOpen(false);
     // FE form field `videoUrl` maps to `introVideoUrl` on the request DTO.
     const payload: UpdateTutorProfileRequest = {
       bio: form.bio,
@@ -49,6 +92,7 @@ const TutorProfile = () => {
       introVideoUrl: form.videoUrl,
       teachingStyle: form.teachingStyle,
       location: form.location,
+      avatarUrl,
       certificates,
       achievements,
     };
@@ -121,7 +165,29 @@ const TutorProfile = () => {
       {/* Header */}
       <div className="bg-card border border-border rounded-2xl p-6">
         <div className="flex items-start gap-6">
-          <img src={profile.avatar} alt={profile.name} className="w-24 h-24 rounded-2xl object-cover" />
+          <div className="relative w-24 h-24 shrink-0">
+            <img src={avatarUrl || profile.avatar} alt={profile.name} className="w-24 h-24 rounded-2xl object-cover" />
+            {editing && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadImage.isPending}
+                  className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/50 text-white opacity-0 hover:opacity-100 transition-opacity disabled:opacity-100"
+                  aria-label="Đổi ảnh đại diện"
+                >
+                  {uploadImage.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Camera className="w-6 h-6" />}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
+              </>
+            )}
+          </div>
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1 flex-wrap">
               <h2 className="text-xl font-bold text-foreground">{profile.name}</h2>
@@ -163,7 +229,7 @@ const TutorProfile = () => {
               </div>
             )}
           </div>
-          <button onClick={() => (editing ? handleSave() : setEditing(true))} className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground">
+          <button onClick={() => (editing ? requestSave() : setEditing(true))} className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground">
             {editing ? <Save className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
           </button>
         </div>
@@ -356,10 +422,26 @@ const TutorProfile = () => {
 
       {editing && (
         <div className="flex gap-3">
-          <button onClick={handleSave} disabled={updateProfile.isPending} className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-60">{updateProfile.isPending ? "Đang lưu..." : "Lưu thay đổi"}</button>
+          <button onClick={requestSave} disabled={updateProfile.isPending} className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-60">{updateProfile.isPending ? "Đang lưu..." : "Lưu thay đổi"}</button>
           <button onClick={() => setEditing(false)} className="px-6 py-2.5 bg-muted text-muted-foreground rounded-xl font-medium">Hủy</button>
         </div>
       )}
+
+      {/* Confirm before persisting profile changes. */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận cập nhật hồ sơ</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn lưu các thay đổi vào hồ sơ của mình không?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSave}>Xác nhận</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
