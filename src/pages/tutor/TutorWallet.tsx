@@ -27,12 +27,8 @@ const paymentMethods = [
   { id: "bidv", name: "BIDV", icon: Landmark, desc: "****9012" },
 ];
 
-// Deposit dialog list: a demo option (credits the wallet directly via the test-deposit
-// API, no gateway) followed by the real payment methods.
-const depositMethods = [
-  { id: "test", name: "Test (Demo)", icon: Plus, desc: "Nạp thử — cộng ngay vào ví, không qua cổng" },
-  ...paymentMethods,
-];
+// Deposit dialog list (real payment methods only).
+const depositMethods = [...paymentMethods];
 
 const refundReasons = [
   "Lớp học bị hủy do học sinh không tham gia",

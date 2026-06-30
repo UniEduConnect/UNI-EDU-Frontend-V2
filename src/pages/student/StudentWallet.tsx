@@ -66,16 +66,8 @@ const paymentMethods = [
   { id: "techcombank", name: "Techcombank", desc: "Ngân hàng Techcombank" },
 ];
 
-// Methods for the deposit dialog: real gateways + a demo option that credits the wallet
-// directly via the test-deposit API (no Momo/VNPay sandbox required).
-const depositMethods = [
-  {
-    id: "test",
-    name: "Test (Demo)",
-    desc: "Nạp thử — cộng ngay vào ví, không qua cổng",
-  },
-  ...paymentMethods,
-];
+// Methods for the deposit dialog (real gateways only).
+const depositMethods = [...paymentMethods];
 
 const CHART_COLORS = [
   "hsl(224, 76%, 48%)",
