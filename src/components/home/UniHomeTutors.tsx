@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTutors } from "@/hooks/useTutors";
 
@@ -7,6 +8,38 @@ const gradients = [
   "linear-gradient(135deg,#f5a623,#ffce3c)",
   "linear-gradient(135deg,#6d4ed6,#a48bff)",
 ];
+
+// Avatar: shows the tutor's photo when available, falling back to the first letter
+// on a coloured gradient when there's no image or the image fails to load.
+function TutorAvatar({ name, avatar, gradient, verified }: {
+  name: string;
+  avatar?: string | null;
+  gradient: string;
+  verified?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const showImg = !!avatar && !failed;
+
+  return (
+    <div className="ava" style={{ background: showImg ? undefined : gradient }}>
+      {showImg ? (
+        <img
+          src={avatar as string}
+          alt={name}
+          onError={() => setFailed(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+        />
+      ) : (
+        (name?.trim()?.charAt(0) || "G").toUpperCase()
+      )}
+      {verified && (
+        <div className="vbadge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Real "featured tutors" grid for the landing page — same design classes as the ported HTML,
 // rendered inside the .uni-home scope so the design CSS applies.
@@ -31,14 +64,12 @@ export function UniHomeTutors() {
             top.map((t, i) => (
               <div key={t.id} className="tcard reveal">
                 <div className="top">
-                  <div className="ava" style={{ background: gradients[i % gradients.length] }}>
-                    {(t.name?.trim()?.charAt(0) || "G").toUpperCase()}
-                    {t.verified && (
-                      <div className="vbadge">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-                      </div>
-                    )}
-                  </div>
+                  <TutorAvatar
+                    name={t.name}
+                    avatar={t.avatar}
+                    gradient={gradients[i % gradients.length]}
+                    verified={t.verified}
+                  />
                   <div>
                     <div className="nm">{t.name}</div>
                     <div className="subj">{t.subjects?.[0] || t.school || "Gia sư"}</div>
