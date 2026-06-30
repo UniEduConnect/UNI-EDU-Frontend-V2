@@ -11,7 +11,12 @@ const gradients = [
 
 // Avatar: shows the tutor's photo when available, falling back to the first letter
 // on a coloured gradient when there's no image or the image fails to load.
-function TutorAvatar({ name, avatar, gradient, verified }: {
+function TutorAvatar({
+  name,
+  avatar,
+  gradient,
+  verified,
+}: {
   name: string;
   avatar?: string | null;
   gradient: string;
@@ -27,14 +32,28 @@ function TutorAvatar({ name, avatar, gradient, verified }: {
           src={avatar as string}
           alt={name}
           onError={() => setFailed(true)}
-          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            borderRadius: "inherit",
+          }}
         />
       ) : (
         (name?.trim()?.charAt(0) || "G").toUpperCase()
       )}
       {verified && (
         <div className="vbadge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
         </div>
       )}
     </div>
@@ -51,13 +70,27 @@ export function UniHomeTutors() {
     <section className="tutors" id="tutors">
       <div className="wrap">
         <div className="section-head reveal">
-          <span className="eyebrow"><span className="dot" />Gia sư tiêu biểu</span>
-          <h2>Đội ngũ gia sư <span className="text-grad">đã được kiểm duyệt</span></h2>
-          <p>Mỗi gia sư đều có hồ sơ, bằng cấp xác thực và đánh giá thật từ học viên.</p>
+          <span className="eyebrow">
+            <span className="dot" />
+            Gia sư tiêu biểu
+          </span>
+          <h2>
+            Đội ngũ gia sư <span className="text-grad">đã được kiểm duyệt</span>
+          </h2>
+          <p>
+            Mỗi gia sư đều có hồ sơ, bằng cấp xác thực và đánh giá thật từ học
+            viên.
+          </p>
         </div>
         <div className="tutor-grid">
           {top.length === 0 ? (
-            <p style={{ gridColumn: "1 / -1", textAlign: "center", color: "var(--ink-3)" }}>
+            <p
+              style={{
+                gridColumn: "1 / -1",
+                textAlign: "center",
+                color: "var(--ink-3)",
+              }}
+            >
               Chưa có gia sư nổi bật để hiển thị.
             </p>
           ) : (
@@ -72,19 +105,29 @@ export function UniHomeTutors() {
                   />
                   <div>
                     <div className="nm">{t.name}</div>
-                    <div className="subj">{t.subjects?.[0] || t.school || "Gia sư"}</div>
+                    <div className="subj">
+                      {t.subjects?.[0] || t.school || "Gia sư"}
+                    </div>
                   </div>
                 </div>
                 <div className="rate">
                   <span className="star">★</span>
-                  <b>{t.rating ? t.rating.toFixed(1) : "—"}</b> ({t.totalReviews}) · {t.yearsExperience} năm KN
+                  <b>{t.rating ? t.rating.toFixed(1) : "—"}</b> (
+                  {t.totalReviews}) · {t.yearsExperience} năm KN
                 </div>
                 <div className="tags">
-                  {(t.subjects ?? []).slice(0, 3).map((s) => <span key={s}>{s}</span>)}
+                  {(t.subjects ?? []).slice(0, 3).map((s) => (
+                    <span key={s}>{s}</span>
+                  ))}
                 </div>
                 <div className="foot">
-                  <div className="price">{Math.round((t.hourlyRate || 0) / 1000)}k<small>mỗi buổi</small></div>
-                  <Link to="/find-tutor" className="book">Đặt lịch</Link>
+                  <div className="price">
+                    {Math.round((t.hourlyRate || 0) / 1000)}k
+                    <small>mỗi buổi</small>
+                  </div>
+                  <Link to="/find-tutor" className="book">
+                    Đặt lịch
+                  </Link>
                 </div>
               </div>
             ))
