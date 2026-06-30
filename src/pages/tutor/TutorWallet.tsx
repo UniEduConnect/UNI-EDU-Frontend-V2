@@ -19,8 +19,8 @@ const typeLabels: Record<string, string> = {
 };
 
 const paymentMethods = [
-  { id: "momo", name: "MoMo", icon: Smartphone, desc: "Ví điện tử MoMo" },
   { id: "vnpay", name: "VNPay", icon: CreditCard, desc: "Cổng thanh toán VNPay" },
+  { id: "momo", name: "MoMo", icon: Smartphone, desc: "Ví điện tử MoMo" },
   { id: "payos", name: "PayOS", icon: CreditCard, desc: "Cổng thanh toán PayOS" },
   { id: "vietcombank", name: "Vietcombank", icon: Landmark, desc: "****1234" },
   { id: "techcombank", name: "Techcombank", icon: Building2, desc: "****5678" },
