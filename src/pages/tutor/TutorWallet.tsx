@@ -4,7 +4,18 @@ import { useState } from "react";
 import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
 import { useMyRefunds, useRequestRefund } from "@/hooks/useRefunds";
+import { useMyBankAccount } from "@/hooks/useTutors";
+import { Link } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 const typeLabels: Record<string, string> = {
@@ -49,6 +60,7 @@ const TutorWallet = () => {
   const depositMutation = useDeposit();
   const testDepositMutation = useTestDeposit();
   const withdrawMutation = useWithdraw();
+  const { data: bankAccount } = useMyBankAccount();
   const requestRefundMutation = useRequestRefund();
 
   const walletBalance = walletData?.balance ?? 0;
@@ -58,6 +70,7 @@ const TutorWallet = () => {
   const [amount, setAmount] = useState("");
   const [selectedMethod, setSelectedMethod] = useState("");
   const [filter, setFilter] = useState<string>("all");
+  const [confirmWithdrawOpen, setConfirmWithdrawOpen] = useState(false);
 
   // Refund modal state
   const [refundClassId, setRefundClassId] = useState<string | null>(null);
@@ -75,21 +88,44 @@ const TutorWallet = () => {
 
   const hasExistingRefund = (classId: string) => refunds.some(r => r.classId === classId && r.status === "pending");
 
+  const selectedMethodName = () => paymentMethods.find(m => m.id === selectedMethod)?.name || selectedMethod;
+
+  // Actually submit the withdrawal after the user confirms in the AlertDialog.
+  // Backend only supports payouts to a saved bank account (method must be "bank").
+  const doWithdraw = () => {
+    const amt = parseInt(amount);
+    if (!amt || amt <= 0 || !bankAccount) return;
+    withdrawMutation.mutate(
+      { amount: amt, method: "bank", bankAccount: bankAccount.bankAccount, bankName: bankAccount.bankName, note: "" },
+      {
+        onSuccess: () => {
+          toast.success(`Yêu cầu rút ${amt.toLocaleString("vi-VN")}đ về ${bankAccount.bankName} đã được gửi`);
+          setConfirmWithdrawOpen(false);
+          setDialogType(null); setAmount(""); setSelectedMethod("");
+        },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Rút tiền thất bại."),
+      },
+    );
+  };
+
   const handleSubmit = () => {
     const amt = parseInt(amount);
-    if (!amt || amt <= 0 || !selectedMethod) return;
-    const methodName = paymentMethods.find(m => m.id === selectedMethod)?.name || selectedMethod;
-    const reset = () => { setDialogType(null); setAmount(""); setSelectedMethod(""); };
+    if (!amt || amt <= 0) return;
+
     if (dialogType === "withdraw") {
+      if (!bankAccount) { toast.error("Bạn chưa lưu tài khoản ngân hàng. Vào Hồ sơ để thêm trước khi rút."); return; }
+      if (amt < 50000) { toast.error("Số tiền rút tối thiểu là 50.000đ"); return; }
       if (amt > walletBalance) { toast.error("Số tiền vượt quá số dư!"); return; }
-      withdrawMutation.mutate(
-        { amount: amt, method: selectedMethod, bankAccount: "", bankName: methodName, note: "" },
-        {
-          onSuccess: () => { toast.success(`Yêu cầu rút ${amt.toLocaleString("vi-VN")}đ qua ${methodName} đã được gửi`); reset(); },
-          onError: (e) => toast.error(e instanceof Error ? e.message : "Rút tiền thất bại."),
-        },
-      );
-    } else if (selectedMethod === "test") {
+      // Ask for confirmation first (the actual withdraw runs in doWithdraw).
+      setConfirmWithdrawOpen(true);
+      return;
+    }
+
+    // Deposit paths below require a selected payment method.
+    if (!selectedMethod) return;
+    const methodName = selectedMethodName();
+    const reset = () => { setDialogType(null); setAmount(""); setSelectedMethod(""); };
+    if (selectedMethod === "test") {
       // Demo path: create + confirm a test deposit, crediting the wallet immediately.
       testDepositMutation.mutate(amt, {
         onSuccess: () => { toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví (test)!`); reset(); },
@@ -290,7 +326,13 @@ const TutorWallet = () => {
           <DialogHeader><DialogTitle>{dialogType === "withdraw" ? "Rút tiền" : "Nạp tiền"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             {dialogType === "withdraw" && (
-              <p className="text-sm text-muted-foreground">Số dư khả dụng: <strong>{walletBalance.toLocaleString("vi-VN")}đ</strong></p>
+              <>
+                <p className="text-sm text-muted-foreground">Số dư khả dụng: <strong>{walletBalance.toLocaleString("vi-VN")}đ</strong></p>
+                <div className="flex gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  <Info className="w-4 h-4 shrink-0 text-primary mt-0.5" />
+                  <span>Tiền sẽ về tài khoản của bạn trong vòng <strong className="text-foreground">1–3 ngày làm việc</strong> (không tính Chủ nhật &amp; ngày lễ).</span>
+                </div>
+              </>
             )}
             <div>
               <label className="text-xs font-medium text-foreground">Số tiền</label>
@@ -301,27 +343,82 @@ const TutorWallet = () => {
                 ))}
               </div>
             </div>
-            <div>
-              <label className="text-xs font-medium text-foreground">Phương thức thanh toán</label>
-              <div className="space-y-2 mt-2">
-                {(dialogType === "deposit" ? depositMethods : paymentMethods).map(m => (
-                  <button key={m.id} onClick={() => setSelectedMethod(m.id)} className={cn("w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all", selectedMethod === m.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/50")}>
-                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center"><m.icon className="w-4 h-4 text-muted-foreground" /></div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{m.name}</p>
-                      <p className="text-xs text-muted-foreground">{m.desc}</p>
-                    </div>
-                  </button>
-                ))}
+            {dialogType === "deposit" ? (
+              <div>
+                <label className="text-xs font-medium text-foreground">Phương thức thanh toán</label>
+                <div className="space-y-2 mt-2">
+                  {depositMethods.map(m => (
+                    <button key={m.id} onClick={() => setSelectedMethod(m.id)} className={cn("w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all", selectedMethod === m.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/50")}>
+                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center"><m.icon className="w-4 h-4 text-muted-foreground" /></div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{m.name}</p>
+                        <p className="text-xs text-muted-foreground">{m.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <button onClick={handleSubmit} disabled={!amount || parseInt(amount) <= 0 || !selectedMethod || depositMutation.isPending || testDepositMutation.isPending || withdrawMutation.isPending} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+            ) : (
+              <div>
+                <label className="text-xs font-medium text-foreground">Tài khoản nhận tiền</label>
+                {bankAccount ? (
+                  <div className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3">
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center"><Landmark className="w-4 h-4 text-muted-foreground" /></div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{bankAccount.bankName}</p>
+                      <p className="text-xs text-muted-foreground">{bankAccount.bankAccount} • {bankAccount.bankAccountHolder}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      Bạn chưa lưu tài khoản ngân hàng. Vào mục{" "}
+                      <Link to="/tutor/profile#bank-account" onClick={() => setDialogType(null)} className="font-semibold underline underline-offset-2 hover:text-warning/80">
+                        Hồ sơ
+                      </Link>{" "}
+                      để thêm trước khi rút tiền.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+            <button onClick={handleSubmit} disabled={!amount || parseInt(amount) <= 0 || (dialogType === "withdraw" ? !bankAccount : !selectedMethod) || depositMutation.isPending || testDepositMutation.isPending || withdrawMutation.isPending} className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2">
               {(depositMutation.isPending || testDepositMutation.isPending || withdrawMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
               {dialogType === "withdraw" ? "Xác nhận rút tiền" : "Xác nhận nạp tiền"}
             </button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Withdraw confirmation */}
+      <AlertDialog open={confirmWithdrawOpen} onOpenChange={setConfirmWithdrawOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận rút tiền</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc muốn rút{" "}
+              <strong className="text-foreground">{(parseInt(amount) || 0).toLocaleString("vi-VN")}đ</strong>{" "}
+              về {bankAccount ? `${bankAccount.bankName} - ${bankAccount.bankAccount}` : "tài khoản ngân hàng"}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+            <Info className="w-4 h-4 shrink-0 text-primary mt-0.5" />
+            <span>Bạn sẽ nhận được tiền trong vòng <strong className="text-foreground">1–3 ngày làm việc</strong> (không tính Chủ nhật &amp; ngày lễ).</span>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={withdrawMutation.isPending}>Hủy</AlertDialogCancel>
+            <button
+              onClick={doWithdraw}
+              disabled={withdrawMutation.isPending}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {withdrawMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Xác nhận rút
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Refund Request Dialog */}
       <Dialog open={!!refundClassId} onOpenChange={() => setRefundClassId(null)}>

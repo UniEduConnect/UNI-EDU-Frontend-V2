@@ -10,47 +10,26 @@ import {
   Sparkles,
   CalendarDays,
   Loader2,
-  UserPlus,
-  Wallet,
-  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { useClasses } from "@/hooks/useClasses";
 import { useClassSessions, useRateSession } from "@/hooks/useSessions";
-import { useCreateClassRequest, useMyClassRequests } from "@/hooks/useClassRequests";
-import { useSubjects } from "@/hooks/useSubjects";
-import type { ClassItem, ClassRequestResponse, WeeklySlotDto } from "@/types/api";
+import type { ClassItem, WeeklySlotDto } from "@/types/api";
 
 const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
 /** Build a human-readable schedule string from the class's weekly slots. */
 function formatSchedule(slots: WeeklySlotDto[]): string {
   if (!slots || slots.length === 0) return "Chưa có lịch";
-  const days = slots.map((s) => DAY_LABELS[s.dayOfWeek] ?? `T${s.dayOfWeek}`).join(", ");
+  const days = slots
+    .map((s) => DAY_LABELS[s.dayOfWeek] ?? `T${s.dayOfWeek}`)
+    .join(", ");
   const time = `${(slots[0].startTime ?? "").slice(0, 5)}-${(slots[0].endTime ?? "").slice(0, 5)}`;
   return `${days} • ${time}`;
 }
@@ -64,69 +43,25 @@ const StudentClasses = () => {
   const navigate = useNavigate();
   const { classes, isLoading } = useClasses();
 
-  const [ratingModal, setRatingModal] = useState<{ classId: string } | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [ratingModal, setRatingModal] = useState<{ classId: string } | null>(
+    null,
+  );
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null,
+  );
   const [ratingValue, setRatingValue] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "completed">("all");
-
-  // "Looking for a tutor" request flow.
-  const { subjects } = useSubjects();
-  const { requests: myRequests } = useMyClassRequests();
-  const createRequest = useCreateClassRequest();
-  const [requestOpen, setRequestOpen] = useState(false);
-  const [reqSubjectId, setReqSubjectId] = useState("");
-  const [reqGrade, setReqGrade] = useState("");
-  const [reqSchedule, setReqSchedule] = useState("");
-  const [reqBudget, setReqBudget] = useState("");
-  const [reqNote, setReqNote] = useState("");
-
-  const resetRequestForm = () => {
-    setReqSubjectId("");
-    setReqGrade("");
-    setReqSchedule("");
-    setReqBudget("");
-    setReqNote("");
-  };
-
-  const handleSubmitRequest = () => {
-    if (!reqSubjectId || !reqGrade) {
-      toast.error("Vui lòng chọn môn học và nhập khối lớp");
-      return;
-    }
-    createRequest.mutate(
-      {
-        subjectId: reqSubjectId,
-        grade: Number(reqGrade),
-        preferredSchedule: reqSchedule || undefined,
-        budget: reqBudget ? Number(reqBudget) : undefined,
-        note: reqNote || undefined,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Đã đăng yêu cầu tìm gia sư");
-          setRequestOpen(false);
-          resetRequestForm();
-        },
-        onError: (e) =>
-          toast.error(e instanceof Error ? e.message : "Đăng yêu cầu thất bại"),
-      }
-    );
-  };
-
-  const requestStatusMeta = (status: string) => {
-    if (status === "assigned")
-      return { label: "Đã có gia sư", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" };
-    if (status === "cancelled")
-      return { label: "Đã hủy", className: "bg-muted text-muted-foreground" };
-    return { label: "Đang tìm", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" };
-  };
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "completed"
+  >("all");
 
   const rateSession = useRateSession();
   // Sessions for the class whose rating modal is open (used to pick which session to rate).
   const { sessions: modalSessions } = useClassSessions(ratingModal?.classId);
-  const completedSessions = modalSessions.filter((s) => s.status === "completed");
+  const completedSessions = modalSessions.filter(
+    (s) => s.status === "completed",
+  );
 
   const filtered = classes.filter((c) => {
     const matchSearch =
@@ -137,7 +72,9 @@ const StudentClasses = () => {
 
     const matchStatus =
       statusFilter === "all" ||
-      (statusFilter === "active" ? isActive(c.status) : c.status === "completed");
+      (statusFilter === "active"
+        ? isActive(c.status)
+        : c.status === "completed");
     return matchSearch && matchStatus;
   });
 
@@ -154,8 +91,11 @@ const StudentClasses = () => {
   const handleRate = () => {
     if (!selectedSessionId) return;
     rateSession.mutate(
-      { id: selectedSessionId, payload: { rating: ratingValue, comment: ratingComment } },
-      { onSuccess: closeRating }
+      {
+        id: selectedSessionId,
+        payload: { rating: ratingValue, comment: ratingComment },
+      },
+      { onSuccess: closeRating },
     );
   };
 
@@ -180,26 +120,26 @@ const StudentClasses = () => {
               <Sparkles className="h-3.5 w-3.5" />
               Quản lý lớp học
             </div>
-            <h2 className="mt-3 text-2xl font-bold">Theo dõi toàn bộ lớp học của bạn</h2>
-            {/* <p className="mt-1 text-sm text-white/80">
+            <h2 className="mt-3 text-2xl font-bold">
+              Theo dõi toàn bộ lớp học của bạn
+            </h2>
+            <p className="mt-1 text-sm text-white/80">
               Xem tiến độ, lịch học tiếp theo và đánh giá các buổi học đã hoàn thành.
-            </p> */}
-            <Button
-              onClick={() => setRequestOpen(true)}
-              className="mt-4 rounded-2xl bg-white text-blue-700 shadow-sm hover:bg-white/90"
-            >
-              <UserPlus className="mr-2 h-4 w-4" /> Đăng tìm gia sư
-            </Button>
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 lg:w-[320px]">
             <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
               <p className="text-xs text-white/75">Đang học</p>
-              <p className="mt-1 text-2xl font-bold">{classes.filter((c) => isActive(c.status)).length}</p>
+              <p className="mt-1 text-2xl font-bold">
+                {classes.filter((c) => isActive(c.status)).length}
+              </p>
             </div>
             <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
               <p className="text-xs text-white/75">Hoàn thành</p>
-              <p className="mt-1 text-2xl font-bold">{classes.filter((c) => c.status === "completed").length}</p>
+              <p className="mt-1 text-2xl font-bold">
+                {classes.filter((c) => c.status === "completed").length}
+              </p>
             </div>
           </div>
         </div>
@@ -227,179 +167,20 @@ const StudentClasses = () => {
                   "rounded-full px-4 py-2 text-xs font-medium transition-all",
                   statusFilter === s
                     ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-muted text-muted-foreground hover:text-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground",
                 )}
               >
-                {s === "all" ? "Tất cả" : s === "active" ? "Đang học" : "Hoàn thành"}
+                {s === "all"
+                  ? "Tất cả"
+                  : s === "active"
+                    ? "Đang học"
+                    : "Hoàn thành"}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Post "looking for a tutor" request */}
-      <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
-        <DialogContent className="rounded-3xl sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Đăng tìm gia sư</DialogTitle>
-            <DialogDescription>
-              Mô tả nhu cầu học của bạn. Gia sư phù hợp sẽ xem và nhận yêu cầu.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-1">
-            <div className="space-y-1.5">
-              <Label>Môn học</Label>
-              <Select value={reqSubjectId} onValueChange={setReqSubjectId}>
-                <SelectTrigger className="rounded-2xl">
-                  <SelectValue placeholder="Chọn môn học" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Khối lớp</Label>
-              <Input
-                type="number"
-                min={1}
-                max={12}
-                value={reqGrade}
-                onChange={(e) => setReqGrade(e.target.value)}
-                placeholder="VD: 10"
-                className="rounded-2xl"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Lịch học mong muốn</Label>
-              <Input
-                value={reqSchedule}
-                onChange={(e) => setReqSchedule(e.target.value)}
-                placeholder="VD: T2,T4 19:00"
-                className="rounded-2xl"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Ngân sách (VND / buổi)</Label>
-              <Input
-                type="number"
-                min={0}
-                value={reqBudget}
-                onChange={(e) => setReqBudget(e.target.value)}
-                placeholder="VD: 200000"
-                className="rounded-2xl"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Ghi chú</Label>
-              <Textarea
-                value={reqNote}
-                onChange={(e) => setReqNote(e.target.value)}
-                placeholder="Mô tả thêm về mục tiêu, trình độ hiện tại..."
-                className="min-h-24 rounded-2xl"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="rounded-2xl"
-              onClick={() => setRequestOpen(false)}
-              disabled={createRequest.isPending}
-            >
-              Hủy
-            </Button>
-            <Button
-              className="rounded-2xl"
-              onClick={handleSubmitRequest}
-              disabled={createRequest.isPending}
-            >
-              {createRequest.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang đăng...
-                </>
-              ) : (
-                "Đăng yêu cầu"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* My "looking for a tutor" requests */}
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <UserPlus className="h-4 w-4 text-primary" />
-          Yêu cầu tìm gia sư của tôi
-          {myRequests.length > 0 && <span className="text-muted-foreground">({myRequests.length})</span>}
-        </h3>
-
-        {myRequests.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-            Bạn chưa đăng yêu cầu nào. Nhấn "Đăng tìm gia sư" để bắt đầu.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {myRequests.map((r: ClassRequestResponse) => {
-              const meta = requestStatusMeta(r.status);
-              return (
-                <div
-                  key={r.id}
-                  className="rounded-2xl border border-border bg-muted/20 p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">
-                        {r.subject} • Lớp {r.grade}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                        {r.preferredSchedule && (
-                          <span className="inline-flex items-center gap-1">
-                            <CalendarDays className="h-3 w-3" /> {r.preferredSchedule}
-                          </span>
-                        )}
-                        {r.budget != null && (
-                          <span className="inline-flex items-center gap-1">
-                            <Wallet className="h-3 w-3" /> {r.budget.toLocaleString("vi-VN")}đ
-                          </span>
-                        )}
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="h-3 w-3" />{" "}
-                          {new Date(r.createdAt).toLocaleDateString("vi-VN")}
-                        </span>
-                      </div>
-                      {r.status === "assigned" && r.assignedTutorName && (
-                        <p className="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
-                          Gia sư: {r.assignedTutorName}
-                        </p>
-                      )}
-                    </div>
-
-                    <Badge
-                      className={cn(
-                        "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium",
-                        meta.className
-                      )}
-                    >
-                      {meta.label}
-                    </Badge>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
       {/* Rating Modal */}
       {ratingModal && (
@@ -413,7 +194,9 @@ const StudentClasses = () => {
           >
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-semibold text-foreground">Đánh giá buổi học</h3>
+                <h3 className="text-base font-semibold text-foreground">
+                  Đánh giá buổi học
+                </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Chia sẻ cảm nhận của bạn về buổi học này
                 </p>
@@ -428,7 +211,9 @@ const StudentClasses = () => {
 
             {/* Pick which completed session to rate */}
             <div className="mb-5">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Chọn buổi học</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                Chọn buổi học
+              </p>
               {completedSessions.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
                   Chưa có buổi học nào đã hoàn thành để đánh giá
@@ -443,7 +228,7 @@ const StudentClasses = () => {
                         "flex w-full items-center gap-3 rounded-2xl border p-3 text-left text-sm transition-all",
                         selectedSessionId === s.id
                           ? "border-primary bg-primary/5 font-medium"
-                          : "border-border hover:border-primary/50"
+                          : "border-border hover:border-primary/50",
                       )}
                     >
                       <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -452,7 +237,8 @@ const StudentClasses = () => {
                       </span>
                       {s.rating != null && (
                         <span className="flex items-center gap-0.5 text-[10px] text-amber-500">
-                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {s.rating}
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />{" "}
+                          {s.rating}
                         </span>
                       )}
                     </button>
@@ -473,7 +259,7 @@ const StudentClasses = () => {
                       "h-8 w-8",
                       v <= ratingValue
                         ? "fill-amber-400 text-amber-400"
-                        : "text-muted-foreground/30"
+                        : "text-muted-foreground/30",
                     )}
                   />
                 </button>
@@ -495,7 +281,11 @@ const StudentClasses = () => {
               >
                 {rateSession.isPending ? "Đang gửi..." : "Gửi đánh giá"}
               </Button>
-              <Button variant="outline" className="rounded-2xl" onClick={closeRating}>
+              <Button
+                variant="outline"
+                className="rounded-2xl"
+                onClick={closeRating}
+              >
                 Hủy
               </Button>
             </div>
@@ -521,7 +311,8 @@ const StudentClasses = () => {
                 {activeClasses.map((c: ClassItem) => {
                   const total = c.totalSessions || 0;
                   const done = c.completedSessions || 0;
-                  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+                  const percent =
+                    total > 0 ? Math.round((done / total) * 100) : 0;
 
                   return (
                     <div
@@ -529,17 +320,27 @@ const StudentClasses = () => {
                       className="group rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
                       <div className="mb-4 flex items-start gap-4">
-                        <img src={c.tutorAvatar} alt="" className="h-14 w-14 rounded-2xl object-cover" />
+                        <img
+                          src={c.tutorAvatar}
+                          alt=""
+                          className="h-14 w-14 rounded-2xl object-cover"
+                        />
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <h4 className="text-base font-semibold text-foreground">{c.name}</h4>
-                              <p className="mt-0.5 text-xs text-muted-foreground">{c.tutorName}</p>
+                              <h4 className="text-base font-semibold text-foreground">
+                                {c.name}
+                              </h4>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {c.tutorName}
+                              </p>
                             </div>
 
                             <Badge className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300">
-                              {c.status === "searching" ? "Đang tìm gia sư" : "Đang học"}
+                              {c.status === "searching"
+                                ? "Đang tìm gia sư"
+                                : "Đang học"}
                             </Badge>
                           </div>
 
@@ -559,16 +360,24 @@ const StudentClasses = () => {
                               )}
                             </Badge>
 
-                            <span className="text-[10px] text-muted-foreground">{c.subject}</span>
-                            <span className="text-[10px] text-muted-foreground">•</span>
-                            <span className="text-[10px] text-muted-foreground">{formatSchedule(c.weeklySlots)}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {c.subject}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              •
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {formatSchedule(c.weeklySlots)}
+                            </span>
                           </div>
                         </div>
                       </div>
 
                       <div className="mb-4 rounded-2xl bg-muted/35 p-4">
                         <div className="mb-2 flex items-center justify-between">
-                          <span className="text-[11px] text-muted-foreground">Tiến độ lớp học</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Tiến độ lớp học
+                          </span>
                           <span className="text-xs font-semibold text-foreground">
                             {done}/{total} buổi
                           </span>
@@ -619,10 +428,16 @@ const StudentClasses = () => {
                     className="rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md"
                   >
                     <div className="flex items-center gap-4">
-                      <img src={c.tutorAvatar} alt="" className="h-12 w-12 rounded-2xl object-cover" />
+                      <img
+                        src={c.tutorAvatar}
+                        alt=""
+                        className="h-12 w-12 rounded-2xl object-cover"
+                      />
 
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-semibold text-foreground">{c.name}</h4>
+                        <h4 className="text-sm font-semibold text-foreground">
+                          {c.name}
+                        </h4>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {c.tutorName} • {c.totalSessions} buổi
                         </p>
@@ -639,7 +454,8 @@ const StudentClasses = () => {
                       size="sm"
                       onClick={() => navigate(`/student/classes/${c.id}`)}
                     >
-                      Chi tiết lớp học <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                      Chi tiết lớp học{" "}
+                      <ChevronRight className="ml-1 h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ))}
@@ -652,7 +468,9 @@ const StudentClasses = () => {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-muted">
                 <Search className="h-7 w-7 text-muted-foreground/60" />
               </div>
-              <p className="text-sm font-medium text-foreground">Không tìm thấy lớp học nào</p>
+              <p className="text-sm font-medium text-foreground">
+                Không tìm thấy lớp học nào
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Thử tìm bằng tên lớp, tên gia sư hoặc môn học
               </p>

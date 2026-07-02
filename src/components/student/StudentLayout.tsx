@@ -40,13 +40,13 @@ const navGroups = [
   {
     items: [
       { to: "/student", icon: LayoutDashboard, label: "Tổng quan", end: true },
-      { to: "/student/tutor-posts", icon: Megaphone, label: "GS tìm học sinh" },
       { to: "/student/classes", icon: BookOpen, label: "Học tập" },
       {
         to: "/student/tests",
         icon: ClipboardCheck,
         label: "Bài tập & Kiểm tra",
       },
+      { to: "/student/tutor-posts", icon: Megaphone, label: "GS tìm học sinh" },
       { to: "/student/wallet", icon: Wallet, label: "Ví học phí" },
       { to: "/student/reviews", icon: Star, label: "Đánh giá" },
       { to: "/student/chat", icon: MessageSquare, label: "Tin nhắn" },
@@ -276,6 +276,14 @@ const StudentLayout = () => {
                             onClick={() => {
                               if (!n.read) markRead.mutate(n.id);
                               setShowNotif(false);
+
+                              // "Gia sư đã nhận lớp": new notifications deep-link to the exact
+                              // class (/student/classes/{id}); older ones stored a generic
+                              // "/student" link — fall back to the classes list either way.
+                              if (n.title.includes("nhận lớp")) {
+                                navigate(n.link?.startsWith("/student/classes") ? n.link : "/student/classes");
+                                return;
+                              }
 
                               if (n.link) {
                                 navigate(n.link);

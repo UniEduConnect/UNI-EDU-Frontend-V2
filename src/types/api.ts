@@ -360,6 +360,8 @@ export interface ClassRequestResponse {
   subject: string;
   preferredSchedule?: string | null;
   budget?: number | null;
+  /** Minimum learning commitment in months (>= 3). */
+  durationMonths?: number | null;
   note?: string | null;
   status: string; // open | assigned | cancelled
   assignedTutorName?: string | null;
@@ -370,6 +372,8 @@ export interface CreateClassRequestRequest {
   grade: number;
   preferredSchedule?: string;
   budget?: number;
+  /** Minimum learning commitment in months (>= 3). */
+  durationMonths?: number;
   note?: string;
   /** Only sent when a Parent posts on behalf of a linked child. */
   studentId?: string;

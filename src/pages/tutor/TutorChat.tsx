@@ -11,8 +11,9 @@ import {
   CheckCheck,
   Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatMessageTime } from "@/lib/utils";
 import { useState, useRef, useEffect, useMemo } from "react";
+import ChatAvatar from "@/components/chat/ChatAvatar";
 
 const TutorChat = () => {
   const { user } = useAuth();
@@ -115,10 +116,10 @@ const TutorChat = () => {
                     >
                       <div className="flex items-center gap-3">
                         <div className="relative shrink-0">
-                          <img
-                            src={c.otherPartyAvatar ?? undefined}
-                            alt={c.otherPartyName}
-                            className="w-11 h-11 rounded-full object-cover ring-2 ring-background"
+                          <ChatAvatar
+                            src={c.otherPartyAvatar}
+                            name={c.otherPartyName}
+                            className="w-11 h-11 ring-2 ring-background"
                           />
                           <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-card" />
                         </div>
@@ -193,10 +194,10 @@ const TutorChat = () => {
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="relative shrink-0">
-                      <img
-                        src={selectedConversation.otherPartyAvatar ?? undefined}
-                        alt={selectedConversation.otherPartyName}
-                        className="w-11 h-11 rounded-full object-cover ring-2 ring-background"
+                      <ChatAvatar
+                        src={selectedConversation.otherPartyAvatar}
+                        name={selectedConversation.otherPartyName}
+                        className="w-11 h-11 ring-2 ring-background"
                       />
                       <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-card" />
                     </div>
@@ -264,7 +265,7 @@ const TutorChat = () => {
                                 : "justify-end text-muted-foreground"
                             )}
                           >
-                            <span>{m.timestamp}</span>
+                            <span>{formatMessageTime(m.timestamp)}</span>
                             {isOwn && <CheckCheck className="w-3.5 h-3.5" />}
                           </div>
                         </div>
