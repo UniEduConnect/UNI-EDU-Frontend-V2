@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   BookOpen,
   Wallet,
-  CalendarDays,
   Users,
   Star,
   MessageSquare,
@@ -41,10 +40,10 @@ const navItems = [
   { to: "/teacher", icon: LayoutDashboard, label: "Tổng quan", end: true },
   { to: "/teacher/classes", icon: BookOpen, label: "Lớp học" },
   { to: "/teacher/students", icon: Users, label: "Học sinh" },
-  { to: "/teacher/wallet", icon: Wallet, label: "Thu nhập" },
-  { to: "/teacher/schedule", icon: CalendarDays, label: "Lịch dạy" },
-  { to: "/teacher/reviews", icon: Star, label: "Đánh giá" },
   { to: "/teacher/chat", icon: MessageSquare, label: "Tin nhắn" },
+  { to: "/teacher/wallet", icon: Wallet, label: "Thu nhập" },
+  { to: "/teacher/reviews", icon: Star, label: "Đánh giá" },
+  { to: "/teacher/find-students", icon: UserSearch, label: "Tìm học sinh" },
   { to: "/teacher/profile", icon: UserCircle, label: "Hồ sơ" },
 ];
 
@@ -54,7 +53,6 @@ const pageTitles: Record<string, string> = {
   "/teacher/students": "Tiến Độ Học Sinh",
   "/teacher/find-students": "Tìm Học Sinh",
   "/teacher/wallet": "Thu Nhập",
-  "/teacher/schedule": "Lịch Dạy",
   "/teacher/reviews": "Đánh Giá",
   "/teacher/chat": "Tin Nhắn",
   "/teacher/profile": "Hồ Sơ Cá Nhân",
@@ -270,16 +268,16 @@ const TeacherLayout = () => {
                                   navigate("/teacher/wallet");
                                 }
 
-                                if (n.title.includes("Lịch dạy")) {
-                                  navigate("/teacher/schedule");
-                                }
-
                                 if (
+                                  n.title.includes("Lịch dạy") ||
                                   n.title.includes("Buổi dạy") ||
-                                  n.title.includes("Học sinh mới") ||
-                                  n.title.includes("Yêu cầu học thử")
+                                  n.title.includes("Học sinh mới")
                                 ) {
                                   navigate("/teacher/classes");
+                                }
+
+                                if (n.title.includes("Yêu cầu học thử")) {
+                                  navigate("/teacher/find-students?tab=trials");
                                 }
                               }}
                               className={cn(

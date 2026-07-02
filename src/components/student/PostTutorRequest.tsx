@@ -22,26 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import WeeklySchedulePicker, { useWeeklySchedule } from "@/components/schedule/WeeklySchedulePicker";
 import { useCreateClassRequest, useMyClassRequests } from "@/hooks/useClassRequests";
 import { useSubjects } from "@/hooks/useSubjects";
 import type { ClassRequestResponse } from "@/types/api";
-
-// Weekday chips for the "desired schedule" picker (Mon-first, Sunday last).
-const SCHEDULE_DAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
-
-type DaySlot = { from: string; to: string };
-
-/** Serialize picked days + per-day time ranges, e.g. "T2 19:00-21:00, T5 18:00-20:00". */
-function buildSchedule(days: string[], times: Record<string, DaySlot>): string {
-  return SCHEDULE_DAYS.filter((d) => days.includes(d))
-    .map((d) => {
-      const { from = "", to = "" } = times[d] ?? {};
-      if (from && to) return `${d} ${from}-${to}`;
-      if (from) return `${d} ${from}`;
-      return d;
-    })
-    .join(", ");
-}
 
 function requestStatusMeta(status: string) {
   if (status === "assigned")
@@ -69,35 +53,15 @@ export default function PostTutorRequest() {
   const [requestOpen, setRequestOpen] = useState(false);
   const [reqSubjectId, setReqSubjectId] = useState("");
   const [reqGrade, setReqGrade] = useState("");
-  const [reqDays, setReqDays] = useState<string[]>([]);
-  const [reqTimes, setReqTimes] = useState<Record<string, DaySlot>>({});
+  const schedule = useWeeklySchedule();
   const [reqBudget, setReqBudget] = useState("");
   const [reqDuration, setReqDuration] = useState("3");
   const [reqNote, setReqNote] = useState("");
 
-  const toggleReqDay = (day: string) => {
-    setReqDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
-    setReqTimes((prev) => {
-      if (prev[day]) {
-        const next = { ...prev };
-        delete next[day];
-        return next;
-      }
-      return { ...prev, [day]: { from: "", to: "" } };
-    });
-  };
-
-  const setDayTime = (day: string, key: keyof DaySlot, value: string) =>
-    setReqTimes((prev) => ({
-      ...prev,
-      [day]: { ...(prev[day] ?? { from: "", to: "" }), [key]: value },
-    }));
-
   const resetRequestForm = () => {
     setReqSubjectId("");
     setReqGrade("");
-    setReqDays([]);
-    setReqTimes({});
+    schedule.reset();
     setReqBudget("");
     setReqDuration("3");
     setReqNote("");
@@ -117,7 +81,7 @@ export default function PostTutorRequest() {
       {
         subjectId: reqSubjectId,
         grade: Number(reqGrade),
-        preferredSchedule: buildSchedule(reqDays, reqTimes) || undefined,
+        preferredSchedule: schedule.scheduleString || undefined,
         budget: reqBudget ? Number(reqBudget) : undefined,
         durationMonths: duration,
         note: reqNote || undefined,
@@ -239,63 +203,13 @@ export default function PostTutorRequest() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Lịch học mong muốn</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {SCHEDULE_DAYS.map((d) => {
-                  const active = reqDays.includes(d);
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => toggleReqDay(d)}
-                      className={cn(
-                        "h-9 min-w-[2.75rem] rounded-xl border px-2 text-xs font-medium transition-colors",
-                        active
-                          ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                          : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground",
-                      )}
-                    >
-                      {d}
-                    </button>
-                  );
-                })}
-              </div>
-              {SCHEDULE_DAYS.filter((d) => reqDays.includes(d)).map((d) => (
-                <div key={d} className="flex items-center gap-2">
-                  <span className="flex h-9 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold text-primary">
-                    {d}
-                  </span>
-                  <div className="relative flex-1">
-                    <Clock className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="time"
-                      aria-label={`Giờ bắt đầu ${d}`}
-                      value={reqTimes[d]?.from ?? ""}
-                      onChange={(e) => setDayTime(d, "from", e.target.value)}
-                      className="h-9 rounded-xl pl-8 text-sm"
-                    />
-                  </div>
-                  <span className="text-xs text-muted-foreground">đến</span>
-                  <div className="relative flex-1">
-                    <Clock className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="time"
-                      aria-label={`Giờ kết thúc ${d}`}
-                      value={reqTimes[d]?.to ?? ""}
-                      onChange={(e) => setDayTime(d, "to", e.target.value)}
-                      className="h-9 rounded-xl pl-8 text-sm"
-                    />
-                  </div>
-                </div>
-              ))}
-              {reqDays.length > 0 && (
-                <p className="text-[11px] text-muted-foreground">
-                  Lịch đã chọn:{" "}
-                  <span className="font-medium text-foreground">{buildSchedule(reqDays, reqTimes)}</span>
-                </p>
-              )}
-            </div>
+            <WeeklySchedulePicker
+              label="Lịch học mong muốn"
+              days={schedule.days}
+              times={schedule.times}
+              onToggleDay={schedule.toggleDay}
+              onChangeTime={schedule.setTime}
+            />
 
             <div className="space-y-1.5">
               <Label>Ngân sách (VND / buổi)</Label>

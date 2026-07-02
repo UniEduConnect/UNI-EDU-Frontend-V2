@@ -443,15 +443,21 @@ export interface TutorPostResponse {
   gradeLevels?: string | null;
   hourlyRate?: number | null;
   preferredSchedule?: string | null;
+  /** Minimum teaching commitment in months (>= 3). */
+  durationMonths?: number | null;
   note?: string | null;
   status: string; // open | closed
   createdAt: string;
+  /** True when the caller (a Student) already has a pending application on this post. */
+  hasPendingApplication: boolean;
 }
 export interface CreateTutorPostRequest {
   subjectId: string;
   gradeLevels?: string;
   hourlyRate?: number;
   preferredSchedule?: string;
+  /** Minimum teaching commitment in months (>= 3). */
+  durationMonths?: number;
   note?: string;
 }
 export interface TutorPostListQuery {
