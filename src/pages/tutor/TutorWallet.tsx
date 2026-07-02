@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
-import { useRefunds, useRequestRefund } from "@/hooks/useRefunds";
+import { useMyRefunds, useRequestRefund } from "@/hooks/useRefunds";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -44,9 +44,8 @@ const TutorWallet = () => {
   // ClassItem has no escrow fields — show session-based progress only.
   // TODO(BE): add escrowAmount/escrowReleased/escrowStatus to ClassListItemResponse
   const { classes } = useClasses({ Status: "active" });
-  // GET /Finance/refunds may be Admin/Finance-only; a tutor without access just sees an empty list.
-  // TODO(BE): tutor-scoped GET /me/refunds for a tutor's own refund history
-  const { refunds } = useRefunds();
+  // Tutor's own refund history via GET /me/refunds (Tutor-scoped; no 403).
+  const { refunds } = useMyRefunds();
   const depositMutation = useDeposit();
   const testDepositMutation = useTestDeposit();
   const withdrawMutation = useWithdraw();
