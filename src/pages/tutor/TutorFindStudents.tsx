@@ -204,6 +204,12 @@ const TutorFindStudents = () => {
                     ? `${r.budget.toLocaleString("vi-VN")}đ/buổi`
                     : "Học phí: thỏa thuận"}
                 </div>
+                {r.durationMonths != null && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
+                    <CalendarClock className="w-3 h-3" />
+                    Học trong {r.durationMonths} tháng
+                  </div>
+                )}
               </div>
 
               {r.note && (
@@ -304,6 +310,12 @@ const DetailDialog = ({ request, onClose, onAccept }: DetailDialogProps) => {
                   {request.budget != null ? "/buổi" : ""}
                 </span>
               </div>
+              {request.durationMonths != null && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CalendarClock className="w-4 h-4 shrink-0" />
+                  Học trong {request.durationMonths} tháng
+                </div>
+              )}
               {request.note && (
                 <div className="flex items-start gap-2 text-muted-foreground">
                   <StickyNote className="w-4 h-4 shrink-0 mt-0.5" />
