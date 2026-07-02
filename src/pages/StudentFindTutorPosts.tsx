@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useOpenTutorPosts, useApplyTutorPost } from "@/hooks/useTutorPosts";
 import { useSubjects } from "@/hooks/useSubjects";
+import PostTutorRequest from "@/components/student/PostTutorRequest";
 
 const ALL_SUBJECTS = "Tất cả";
 
@@ -62,6 +63,11 @@ export default function StudentFindTutorPosts() {
           Các gia sư đang muốn nhận thêm học sinh
         </p>
       </header>
+
+      {/* Student's own "find a tutor" requests + post button (moved here from Học tập). */}
+      <div className="mb-8">
+        <PostTutorRequest />
+      </div>
 
       <div className="mb-8 bg-card border border-border rounded-2xl p-6">
         <div className="flex flex-col sm:flex-row gap-4">

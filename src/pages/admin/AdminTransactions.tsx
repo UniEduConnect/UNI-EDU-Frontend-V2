@@ -10,8 +10,31 @@ import { CreditCard, TrendingUp, Wallet, Receipt, Search, Download, Loader2 } fr
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-const typeLabel: Record<string, string> = { tuition: "Học phí", salary: "Lương gia sư", "exam-fee": "Phí thi thử" };
+const typeLabel: Record<string, string> = {
+  deposit: "Nạp tiền",
+  withdrawal: "Rút tiền",
+  tuition_payment: "Thanh toán học phí",
+  escrow_in: "Ký quỹ",
+  escrow_release: "Giải ngân",
+  refund: "Hoàn tiền",
+  platform_fee: "Phí nền tảng",
+  transferin: "Nhận chuyển khoản",
+  transferout: "Chuyển khoản đi",
+  // legacy labels
+  tuition: "Học phí",
+  salary: "Lương gia sư",
+  "exam-fee": "Phí thi thử",
+};
 const typeVariant: Record<string, "default" | "success" | "warning"> = {
+  deposit: "success",
+  withdrawal: "warning",
+  tuition_payment: "default",
+  escrow_in: "default",
+  escrow_release: "success",
+  refund: "warning",
+  platform_fee: "default",
+  transferin: "success",
+  transferout: "warning",
   tuition: "default",
   salary: "success",
   "exam-fee": "warning",
