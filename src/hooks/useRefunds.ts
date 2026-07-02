@@ -2,8 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as svc from "@/services/refunds";
 import type { CreateRefundRequest, ReviewRefundRequest } from "@/types/api";
 
+// GET /Finance/refunds — Admin/Finance portal only. Tutors use useMyRefunds instead.
 export function useRefunds(params: { Status?: string; Page?: number } = {}) {
   const result = useQuery({ queryKey: ["refunds", params], queryFn: () => svc.getRefunds(params) });
+  return { ...result, refunds: result.data?.items ?? [] };
+}
+
+// A tutor's own refund history via GET /me/refunds (Tutor role).
+export function useMyRefunds(params: { Status?: string; Page?: number } = {}) {
+  const result = useQuery({ queryKey: ["my-refunds", params], queryFn: () => svc.getMyRefunds(params) });
   return { ...result, refunds: result.data?.items ?? [] };
 }
 function useInv() { const qc = useQueryClient(); return () => qc.invalidateQueries({ queryKey: ["refunds"] }); }
