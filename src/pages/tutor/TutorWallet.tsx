@@ -281,7 +281,7 @@ const TutorWallet = () => {
       {/* Secure Payment Badge */}
       <div className="flex items-center justify-center gap-3 py-4">
         <ShieldCheck className="w-5 h-5 text-primary" />
-        <span className="text-xs text-muted-foreground">Secure Payment • MoMo • VNPay • Ngân hàng</span>
+        <span className="text-xs text-muted-foreground">Secure Payment • VNPay • MoMo • Ngân hàng</span>
       </div>
 
       {/* Withdraw/Deposit Dialog */}

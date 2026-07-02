@@ -395,9 +395,16 @@ const ParentWallet = () => {
                     {t.amount.toLocaleString("vi-VN")}đ
                   </p>
 
-                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                  <span
+                    className={cn(
+                      "inline-block shrink-0 text-[10px] px-2 py-0.5 rounded-lg",
+                      t.status === "completed"
+                        ? "bg-success/15 text-success dark:bg-emerald-900/20"
+                        : "bg-warning/15 text-warning dark:bg-amber-900/20",
+                    )}
+                  >
                     {t.status === "completed" ? "Hoàn thành" : "Đang xử lý"}
-                  </Badge>
+                  </span>
                 </div>
               ))
             )}
@@ -409,7 +416,7 @@ const ParentWallet = () => {
       <div className="flex items-center justify-center gap-3 py-2">
         <ShieldCheck className="h-5 w-5 text-muted-foreground" />
         <span className="text-xs text-muted-foreground">
-          Secure Payment • MoMo • VNPay • Ngân hàng
+          Secure Payment • VNPay • MoMo • Ngân hàng
         </span>
       </div>
 
