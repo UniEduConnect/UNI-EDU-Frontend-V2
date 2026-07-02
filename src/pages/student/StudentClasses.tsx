@@ -331,7 +331,7 @@ const StudentClasses = () => {
 
       {/* Post "looking for a tutor" request */}
       <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-3xl sm:max-w-md">
+        <DialogContent className="rounded-3xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Đăng tìm gia sư</DialogTitle>
             <DialogDescription>

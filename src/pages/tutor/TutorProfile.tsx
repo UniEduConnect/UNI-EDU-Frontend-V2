@@ -1,4 +1,6 @@
-import { ShieldCheck, Star, BookOpen, Trophy, Video, Edit2, Save, MapPin, Phone, Mail, Calendar, Award, TrendingUp, Users, Loader2, GraduationCap, Briefcase, BadgeCheck, Camera } from "lucide-react";
+import { ShieldCheck, Star, BookOpen, Trophy, Video, Edit2, Save, MapPin, Phone, Mail, Calendar, Award, TrendingUp, Users, Loader2, GraduationCap, Briefcase, BadgeCheck, Camera, Landmark, ChevronsUpDown, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -14,11 +16,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useMyTutorProfile, useUpdateMyProfile, useMyReviews } from "@/hooks/useTutors";
+import { useMyTutorProfile, useUpdateMyProfile, useMyReviews, useMyBankAccount, useSaveMyBankAccount } from "@/hooks/useTutors";
 import { useUploadImage } from "@/hooks/useUploads";
 import { useClasses } from "@/hooks/useClasses";
 import { useMySchedule } from "@/hooks/useSchedule";
 import type { UpdateTutorProfileRequest } from "@/types/api";
+
+// Common Vietnamese banks for the payout account dropdown.
+const VIETNAM_BANKS = [
+  "Vietcombank", "VietinBank", "BIDV", "Agribank", "Techcombank", "MB Bank",
+  "ACB", "VPBank", "Sacombank", "TPBank", "VIB", "HDBank", "SHB", "SeABank",
+  "OCB", "MSB", "Eximbank", "LPBank", "Bac A Bank", "PVcomBank", "NamA Bank",
+  "SCB", "ABBANK", "VietA Bank", "BVBank", "KienLong Bank", "NCB", "Saigonbank",
+];
 
 const TutorProfile = () => {
   const { data: profile, isLoading } = useMyTutorProfile();
@@ -29,6 +39,15 @@ const TutorProfile = () => {
   const { classes: activeClassList } = useClasses({ Status: "active" });
   const { classes: completedClassList } = useClasses({ Status: "completed" });
   const { sessions } = useMySchedule();
+
+  // Bank account (payout target for withdrawals).
+  const { data: bankAccount } = useMyBankAccount();
+  const saveBank = useSaveMyBankAccount();
+  const [bankForm, setBankForm] = useState({ bankName: "", bankAccount: "", bankAccountHolder: "" });
+  const [editingBank, setEditingBank] = useState(false);
+  const [bankPickerOpen, setBankPickerOpen] = useState(false);
+  const bankSectionRef = useRef<HTMLDivElement>(null);
+  const hasBankAccount = !!bankAccount?.bankAccount;
 
   const [editing, setEditing] = useState(false);
   // Confirm dialog gates the actual save so the tutor can't update by accident.
@@ -58,6 +77,48 @@ const TutorProfile = () => {
     setCertificates(profile.certificates ?? []);
     setAchievements(profile.achievements ?? []);
   }, [profile]);
+
+  // Seed the bank form from the saved account.
+  useEffect(() => {
+    if (!bankAccount) return;
+    setBankForm({
+      bankName: bankAccount.bankName ?? "",
+      bankAccount: bankAccount.bankAccount ?? "",
+      bankAccountHolder: bankAccount.bankAccountHolder ?? "",
+    });
+  }, [bankAccount]);
+
+  // Deep-link from the withdraw dialog (/tutor/profile#bank-account) scrolls to the bank
+  // section and opens it in edit mode so the tutor can fill it in right away.
+  useEffect(() => {
+    if (isLoading || window.location.hash !== "#bank-account") return;
+    setEditingBank(true);
+    const t = setTimeout(() => bankSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 200);
+    return () => clearTimeout(t);
+  }, [isLoading]);
+
+  const cancelBankEdit = () => {
+    setBankForm({
+      bankName: bankAccount?.bankName ?? "",
+      bankAccount: bankAccount?.bankAccount ?? "",
+      bankAccountHolder: bankAccount?.bankAccountHolder ?? "",
+    });
+    setEditingBank(false);
+  };
+
+  const handleSaveBank = () => {
+    if (!bankForm.bankName.trim() || !bankForm.bankAccount.trim() || !bankForm.bankAccountHolder.trim()) {
+      toast.error("Vui lòng điền đầy đủ thông tin tài khoản ngân hàng.");
+      return;
+    }
+    saveBank.mutate(bankForm, {
+      onSuccess: () => {
+        toast.success("Đã lưu tài khoản ngân hàng!");
+        setEditingBank(false);
+      },
+      onError: () => toast.error("Lưu tài khoản ngân hàng thất bại."),
+    });
+  };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -418,6 +479,96 @@ const TutorProfile = () => {
         {editing ? (
           <div className="flex items-center gap-2"><input type="number" value={form.hourlyRate} onChange={e => setForm(p => ({ ...p, hourlyRate: parseInt(e.target.value) || 0 }))} className="w-40 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" /><span className="text-sm text-muted-foreground">đ/giờ</span></div>
         ) : <p className="text-2xl font-bold text-primary">{profile.hourlyRate.toLocaleString("vi-VN")}đ <span className="text-sm font-normal text-muted-foreground">/ giờ</span></p>}
+      </div>
+
+      {/* Bank account — payout target for wallet withdrawals. */}
+      <div ref={bankSectionRef} id="bank-account" className="bg-card border border-border rounded-2xl p-5 scroll-mt-24">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Landmark className="w-4 h-4 text-primary" /> Tài khoản ngân hàng</h3>
+            <p className="text-xs text-muted-foreground mt-1">Dùng để nhận tiền khi bạn rút từ ví.</p>
+          </div>
+          {!editingBank && (
+            <button
+              onClick={() => setEditingBank(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              <Edit2 className="w-3.5 h-3.5" /> {hasBankAccount ? "Chỉnh sửa" : "Thêm tài khoản"}
+            </button>
+          )}
+        </div>
+
+        {editingBank ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="text-xs font-medium text-foreground">Ngân hàng</label>
+                <Popover open={bankPickerOpen} onOpenChange={setBankPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      role="combobox"
+                      aria-expanded={bankPickerOpen}
+                      className="w-full mt-1 flex items-center justify-between gap-2 px-3 py-2 bg-background border border-primary/40 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                    >
+                      <span className={cn("truncate", !bankForm.bankName && "text-muted-foreground")}>
+                        {bankForm.bankName || "Chọn ngân hàng"}
+                      </span>
+                      <ChevronsUpDown className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Tìm ngân hàng..." />
+                      <CommandList>
+                        <CommandEmpty>Không tìm thấy ngân hàng.</CommandEmpty>
+                        <CommandGroup>
+                          {VIETNAM_BANKS.map(b => (
+                            <CommandItem
+                              key={b}
+                              value={b}
+                              onSelect={() => { setBankForm(p => ({ ...p, bankName: b })); setBankPickerOpen(false); }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", bankForm.bankName === b ? "opacity-100" : "opacity-0")} />
+                              {b}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground">Số tài khoản</label>
+                <input value={bankForm.bankAccount} onChange={e => setBankForm(p => ({ ...p, bankAccount: e.target.value }))} placeholder="VD: 0123456789" className="w-full mt-1 px-3 py-2 bg-background border border-primary/40 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground">Chủ tài khoản</label>
+                <input value={bankForm.bankAccountHolder} onChange={e => setBankForm(p => ({ ...p, bankAccountHolder: e.target.value }))} placeholder="VD: NGUYEN VAN AN" className="w-full mt-1 px-3 py-2 bg-background border border-primary/40 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none" />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button onClick={handleSaveBank} disabled={saveBank.isPending} className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-60 flex items-center gap-2">
+                {saveBank.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Lưu tài khoản
+              </button>
+              <button onClick={cancelBankEdit} disabled={saveBank.isPending} className="px-6 py-2.5 bg-muted text-muted-foreground rounded-xl font-medium">Hủy</button>
+            </div>
+          </>
+        ) : hasBankAccount ? (
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"><Landmark className="w-5 h-5 text-primary" /></div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">{bankAccount!.bankName}</p>
+              <p className="text-xs text-muted-foreground">{bankAccount!.bankAccount} • {bankAccount!.bankAccountHolder}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border p-4">
+            <p className="text-sm text-muted-foreground">Bạn chưa lưu tài khoản ngân hàng nào.</p>
+            <button onClick={() => setEditingBank(true)} className="shrink-0 text-xs font-semibold text-primary hover:underline">Thêm ngay</button>
+          </div>
+        )}
       </div>
 
       {editing && (
