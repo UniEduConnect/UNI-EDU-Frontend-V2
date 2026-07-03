@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   BookOpen,
   Wallet,
-  CalendarDays,
   Users,
   Star,
   MessageSquare,
@@ -40,10 +39,10 @@ const navItems = [
   { to: "/tutor", icon: LayoutDashboard, label: "Tổng quan", end: true },
   { to: "/tutor/classes", icon: BookOpen, label: "Lớp học" },
   { to: "/tutor/students", icon: Users, label: "Học sinh" },
-  { to: "/tutor/wallet", icon: Wallet, label: "Thu nhập" },
-  { to: "/tutor/schedule", icon: CalendarDays, label: "Lịch dạy" },
-  { to: "/tutor/reviews", icon: Star, label: "Đánh giá" },
   { to: "/tutor/chat", icon: MessageSquare, label: "Tin nhắn" },
+  { to: "/tutor/wallet", icon: Wallet, label: "Thu nhập" },
+  { to: "/tutor/reviews", icon: Star, label: "Đánh giá" },
+  { to: "/tutor/find-students", icon: UserSearch, label: "Tìm học sinh" },
   { to: "/tutor/profile", icon: UserCircle, label: "Hồ sơ" },
 ];
 
@@ -53,7 +52,6 @@ const pageTitles: Record<string, string> = {
   "/tutor/students": "Tiến Độ Học Sinh",
   "/tutor/find-students": "Tìm Học Sinh",
   "/tutor/wallet": "Thu Nhập",
-  "/tutor/schedule": "Lịch Dạy",
   "/tutor/reviews": "Đánh Giá",
   "/tutor/chat": "Tin Nhắn",
   "/tutor/profile": "Hồ Sơ Cá Nhân",
@@ -272,15 +270,16 @@ const TutorLayout = () => {
                                 navigate("/tutor/wallet");
                               }
 
-                              if (
-                                n.title.includes("Yêu cầu học thử") ||
-                                n.title.includes("Buổi học")
-                              ) {
+                              if (n.title.includes("Buổi học")) {
                                 navigate("/tutor/classes");
                               }
 
+                              if (n.title.includes("Yêu cầu học thử")) {
+                                navigate("/tutor/find-students?tab=trials");
+                              }
+
                               if (n.title.includes("Lịch dạy")) {
-                                navigate("/tutor/schedule");
+                                navigate("/tutor/classes");
                               }
                             }}
                             className={cn(

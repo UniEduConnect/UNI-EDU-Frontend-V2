@@ -7,50 +7,78 @@ import {
   ChevronRight,
   Search,
   X,
+  X as XIcon,
   Sparkles,
   CalendarDays,
+  AlertTriangle,
+  Save,
+  Edit2,
+  Monitor,
   Loader2,
-  UserPlus,
-  Wallet,
-  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
+  DialogFooter,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useClasses } from "@/hooks/useClasses";
-import { useClassSessions, useRateSession } from "@/hooks/useSessions";
-import { useCreateClassRequest, useMyClassRequests } from "@/hooks/useClassRequests";
-import { useSubjects } from "@/hooks/useSubjects";
-import type { ClassItem, ClassRequestResponse, WeeklySlotDto } from "@/types/api";
+import {
+  useClassSessions,
+  useRateSession,
+  useApproveAbsence,
+  useRejectAbsence,
+} from "@/hooks/useSessions";
+import { useMySchedule } from "@/hooks/useSchedule";
+import {
+  useMyStudentAvailability,
+  useUpdateMyStudentAvailability,
+  useCommonSlots,
+  useAiSlots,
+} from "@/hooks/useStudents";
+import { WeeklyTimetable } from "@/components/schedule/WeeklyTimetable";
+import { slotKey, normalizeDay } from "@/lib/scheduleUtils";
+import { formatSessionDate, formatSessionClock } from "@/lib/sessionTime";
+import SessionStatusBadge from "@/components/schedule/SessionStatusBadge";
+import WeeklyCalendarBoard, {
+  type CalendarBoardSession,
+} from "@/components/schedule/WeeklyCalendarBoard";
+import type {
+  AvailableSlotDto,
+  ClassItem,
+  SessionResponse,
+  WeeklySlotDto,
+} from "@/types/api";
+
+const STUDENT_TUTOR_AVATAR_PLACEHOLDER = "/placeholder.svg";
+
+type ViewSession = SessionResponse & {
+  date: string;
+  time: string;
+  className: string;
+  tutorName: string;
+  tutorAvatar: string;
+  subject: string;
+};
 
 const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
 /** Build a human-readable schedule string from the class's weekly slots. */
 function formatSchedule(slots: WeeklySlotDto[]): string {
   if (!slots || slots.length === 0) return "Chưa có lịch";
-  const days = slots.map((s) => DAY_LABELS[s.dayOfWeek] ?? `T${s.dayOfWeek}`).join(", ");
+  const days = slots
+    .map((s) => DAY_LABELS[s.dayOfWeek] ?? `T${s.dayOfWeek}`)
+    .join(", ");
   const time = `${(slots[0].startTime ?? "").slice(0, 5)}-${(slots[0].endTime ?? "").slice(0, 5)}`;
   return `${days} • ${time}`;
 }
@@ -64,69 +92,165 @@ const StudentClasses = () => {
   const navigate = useNavigate();
   const { classes, isLoading } = useClasses();
 
-  const [ratingModal, setRatingModal] = useState<{ classId: string } | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [ratingModal, setRatingModal] = useState<{ classId: string } | null>(
+    null,
+  );
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null,
+  );
   const [ratingValue, setRatingValue] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "completed">("all");
-
-  // "Looking for a tutor" request flow.
-  const { subjects } = useSubjects();
-  const { requests: myRequests } = useMyClassRequests();
-  const createRequest = useCreateClassRequest();
-  const [requestOpen, setRequestOpen] = useState(false);
-  const [reqSubjectId, setReqSubjectId] = useState("");
-  const [reqGrade, setReqGrade] = useState("");
-  const [reqSchedule, setReqSchedule] = useState("");
-  const [reqBudget, setReqBudget] = useState("");
-  const [reqNote, setReqNote] = useState("");
-
-  const resetRequestForm = () => {
-    setReqSubjectId("");
-    setReqGrade("");
-    setReqSchedule("");
-    setReqBudget("");
-    setReqNote("");
-  };
-
-  const handleSubmitRequest = () => {
-    if (!reqSubjectId || !reqGrade) {
-      toast.error("Vui lòng chọn môn học và nhập khối lớp");
-      return;
-    }
-    createRequest.mutate(
-      {
-        subjectId: reqSubjectId,
-        grade: Number(reqGrade),
-        preferredSchedule: reqSchedule || undefined,
-        budget: reqBudget ? Number(reqBudget) : undefined,
-        note: reqNote || undefined,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Đã đăng yêu cầu tìm gia sư");
-          setRequestOpen(false);
-          resetRequestForm();
-        },
-        onError: (e) =>
-          toast.error(e instanceof Error ? e.message : "Đăng yêu cầu thất bại"),
-      }
-    );
-  };
-
-  const requestStatusMeta = (status: string) => {
-    if (status === "assigned")
-      return { label: "Đã có gia sư", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" };
-    if (status === "cancelled")
-      return { label: "Đã hủy", className: "bg-muted text-muted-foreground" };
-    return { label: "Đang tìm", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" };
-  };
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "completed"
+  >("all");
 
   const rateSession = useRateSession();
   // Sessions for the class whose rating modal is open (used to pick which session to rate).
   const { sessions: modalSessions } = useClassSessions(ratingModal?.classId);
-  const completedSessions = modalSessions.filter((s) => s.status === "completed");
+  const completedSessions = modalSessions.filter(
+    (s) => s.status === "completed",
+  );
+
+  // --- Thời khóa biểu / lịch rảnh (merged in from the former "Lịch học" page) ---
+  const { sessions, isLoading: sessionsLoading } = useMySchedule();
+  const approveAbsence = useApproveAbsence();
+  const rejectAbsence = useRejectAbsence();
+
+  // Smart timetable: free slots + edit + common-slot suggestion with a tutor.
+  const { slots: myAvail } = useMyStudentAvailability();
+  const updateAvail = useUpdateMyStudentAvailability();
+  const [availEdit, setAvailEdit] = useState(false);
+  const [availDraft, setAvailDraft] = useState<AvailableSlotDto[]>([]);
+  const [suggestTutorId, setSuggestTutorId] = useState("");
+  const [sessionsPerWeek, setSessionsPerWeek] = useState(2);
+  const [selectedSession, setSelectedSession] = useState<ViewSession | null>(
+    null,
+  );
+  const [params, setParams] = useSearchParams();
+
+  const tutorOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    classes.forEach((c) => {
+      if (c.tutorId) m.set(c.tutorId, c.tutorName);
+    });
+    return Array.from(m, ([id, name]) => ({ id, name }));
+  }, [classes]);
+
+  const { slots: commonSlots } = useCommonSlots(suggestTutorId || undefined);
+  const { slots: aiSlots, isLoading: aiSlotsLoading } = useAiSlots(
+    suggestTutorId || undefined,
+    sessionsPerWeek,
+  );
+  // Highlight the AI's chosen sessions on the grid when available; otherwise show the raw overlap.
+  const suggested = useMemo(
+    () =>
+      new Set(
+        (aiSlots.length > 0 ? aiSlots : commonSlots).map((s) =>
+          slotKey(normalizeDay(s.day), s.time),
+        ),
+      ),
+    [aiSlots, commonSlots],
+  );
+
+  const toggleAvailSlot = (day: string, slot: string) =>
+    setAvailDraft((prev) => {
+      const exists = prev.some(
+        (s) => normalizeDay(s.day) === day && s.time === slot,
+      );
+      return exists
+        ? prev.filter((s) => !(normalizeDay(s.day) === day && s.time === slot))
+        : [...prev, { day, time: slot }];
+    });
+
+  const startEditAvail = () => {
+    setAvailDraft(myAvail.map((s) => ({ day: normalizeDay(s.day), time: s.time })));
+    setAvailEdit(true);
+  };
+
+  const saveAvail = () =>
+    updateAvail.mutate(
+      { slots: availDraft },
+      {
+        onSuccess: () => {
+          setAvailEdit(false);
+          toast.success("Đã cập nhật lịch rảnh!");
+        },
+        onError: () => toast.error("Không thể cập nhật lịch rảnh"),
+      },
+    );
+
+  // Per-session class/tutor info is NOT on SessionResponse (only classId); join client-side.
+  const classMap = useMemo(() => {
+    const m = new Map<string, ClassItem>();
+    for (const c of classes) m.set(c.id, c);
+    return m;
+  }, [classes]);
+
+  const allSessions: ViewSession[] = useMemo(
+    () =>
+      sessions
+        .map((s) => {
+          const cls = classMap.get(s.classId);
+          return {
+            ...s,
+            date: formatSessionDate(s.startAt),
+            time: `${formatSessionClock(s.startAt)}-${formatSessionClock(s.endAt)}`,
+            className: cls?.name ?? "Lớp học",
+            tutorName: cls?.tutorName ?? "—",
+            tutorAvatar: cls?.tutorAvatar ?? STUDENT_TUTOR_AVATAR_PLACEHOLDER,
+            subject: cls?.subject ?? "",
+          };
+        })
+        .sort((a, b) => a.startAt.localeCompare(b.startAt)),
+    [sessions, classMap],
+  );
+
+  const boardSessions: CalendarBoardSession[] = useMemo(
+    () =>
+      allSessions.map((s) => ({
+        id: s.id,
+        startAt: s.startAt,
+        endAt: s.endAt,
+        status: s.status,
+        title: s.className,
+        subtitle: s.tutorName,
+        format: s.format,
+      })),
+    [allSessions],
+  );
+
+  const pendingTutorAbsences = useMemo(
+    () =>
+      allSessions.filter(
+        (s) =>
+          s.absenceRequestedBy === "tutor" &&
+          (s.absenceApproved === null || s.absenceApproved === undefined),
+      ),
+    [allSessions],
+  );
+
+  const confirmAbsence = (sessionId: string) => {
+    approveAbsence.mutate(sessionId, {
+      onSuccess: () => toast.success("Đã xác nhận báo vắng"),
+      onError: () => toast.error("Thao tác thất bại"),
+    });
+  };
+
+  const rejectAbsenceFn = (sessionId: string) => {
+    rejectAbsence.mutate(sessionId, {
+      onSuccess: () => toast.success("Đã từ chối cho vắng"),
+      onError: () => toast.error("Thao tác thất bại"),
+    });
+  };
+
+  // Auto-open popup driven by ?absence={sessionId} (notification deep-links).
+  const absenceId = params.get("absence");
+  const absenceSession = useMemo(
+    () => (absenceId ? allSessions.find((s) => s.id === absenceId) ?? null : null),
+    [absenceId, allSessions],
+  );
+  const closeAbsenceDialog = () => setParams({});
 
   const filtered = classes.filter((c) => {
     const matchSearch =
@@ -137,7 +261,9 @@ const StudentClasses = () => {
 
     const matchStatus =
       statusFilter === "all" ||
-      (statusFilter === "active" ? isActive(c.status) : c.status === "completed");
+      (statusFilter === "active"
+        ? isActive(c.status)
+        : c.status === "completed");
     return matchSearch && matchStatus;
   });
 
@@ -154,8 +280,11 @@ const StudentClasses = () => {
   const handleRate = () => {
     if (!selectedSessionId) return;
     rateSession.mutate(
-      { id: selectedSessionId, payload: { rating: ratingValue, comment: ratingComment } },
-      { onSuccess: closeRating }
+      {
+        id: selectedSessionId,
+        payload: { rating: ratingValue, comment: ratingComment },
+      },
+      { onSuccess: closeRating },
     );
   };
 
@@ -180,26 +309,26 @@ const StudentClasses = () => {
               <Sparkles className="h-3.5 w-3.5" />
               Quản lý lớp học
             </div>
-            <h2 className="mt-3 text-2xl font-bold">Theo dõi toàn bộ lớp học của bạn</h2>
-            {/* <p className="mt-1 text-sm text-white/80">
+            <h2 className="mt-3 text-2xl font-bold">
+              Theo dõi toàn bộ lớp học của bạn
+            </h2>
+            <p className="mt-1 text-sm text-white/80">
               Xem tiến độ, lịch học tiếp theo và đánh giá các buổi học đã hoàn thành.
-            </p> */}
-            <Button
-              onClick={() => setRequestOpen(true)}
-              className="mt-4 rounded-2xl bg-white text-blue-700 shadow-sm hover:bg-white/90"
-            >
-              <UserPlus className="mr-2 h-4 w-4" /> Đăng tìm gia sư
-            </Button>
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 lg:w-[320px]">
             <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
               <p className="text-xs text-white/75">Đang học</p>
-              <p className="mt-1 text-2xl font-bold">{classes.filter((c) => isActive(c.status)).length}</p>
+              <p className="mt-1 text-2xl font-bold">
+                {classes.filter((c) => isActive(c.status)).length}
+              </p>
             </div>
             <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
               <p className="text-xs text-white/75">Hoàn thành</p>
-              <p className="mt-1 text-2xl font-bold">{classes.filter((c) => c.status === "completed").length}</p>
+              <p className="mt-1 text-2xl font-bold">
+                {classes.filter((c) => c.status === "completed").length}
+              </p>
             </div>
           </div>
         </div>
@@ -227,179 +356,20 @@ const StudentClasses = () => {
                   "rounded-full px-4 py-2 text-xs font-medium transition-all",
                   statusFilter === s
                     ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-muted text-muted-foreground hover:text-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground",
                 )}
               >
-                {s === "all" ? "Tất cả" : s === "active" ? "Đang học" : "Hoàn thành"}
+                {s === "all"
+                  ? "Tất cả"
+                  : s === "active"
+                    ? "Đang học"
+                    : "Hoàn thành"}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Post "looking for a tutor" request */}
-      <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
-        <DialogContent className="rounded-3xl sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Đăng tìm gia sư</DialogTitle>
-            <DialogDescription>
-              Mô tả nhu cầu học của bạn. Gia sư phù hợp sẽ xem và nhận yêu cầu.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-1">
-            <div className="space-y-1.5">
-              <Label>Môn học</Label>
-              <Select value={reqSubjectId} onValueChange={setReqSubjectId}>
-                <SelectTrigger className="rounded-2xl">
-                  <SelectValue placeholder="Chọn môn học" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Khối lớp</Label>
-              <Input
-                type="number"
-                min={1}
-                max={12}
-                value={reqGrade}
-                onChange={(e) => setReqGrade(e.target.value)}
-                placeholder="VD: 10"
-                className="rounded-2xl"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Lịch học mong muốn</Label>
-              <Input
-                value={reqSchedule}
-                onChange={(e) => setReqSchedule(e.target.value)}
-                placeholder="VD: T2,T4 19:00"
-                className="rounded-2xl"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Ngân sách (VND / buổi)</Label>
-              <Input
-                type="number"
-                min={0}
-                value={reqBudget}
-                onChange={(e) => setReqBudget(e.target.value)}
-                placeholder="VD: 200000"
-                className="rounded-2xl"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Ghi chú</Label>
-              <Textarea
-                value={reqNote}
-                onChange={(e) => setReqNote(e.target.value)}
-                placeholder="Mô tả thêm về mục tiêu, trình độ hiện tại..."
-                className="min-h-24 rounded-2xl"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="rounded-2xl"
-              onClick={() => setRequestOpen(false)}
-              disabled={createRequest.isPending}
-            >
-              Hủy
-            </Button>
-            <Button
-              className="rounded-2xl"
-              onClick={handleSubmitRequest}
-              disabled={createRequest.isPending}
-            >
-              {createRequest.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang đăng...
-                </>
-              ) : (
-                "Đăng yêu cầu"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* My "looking for a tutor" requests */}
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <UserPlus className="h-4 w-4 text-primary" />
-          Yêu cầu tìm gia sư của tôi
-          {myRequests.length > 0 && <span className="text-muted-foreground">({myRequests.length})</span>}
-        </h3>
-
-        {myRequests.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-            Bạn chưa đăng yêu cầu nào. Nhấn "Đăng tìm gia sư" để bắt đầu.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {myRequests.map((r: ClassRequestResponse) => {
-              const meta = requestStatusMeta(r.status);
-              return (
-                <div
-                  key={r.id}
-                  className="rounded-2xl border border-border bg-muted/20 p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">
-                        {r.subject} • Lớp {r.grade}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                        {r.preferredSchedule && (
-                          <span className="inline-flex items-center gap-1">
-                            <CalendarDays className="h-3 w-3" /> {r.preferredSchedule}
-                          </span>
-                        )}
-                        {r.budget != null && (
-                          <span className="inline-flex items-center gap-1">
-                            <Wallet className="h-3 w-3" /> {r.budget.toLocaleString("vi-VN")}đ
-                          </span>
-                        )}
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="h-3 w-3" />{" "}
-                          {new Date(r.createdAt).toLocaleDateString("vi-VN")}
-                        </span>
-                      </div>
-                      {r.status === "assigned" && r.assignedTutorName && (
-                        <p className="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
-                          Gia sư: {r.assignedTutorName}
-                        </p>
-                      )}
-                    </div>
-
-                    <Badge
-                      className={cn(
-                        "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium",
-                        meta.className
-                      )}
-                    >
-                      {meta.label}
-                    </Badge>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
       {/* Rating Modal */}
       {ratingModal && (
@@ -413,7 +383,9 @@ const StudentClasses = () => {
           >
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-semibold text-foreground">Đánh giá buổi học</h3>
+                <h3 className="text-base font-semibold text-foreground">
+                  Đánh giá buổi học
+                </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Chia sẻ cảm nhận của bạn về buổi học này
                 </p>
@@ -428,7 +400,9 @@ const StudentClasses = () => {
 
             {/* Pick which completed session to rate */}
             <div className="mb-5">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Chọn buổi học</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                Chọn buổi học
+              </p>
               {completedSessions.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
                   Chưa có buổi học nào đã hoàn thành để đánh giá
@@ -443,7 +417,7 @@ const StudentClasses = () => {
                         "flex w-full items-center gap-3 rounded-2xl border p-3 text-left text-sm transition-all",
                         selectedSessionId === s.id
                           ? "border-primary bg-primary/5 font-medium"
-                          : "border-border hover:border-primary/50"
+                          : "border-border hover:border-primary/50",
                       )}
                     >
                       <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -452,7 +426,8 @@ const StudentClasses = () => {
                       </span>
                       {s.rating != null && (
                         <span className="flex items-center gap-0.5 text-[10px] text-amber-500">
-                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {s.rating}
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />{" "}
+                          {s.rating}
                         </span>
                       )}
                     </button>
@@ -473,7 +448,7 @@ const StudentClasses = () => {
                       "h-8 w-8",
                       v <= ratingValue
                         ? "fill-amber-400 text-amber-400"
-                        : "text-muted-foreground/30"
+                        : "text-muted-foreground/30",
                     )}
                   />
                 </button>
@@ -495,7 +470,11 @@ const StudentClasses = () => {
               >
                 {rateSession.isPending ? "Đang gửi..." : "Gửi đánh giá"}
               </Button>
-              <Button variant="outline" className="rounded-2xl" onClick={closeRating}>
+              <Button
+                variant="outline"
+                className="rounded-2xl"
+                onClick={closeRating}
+              >
                 Hủy
               </Button>
             </div>
@@ -521,25 +500,45 @@ const StudentClasses = () => {
                 {activeClasses.map((c: ClassItem) => {
                   const total = c.totalSessions || 0;
                   const done = c.completedSessions || 0;
-                  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+                  const percent =
+                    total > 0 ? Math.round((done / total) * 100) : 0;
 
                   return (
                     <div
                       key={c.id}
-                      className="group rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/student/classes/${c.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          navigate(`/student/classes/${c.id}`);
+                        }
+                      }}
+                      className="group cursor-pointer rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
                       <div className="mb-4 flex items-start gap-4">
-                        <img src={c.tutorAvatar} alt="" className="h-14 w-14 rounded-2xl object-cover" />
+                        <img
+                          src={c.tutorAvatar}
+                          alt=""
+                          className="h-14 w-14 rounded-2xl object-cover"
+                        />
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <h4 className="text-base font-semibold text-foreground">{c.name}</h4>
-                              <p className="mt-0.5 text-xs text-muted-foreground">{c.tutorName}</p>
+                              <h4 className="text-base font-semibold text-foreground">
+                                {c.name}
+                              </h4>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {c.tutorName}
+                              </p>
                             </div>
 
                             <Badge className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300">
-                              {c.status === "searching" ? "Đang tìm gia sư" : "Đang học"}
+                              {c.status === "searching"
+                                ? "Đang tìm gia sư"
+                                : "Đang học"}
                             </Badge>
                           </div>
 
@@ -559,16 +558,24 @@ const StudentClasses = () => {
                               )}
                             </Badge>
 
-                            <span className="text-[10px] text-muted-foreground">{c.subject}</span>
-                            <span className="text-[10px] text-muted-foreground">•</span>
-                            <span className="text-[10px] text-muted-foreground">{formatSchedule(c.weeklySlots)}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {c.subject}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              •
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {formatSchedule(c.weeklySlots)}
+                            </span>
                           </div>
                         </div>
                       </div>
 
                       <div className="mb-4 rounded-2xl bg-muted/35 p-4">
                         <div className="mb-2 flex items-center justify-between">
-                          <span className="text-[11px] text-muted-foreground">Tiến độ lớp học</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Tiến độ lớp học
+                          </span>
                           <span className="text-xs font-semibold text-foreground">
                             {done}/{total} buổi
                           </span>
@@ -584,7 +591,10 @@ const StudentClasses = () => {
                           variant="outline"
                           className="flex-1 rounded-2xl text-xs"
                           size="sm"
-                          onClick={() => setRatingModal({ classId: c.id })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRatingModal({ classId: c.id });
+                          }}
                         >
                           <Star className="mr-1 h-3.5 w-3.5" /> Đánh giá buổi
                         </Button>
@@ -592,7 +602,10 @@ const StudentClasses = () => {
                           variant="outline"
                           className="flex-1 rounded-2xl text-xs"
                           size="sm"
-                          onClick={() => navigate(`/student/classes/${c.id}`)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/student/classes/${c.id}`);
+                          }}
                         >
                           Chi tiết <ChevronRight className="ml-1 h-3.5 w-3.5" />
                         </Button>
@@ -616,13 +629,28 @@ const StudentClasses = () => {
                 {completedClasses.map((c: ClassItem) => (
                   <div
                     key={c.id}
-                    className="rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/student/classes/${c.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        navigate(`/student/classes/${c.id}`);
+                      }
+                    }}
+                    className="cursor-pointer rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     <div className="flex items-center gap-4">
-                      <img src={c.tutorAvatar} alt="" className="h-12 w-12 rounded-2xl object-cover" />
+                      <img
+                        src={c.tutorAvatar}
+                        alt=""
+                        className="h-12 w-12 rounded-2xl object-cover"
+                      />
 
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-semibold text-foreground">{c.name}</h4>
+                        <h4 className="text-sm font-semibold text-foreground">
+                          {c.name}
+                        </h4>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {c.tutorName} • {c.totalSessions} buổi
                         </p>
@@ -637,9 +665,13 @@ const StudentClasses = () => {
                       variant="outline"
                       className="mt-4 w-full rounded-2xl text-xs"
                       size="sm"
-                      onClick={() => navigate(`/student/classes/${c.id}`)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/student/classes/${c.id}`);
+                      }}
                     >
-                      Chi tiết lớp học <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                      Chi tiết lớp học{" "}
+                      <ChevronRight className="ml-1 h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ))}
@@ -652,14 +684,400 @@ const StudentClasses = () => {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-muted">
                 <Search className="h-7 w-7 text-muted-foreground/60" />
               </div>
-              <p className="text-sm font-medium text-foreground">Không tìm thấy lớp học nào</p>
+              <p className="text-sm font-medium text-foreground">
+                Không tìm thấy lớp học nào
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Thử tìm bằng tên lớp, tên gia sư hoặc môn học
               </p>
             </div>
           )}
+
+          {/* Pending tutor-absence confirmations */}
+          {pendingTutorAbsences.length > 0 && (
+            <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                <h3 className="text-sm font-semibold text-amber-800">
+                  Gia sư báo vắng cần xác nhận ({pendingTutorAbsences.length})
+                </h3>
+              </div>
+              <div className="space-y-2">
+                {pendingTutorAbsences.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-white/70 p-3 sm:flex-row sm:items-center"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-900">
+                        {s.className}
+                      </p>
+                      <p className="text-xs text-amber-700">
+                        {s.tutorName} • {s.date} • {s.time}
+                      </p>
+                      {s.absenceReason && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Lý do: {s.absenceReason}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        size="sm"
+                        className="rounded-xl bg-amber-600 text-xs text-white hover:bg-amber-700"
+                        disabled={approveAbsence.isPending || rejectAbsence.isPending}
+                        onClick={() => confirmAbsence(s.id)}
+                      >
+                        Xác nhận báo vắng
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-xl border-amber-300 text-xs text-amber-800 hover:bg-amber-100"
+                        disabled={approveAbsence.isPending || rejectAbsence.isPending}
+                        onClick={() => rejectAbsenceFn(s.id)}
+                      >
+                        Từ chối
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Thời khóa biểu — the one real, dated weekly calendar for this student's actual sessions */}
+          {sessionsLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải buổi học...
+            </div>
+          ) : (
+            <div>
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+                <CalendarDays className="h-4 w-4 text-primary" /> Thời khóa biểu (
+                {allSessions.length})
+              </h3>
+              <WeeklyCalendarBoard
+                sessions={boardSessions}
+                onSelect={(s) => {
+                  const full = allSessions.find((x) => x.id === s.id);
+                  if (full) setSelectedSession(full);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Smart timetable: free/busy + edit free slots + suggest common slots with a tutor */}
+          <div className="space-y-4 rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Sparkles className="h-4 w-4 text-primary" /> Lịch rảnh / bận & gợi
+                ý giờ học thông minh
+              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                {!availEdit && tutorOptions.length > 0 && (
+                  <select
+                    value={suggestTutorId}
+                    onChange={(e) => setSuggestTutorId(e.target.value)}
+                    className="rounded-lg border border-border bg-card px-2 py-1.5 text-xs"
+                  >
+                    <option value="">Gợi ý giờ chung với gia sư…</option>
+                    {tutorOptions.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!availEdit && suggestTutorId && (
+                  <select
+                    value={sessionsPerWeek}
+                    onChange={(e) => setSessionsPerWeek(Number(e.target.value))}
+                    className="rounded-lg border border-border bg-card px-2 py-1.5 text-xs"
+                    title="Số buổi học mỗi tuần"
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n} buổi/tuần
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {availEdit ? (
+                  <>
+                    <button
+                      onClick={saveAvail}
+                      disabled={updateAvail.isPending}
+                      className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                    >
+                      <Save className="h-3 w-3" /> Lưu
+                    </button>
+                    <button
+                      onClick={() => setAvailEdit(false)}
+                      className="flex items-center gap-1 rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
+                    >
+                      <XIcon className="h-3 w-3" /> Hủy
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={startEditAvail}
+                    className="flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+                  >
+                    <Edit2 className="h-3 w-3" /> Sửa lịch rảnh
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <WeeklyTimetable
+              availability={availEdit ? availDraft : myAvail}
+              sessions={allSessions}
+              editMode={availEdit}
+              onToggle={toggleAvailSlot}
+              suggested={availEdit ? undefined : suggested}
+            />
+
+            {!availEdit && suggestTutorId && (
+              <div className="rounded-lg bg-muted/40 p-3 text-xs">
+                {commonSlots.length > 0 ? (
+                  <span className="text-foreground">
+                    ★ <span className="font-medium">{commonSlots.length}</span>{" "}
+                    khung giờ phù hợp với{" "}
+                    {tutorOptions.find((t) => t.id === suggestTutorId)?.name}:{" "}
+                    <span className="font-medium text-emerald-700 dark:text-emerald-300">
+                      {commonSlots.map((s) => `${s.day} ${s.time}`).join(" · ")}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Chưa có khung giờ chung. Bạn và gia sư cần khai báo lịch rảnh
+                    trùng nhau (ô xanh lá).
+                  </span>
+                )}
+              </div>
+            )}
+
+            {!availEdit &&
+              suggestTutorId &&
+              (aiSlotsLoading || aiSlots.length > 0) && (
+                <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                    <Sparkles className="h-3.5 w-3.5" /> AI sắp xếp {sessionsPerWeek}{" "}
+                    buổi/tuần tối ưu (lịch rảnh của bạn ∩ gia sư)
+                  </div>
+                  {aiSlotsLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Đang phân
+                      tích…
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {aiSlots.map((s, i) => (
+                        <div
+                          key={`${s.day}-${s.time}-${i}`}
+                          className="flex items-center justify-between gap-2 rounded-lg bg-background/70 px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <span className="text-xs font-medium text-foreground">
+                              {s.day} · {s.time}
+                            </span>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {s.reason}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 text-[11px]"
+                          >
+                            {s.score}đ
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+          </div>
         </>
       )}
+
+      {/* Session Detail Dialog */}
+      <Dialog
+        open={!!selectedSession}
+        onOpenChange={() => setSelectedSession(null)}
+      >
+        <DialogContent className="max-w-md">
+          {selectedSession && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {selectedSession.className}
+                  <SessionStatusBadge status={selectedSession.status} />
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="block text-xs text-muted-foreground">
+                      Ngày
+                    </span>
+                    <span className="font-medium">{selectedSession.date}</span>
+                  </div>
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="block text-xs text-muted-foreground">
+                      Giờ
+                    </span>
+                    <span className="font-medium">{selectedSession.time}</span>
+                  </div>
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="block text-xs text-muted-foreground">
+                      Gia sư
+                    </span>
+                    <span className="font-medium">
+                      {selectedSession.tutorName}
+                    </span>
+                  </div>
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="block text-xs text-muted-foreground">
+                      Môn học
+                    </span>
+                    <span className="font-medium">
+                      {selectedSession.subject || "—"}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-muted/50 p-3">
+                  <span className="block text-xs text-muted-foreground">
+                    Hình thức
+                  </span>
+                  <span className="flex items-center gap-1 font-medium">
+                    {selectedSession.format === "online" ? (
+                      <>
+                        <Monitor className="h-3 w-3 text-primary" /> Online
+                      </>
+                    ) : (
+                      <>
+                        <MapPin className="h-3 w-3" /> Offline
+                      </>
+                    )}
+                  </span>
+                </div>
+                {selectedSession.content && (
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="mb-1 block text-xs text-muted-foreground">
+                      Nội dung
+                    </span>
+                    <p className="text-sm">{selectedSession.content}</p>
+                  </div>
+                )}
+                {selectedSession.notes && (
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="mb-1 block text-xs text-muted-foreground">
+                      Nhận xét
+                    </span>
+                    <p className="text-sm">{selectedSession.notes}</p>
+                  </div>
+                )}
+                {selectedSession.homework && (
+                  <div className="rounded-xl border border-primary/10 bg-primary/5 p-3">
+                    <span className="mb-1 block text-xs text-muted-foreground">
+                      BTVN
+                    </span>
+                    <p className="text-sm font-medium">
+                      {selectedSession.homework}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-opening absence review popup (?absence={sessionId}) */}
+      <Dialog
+        open={!!absenceSession}
+        onOpenChange={(open) => {
+          if (!open) closeAbsenceDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Yêu cầu báo vắng từ gia sư
+            </DialogTitle>
+            <DialogDescription>
+              Gia sư đã gửi yêu cầu báo vắng cho buổi học này. Vui lòng xem chi
+              tiết và phản hồi.
+            </DialogDescription>
+          </DialogHeader>
+          {absenceSession && (
+            <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div>
+                <p className="text-xs text-amber-700">Lớp học</p>
+                <p className="text-sm font-semibold text-amber-900">
+                  {absenceSession.className}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-amber-700">Gia sư</p>
+                <p className="text-sm font-medium text-amber-900">
+                  {absenceSession.tutorName}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-amber-700">Thời gian</p>
+                <p className="text-sm font-medium text-amber-900">
+                  {absenceSession.date} • {absenceSession.time}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-amber-700">Lý do</p>
+                <p className="text-sm text-amber-900">
+                  {absenceSession.absenceReason || "Không có lý do cụ thể"}
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              className="rounded-xl border-amber-300 text-xs text-amber-800 hover:bg-amber-100"
+              disabled={approveAbsence.isPending || rejectAbsence.isPending}
+              onClick={() => {
+                if (!absenceSession) return;
+                rejectAbsence.mutate(absenceSession.id, {
+                  onSuccess: () => {
+                    toast.success("Đã từ chối cho vắng");
+                    closeAbsenceDialog();
+                  },
+                  onError: () => toast.error("Thao tác thất bại"),
+                });
+              }}
+            >
+              Từ chối
+            </Button>
+            <Button
+              className="rounded-xl bg-amber-600 text-xs text-white hover:bg-amber-700"
+              disabled={approveAbsence.isPending || rejectAbsence.isPending}
+              onClick={() => {
+                if (!absenceSession) return;
+                approveAbsence.mutate(absenceSession.id, {
+                  onSuccess: () => {
+                    toast.success("Đã xác nhận báo vắng");
+                    closeAbsenceDialog();
+                  },
+                  onError: () => toast.error("Thao tác thất bại"),
+                });
+              }}
+            >
+              Cho phép vắng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

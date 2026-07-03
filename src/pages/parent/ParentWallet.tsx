@@ -32,19 +32,15 @@ const typeLabels: Record<string, string> = {
 };
 
 const paymentMethods = [
-  { id: "momo", name: "MoMo", desc: "Ví điện tử MoMo" },
   { id: "vnpay", name: "VNPay", desc: "Cổng thanh toán VNPay" },
+  { id: "momo", name: "MoMo", desc: "Ví điện tử MoMo" },
   { id: "payos", name: "PayOS", desc: "Cổng thanh toán PayOS" },
   { id: "vietcombank", name: "Vietcombank", desc: "Ngân hàng Vietcombank" },
   { id: "techcombank", name: "Techcombank", desc: "Ngân hàng Techcombank" },
 ];
 
-// Deposit dialog list: a demo option that credits the wallet directly via the
-// test-deposit API (no gateway), followed by the real payment methods.
-const depositMethods = [
-  { id: "test", name: "Test (Demo)", desc: "Nạp thử — cộng ngay vào ví, không qua cổng" },
-  ...paymentMethods,
-];
+// Deposit dialog list (real payment methods only).
+const depositMethods = [...paymentMethods];
 
 const ParentWallet = () => {
   const { data: walletData } = useWallet();
@@ -399,9 +395,16 @@ const ParentWallet = () => {
                     {t.amount.toLocaleString("vi-VN")}đ
                   </p>
 
-                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                  <span
+                    className={cn(
+                      "inline-block shrink-0 text-[10px] px-2 py-0.5 rounded-lg",
+                      t.status === "completed"
+                        ? "bg-success/15 text-success dark:bg-emerald-900/20"
+                        : "bg-warning/15 text-warning dark:bg-amber-900/20",
+                    )}
+                  >
                     {t.status === "completed" ? "Hoàn thành" : "Đang xử lý"}
-                  </Badge>
+                  </span>
                 </div>
               ))
             )}
@@ -413,7 +416,7 @@ const ParentWallet = () => {
       <div className="flex items-center justify-center gap-3 py-2">
         <ShieldCheck className="h-5 w-5 text-muted-foreground" />
         <span className="text-xs text-muted-foreground">
-          Secure Payment • MoMo • VNPay • Ngân hàng
+          Secure Payment • VNPay • MoMo • Ngân hàng
         </span>
       </div>
 

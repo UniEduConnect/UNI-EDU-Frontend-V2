@@ -29,7 +29,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   ChartContainer,
@@ -59,23 +58,15 @@ const typeLabels: Record<string, string> = {
 };
 
 const paymentMethods = [
-  { id: "momo", name: "MoMo", desc: "Ví điện tử MoMo" },
   { id: "vnpay", name: "VNPay", desc: "Cổng thanh toán VNPay" },
+  { id: "momo", name: "MoMo", desc: "Ví điện tử MoMo" },
   { id: "payos", name: "PayOS", desc: "Cổng thanh toán PayOS" },
   { id: "vietcombank", name: "Vietcombank", desc: "Ngân hàng Vietcombank" },
   { id: "techcombank", name: "Techcombank", desc: "Ngân hàng Techcombank" },
 ];
 
-// Methods for the deposit dialog: real gateways + a demo option that credits the wallet
-// directly via the test-deposit API (no Momo/VNPay sandbox required).
-const depositMethods = [
-  {
-    id: "test",
-    name: "Test (Demo)",
-    desc: "Nạp thử — cộng ngay vào ví, không qua cổng",
-  },
-  ...paymentMethods,
-];
+// Methods for the deposit dialog (real gateways only).
+const depositMethods = [...paymentMethods];
 
 const CHART_COLORS = [
   "hsl(224, 76%, 48%)",
@@ -586,9 +577,16 @@ const StudentWallet = () => {
                     {t.amount > 0 ? "+" : ""}
                     {t.amount.toLocaleString("vi-VN")}đ
                   </p>
-                  <Badge variant="outline" className="text-[10px] mt-1">
+                  <span
+                    className={cn(
+                      "inline-block text-[10px] mt-1 px-2 py-0.5 rounded-lg",
+                      t.status === "completed"
+                        ? "bg-success/15 text-success dark:bg-emerald-900/20"
+                        : "bg-warning/15 text-warning dark:bg-amber-900/20",
+                    )}
+                  >
                     {t.status === "completed" ? "Hoàn thành" : "Đang xử lý"}
-                  </Badge>
+                  </span>
                 </div>
               </div>
             ))}
@@ -604,7 +602,7 @@ const StudentWallet = () => {
       <div className="flex items-center justify-center gap-2 py-1">
         <ShieldCheck className="w-4 h-4 text-muted-foreground" />
         <span className="text-xs sm:text-sm text-muted-foreground text-center">
-          Secure Payment • MoMo • VNPay • Ngân hàng
+          Secure Payment • VNPay • MoMo • Ngân hàng
         </span>
       </div>
 

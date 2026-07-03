@@ -9,7 +9,6 @@ import {
   UserPlus,
   X as XIcon,
   Star,
-  Wallet,
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,7 +19,6 @@ import {
   useParentChildren,
   useLinkChild,
   useChildExams,
-  useFundChild,
 } from "@/hooks/useParentChildren";
 import { useClasses } from "@/hooks/useClasses";
 import { useMySchedule } from "@/hooks/useSchedule";
@@ -37,14 +35,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { formatSessionClock } from "@/lib/sessionTime";
+import SessionStatusBadge from "@/components/schedule/SessionStatusBadge";
+import WeeklyCalendarBoard, { type CalendarBoardSession } from "@/components/schedule/WeeklyCalendarBoard";
 
 const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-
-// "2026-06-05T19:00:00Z" -> "19:00"
-const hhmm = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
 
 // "HH:mm:ss" -> "HH:mm"
 const hm = (t: string) => (t ? t.slice(0, 5) : t);
@@ -54,31 +49,32 @@ const slotsLabel = (slots: ClassItem["weeklySlots"]) =>
     .map(s => `${DAY_LABELS[s.dayOfWeek] ?? `?${s.dayOfWeek}`} ${hm(s.startTime)}-${hm(s.endTime)}`)
     .join(" • ");
 
-const sessionStatusLabel = (status: string) => {
+// Friendly Vietnamese label + color for a raw ClassStatus (searching/active/paused/completed/cancelled),
+// so the card shows "Đang học" instead of the raw "active".
+const classStatusMeta = (status: string): { label: string; className: string } => {
   switch (status) {
-    case "completed": return "Hoàn thành";
-    case "missed": return "Vắng";
-    case "cancelled": return "Hủy";
-    case "in_progress": return "Đang diễn ra";
-    case "pending_confirm": return "Chờ xác nhận";
-    default: return "Sắp tới";
+    case "active":
+      return { label: "Đang học", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" };
+    case "searching":
+      return { label: "Đang tìm gia sư", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" };
+    case "paused":
+      return { label: "Tạm dừng", className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+    case "completed":
+      return { label: "Hoàn thành", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" };
+    case "cancelled":
+      return { label: "Đã hủy", className: "bg-muted text-muted-foreground" };
+    default:
+      return { label: status, className: "bg-card text-muted-foreground" };
   }
 };
 
-const sessionStatusColor = (status: string) => {
-  switch (status) {
-    case "completed": return "bg-muted text-foreground";
-    case "missed": return "bg-destructive/10 text-destructive";
-    case "cancelled": return "bg-muted text-muted-foreground";
-    case "pending_confirm": return "bg-amber-500/10 text-amber-600";
-    default: return "bg-primary/10 text-primary";
-  }
-};
-
-const fmtDate = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-};
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
 
 const ParentChildren = () => {
   const { children, isLoading, isError } = useParentChildren();
@@ -90,13 +86,11 @@ const ParentChildren = () => {
   const linkChild = useLinkChild();
   const [params, setParams] = useSearchParams();
   const absenceId = params.get("absence");
-  const fundChild = useFundChild();
   const [selectedChild, setSelectedChild] = useState("");
   const [tab, setTab] = useState<"overview" | "schedule" | "tests" | "attendance">("overview");
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkEmail, setLinkEmail] = useState("");
-  const [fundOpen, setFundOpen] = useState(false);
-  const [fundAmount, setFundAmount] = useState("");
+  const [selectedSession, setSelectedSession] = useState<ViewSession | null>(null);
 
   // Exam submissions for the currently-selected child (only fetched when a child is selected).
   const { submissions: childExams, isLoading: examsLoading } = useChildExams(selectedChild || undefined);
@@ -115,34 +109,6 @@ const ParentChildren = () => {
       },
       onError: e => toast.error(e instanceof Error ? e.message : "Gửi yêu cầu thất bại"),
     });
-  };
-
-  const FUND_QUICK_AMOUNTS = [200000, 500000, 1000000, 2000000];
-
-  const handleFundChild = (childId: string) => {
-    const amount = Number(fundAmount);
-    if (!childId) {
-      toast.error("Không xác định được con để nạp tiền.");
-      return;
-    }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error("Vui lòng nhập số tiền hợp lệ (lớn hơn 0).");
-      return;
-    }
-    fundChild.mutate(
-      { childId, amount },
-      {
-        onSuccess: () => {
-          toast.success("Đã nạp tiền cho con thành công.");
-          setFundOpen(false);
-          setFundAmount("");
-        },
-        onError: e =>
-          toast.error(
-            e instanceof Error ? e.message : "Nạp tiền thất bại (kiểm tra số dư ví của bạn)."
-          ),
-      }
-    );
   };
 
   // Reusable "connect child" button + dialog, shown both in the empty state and
@@ -228,7 +194,6 @@ const ParentChildren = () => {
 
   // Sessions belonging to the selected child's classes, enriched with class info.
   type ViewSession = SessionResponse & {
-    date: string;
     time: string;
     className: string;
     tutorName: string;
@@ -243,8 +208,7 @@ const ParentChildren = () => {
           const cls = classMap.get(s.classId);
           return {
             ...s,
-            date: s.startAt.slice(0, 10),
-            time: `${hhmm(s.startAt)}-${hhmm(s.endAt)}`,
+            time: `${formatSessionClock(s.startAt)}-${formatSessionClock(s.endAt)}`,
             className: cls?.name ?? "Lớp học",
             tutorName: cls?.tutorName ?? "—",
             subject: cls?.subject ?? "",
@@ -252,6 +216,20 @@ const ParentChildren = () => {
         })
         .sort((a, b) => a.startAt.localeCompare(b.startAt)),
     [sessions, childClassIds, classMap]
+  );
+
+  const childBoardSessions: CalendarBoardSession[] = useMemo(
+    () =>
+      childSessions.map(s => ({
+        id: s.id,
+        startAt: s.startAt,
+        endAt: s.endAt,
+        status: s.status,
+        title: s.className,
+        subtitle: s.tutorName,
+        format: s.format,
+      })),
+    [childSessions]
   );
 
   const upcomingSessions = childSessions.filter(s => s.status === "scheduled" || s.status === "in_progress");
@@ -325,7 +303,7 @@ const ParentChildren = () => {
     const cls = classMap.get(s.classId);
     return {
       ...s,
-      time: `${hhmm(s.startAt)}-${hhmm(s.endAt)}`,
+      time: `${formatSessionClock(s.startAt)}-${formatSessionClock(s.endAt)}`,
       className: cls?.name ?? "Lớp học",
       tutorName: cls?.tutorName ?? "—",
       subject: cls?.subject ?? "",
@@ -533,17 +511,6 @@ const ParentChildren = () => {
                 Lớp {child.grade} • {child.school}
               </p>
             </div>
-            <Button
-              type="button"
-              onClick={() => {
-                setFundAmount("");
-                setFundOpen(true);
-              }}
-              className="rounded-xl shrink-0"
-            >
-              <Wallet className="mr-2 h-4 w-4" />
-              Nạp tiền cho con
-            </Button>
           </div>
 
           {perChildLoading ? (
@@ -574,8 +541,8 @@ const ParentChildren = () => {
                           {slotsLabel(c.weeklySlots) || "Chưa có lịch cố định"}
                         </p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {c.status}
+                      <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium", classStatusMeta(c.status).className)}>
+                        {classStatusMeta(c.status).label}
                       </span>
                     </div>
                     <div className="mt-3">
@@ -600,41 +567,26 @@ const ParentChildren = () => {
         </div>
       )}
 
-      {/* SCHEDULE — upcoming sessions for the child */}
+      {/* SCHEDULE — real, dated weekly calendar of the child's sessions (all statuses) */}
       {tab === "schedule" && (
         <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
             <CalendarDays className="h-4 w-4 text-primary" />
-            Buổi học sắp tới - {child?.fullName}
+            Thời khóa biểu - {child?.fullName}
           </h3>
           {perChildLoading ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
               <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải lịch học...
             </div>
-          ) : upcomingSessions.length === 0 ? (
-            noData("Không có buổi học sắp tới")
           ) : (
-            <div className="space-y-2">
-              {upcomingSessions.map(s => (
-                <div key={s.id} className="flex items-center gap-4 rounded-xl border border-border p-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
-                    <CalendarDays className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{s.className}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {s.tutorName}{s.subject ? ` • ${s.subject}` : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {fmtDate(s.startAt)} • {s.time}
-                    </p>
-                  </div>
-                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", sessionStatusColor(s.status))}>
-                    {sessionStatusLabel(s.status)}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <WeeklyCalendarBoard
+              sessions={childBoardSessions}
+              onSelect={s => {
+                const full = childSessions.find(x => x.id === s.id);
+                if (full) setSelectedSession(full);
+              }}
+              emptyMessage="Không có buổi học nào trong tuần này"
+            />
           )}
         </div>
       )}
@@ -765,9 +717,7 @@ const ParentChildren = () => {
                         {s.tutorName} • {fmtDate(s.startAt)} • {s.time}
                       </p>
                     </div>
-                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", sessionStatusColor(s.status))}>
-                      {sessionStatusLabel(s.status)}
-                    </span>
+                    <SessionStatusBadge status={s.status} />
                     <Button
                       size="sm"
                       className="rounded-xl"
@@ -833,9 +783,7 @@ const ParentChildren = () => {
                             ))}
                           </div>
                         ) : null}
-                        <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", sessionStatusColor(s.status))}>
-                          {sessionStatusLabel(s.status)}
-                        </span>
+                        <SessionStatusBadge status={s.status} />
                       </div>
                     ))}
                 </div>
@@ -888,6 +836,74 @@ const ParentChildren = () => {
           </p>
         </div>
       )}
+
+      {/* SESSION DETAIL — read-only, opened by clicking a session on the schedule calendar */}
+      <Dialog open={!!selectedSession} onOpenChange={open => !open && setSelectedSession(null)}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          {selectedSession && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {selectedSession.className}
+                  <SessionStatusBadge status={selectedSession.status} />
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedSession.subject ? selectedSession.subject : "Chi tiết buổi học"}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 py-2">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block">Gia sư</span>
+                    <span className="font-medium">{selectedSession.tutorName}</span>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block">Môn học</span>
+                    <span className="font-medium">{selectedSession.subject || "—"}</span>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block">Ngày</span>
+                    <span className="font-medium">{fmtDate(selectedSession.startAt)}</span>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block">Giờ</span>
+                    <span className="font-medium">{selectedSession.time}</span>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-xl col-span-2">
+                    <span className="text-xs text-muted-foreground block">Hình thức</span>
+                    <span className="font-medium">
+                      {selectedSession.format === "online"
+                        ? "Online"
+                        : selectedSession.format === "offline"
+                          ? "Offline"
+                          : selectedSession.format || "—"}
+                    </span>
+                  </div>
+                </div>
+                {selectedSession.content && (
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block mb-1">Nội dung</span>
+                    <p className="text-sm">{selectedSession.content}</p>
+                  </div>
+                )}
+                {selectedSession.notes && (
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block mb-1">Nhận xét</span>
+                    <p className="text-sm">{selectedSession.notes}</p>
+                  </div>
+                )}
+                {selectedSession.homework && (
+                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">
+                    <span className="text-xs text-muted-foreground block mb-1">BTVN</span>
+                    <p className="text-sm font-medium">{selectedSession.homework}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ABSENCE REQUEST — auto-opens from the ?absence=<sessionId> notification deep link */}
       <Dialog
@@ -952,63 +968,6 @@ const ParentChildren = () => {
                 </Button>
               </>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* FUND CHILD WALLET — top up the selected child's wallet from the parent's wallet */}
-      <Dialog open={fundOpen} onOpenChange={setFundOpen}>
-        <DialogContent className="rounded-2xl sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              Nạp tiền cho con{child ? ` - ${child.fullName}` : ""}
-            </DialogTitle>
-            <DialogDescription>
-              Nạp tiền từ ví của bạn vào ví của con để đóng học phí/đặt lớp.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 py-2">
-            <Input
-              type="number"
-              min={0}
-              inputMode="numeric"
-              placeholder="Số tiền (VND)"
-              value={fundAmount}
-              onChange={e => setFundAmount(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && child) handleFundChild(child.id);
-              }}
-              className="rounded-xl"
-            />
-            <div className="flex flex-wrap gap-2">
-              {FUND_QUICK_AMOUNTS.map(amt => (
-                <button
-                  key={amt}
-                  type="button"
-                  onClick={() => setFundAmount(String(amt))}
-                  className="rounded-xl border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
-                >
-                  {amt.toLocaleString("vi-VN")}đ
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              onClick={() => child && handleFundChild(child.id)}
-              disabled={
-                fundChild.isPending ||
-                !child ||
-                !(Number(fundAmount) > 0)
-              }
-              className="rounded-xl"
-            >
-              {fundChild.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Nạp tiền
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

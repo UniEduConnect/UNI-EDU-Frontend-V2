@@ -9,6 +9,7 @@ import {
   Search,
   Eye,
   UserPlus,
+  Hourglass,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,12 +23,16 @@ import {
 } from "@/components/ui/select";
 import { useOpenTutorPosts, useApplyTutorPost } from "@/hooks/useTutorPosts";
 import { useSubjects } from "@/hooks/useSubjects";
+import PostTutorRequest from "@/components/student/PostTutorRequest";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ALL_SUBJECTS = "Tất cả";
 
 export default function StudentFindTutorPosts() {
   const [searchParams] = useSearchParams();
   const { subjects } = useSubjects();
+  const { role } = useAuth();
+  const isStudent = role === "student";
 
   const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [subject, setSubject] = useState(
@@ -62,6 +67,14 @@ export default function StudentFindTutorPosts() {
           Các gia sư đang muốn nhận thêm học sinh
         </p>
       </header>
+
+      {/* Student's own "find a tutor" requests + post button (moved here from Học tập).
+          Student-only: hits Student-role endpoints, so hidden for parents. */}
+      {isStudent && (
+        <div className="mb-8">
+          <PostTutorRequest />
+        </div>
+      )}
 
       <div className="mb-8 bg-card border border-border rounded-2xl p-6">
         <div className="flex flex-col sm:flex-row gap-4">
@@ -164,24 +177,37 @@ export default function StudentFindTutorPosts() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-xl text-xs"
+                  className={`rounded-xl text-xs ${isStudent ? "" : "flex-1"}`}
                   onClick={() => navigate(`/tutor-profile?id=${post.tutorId}`)}
                 >
                   <Eye className="w-3.5 h-3.5" /> Xem hồ sơ
                 </Button>
-                <Button
-                  size="sm"
-                  className="flex-1 rounded-xl text-xs"
-                  disabled={applyingId === post.id}
-                  onClick={() => handleApply(post.id)}
-                >
-                  {applyingId === post.id ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                {/* Apply is Student-only (POST /TutorPosts/{id}/apply is [Authorize Student]). */}
+                {isStudent &&
+                  (post.hasPendingApplication ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled
+                      className="flex-1 rounded-xl text-xs cursor-default opacity-100 disabled:opacity-100"
+                    >
+                      <Hourglass className="w-3.5 h-3.5" /> Đã đăng ký, đang chờ
+                    </Button>
                   ) : (
-                    <UserPlus className="w-3.5 h-3.5" />
-                  )}{" "}
-                  Đăng ký học
-                </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1 rounded-xl text-xs"
+                      disabled={applyingId === post.id}
+                      onClick={() => handleApply(post.id)}
+                    >
+                      {applyingId === post.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <UserPlus className="w-3.5 h-3.5" />
+                      )}{" "}
+                      Đăng ký học
+                    </Button>
+                  ))}
               </div>
             </div>
           ))}

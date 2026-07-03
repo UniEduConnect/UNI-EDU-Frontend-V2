@@ -5,7 +5,6 @@ import {
   MessageSquare,
   Users,
   Wallet,
-  UserSearch,
   Megaphone,
   Home,
   LogOut,
@@ -37,13 +36,12 @@ import { useConversations } from "@/hooks/useConversations";
 
 const navItems = [
   { to: "/parent", icon: LayoutDashboard, label: "Tổng quan", end: true },
-  { to: "/parent/tutor-posts", icon: Megaphone, label: "GS tìm học sinh" },
   { to: "/parent/children", icon: Users, label: "Theo dõi học tập" },
+  { to: "/parent/chat", icon: MessageSquare, label: "Tin nhắn" },
   { to: "/parent/reviews", icon: Star, label: "Đánh giá gia sư" },
   { to: "/parent/wallet", icon: Wallet, label: "Thanh toán" },
-    { to: "/parent/chat", icon: MessageSquare, label: "Tin nhắn" },
+  { to: "/parent/tutor-posts", icon: Megaphone, label: "GS tìm học sinh" },
   { to: "/parent/support", icon: HelpCircle, label: "Hỗ trợ" },
-  
 ];
 
 const pageTitles: Record<string, string> = {

@@ -87,19 +87,23 @@ const ChatWidget = () => {
             className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] bg-card rounded-3xl shadow-elevated border border-border flex flex-col overflow-hidden"
             style={{ height: "520px" }}
           >
-            {/* Header */}
-            <div className="gradient-hero p-4 flex items-center gap-3">
+            {/* Header — dark-blue gradient so the white text stays readable
+                (the shared `gradient-hero` utility is a light gradient and washed it out). */}
+            <div
+              className="p-4 flex items-center gap-3"
+              style={{ background: "linear-gradient(135deg, hsl(var(--deep-blue)) 0%, hsl(var(--neon)) 100%)" }}
+            >
               <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-neon/20 flex items-center justify-center">
-                  <Bot className="w-5 h-5 text-neon" />
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                  <Bot className="w-5 h-5 text-white" />
                 </div>
                 <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-deep-blue" />
               </div>
               <div className="flex-1">
                 <div className="text-white font-semibold text-sm">UNI EDU AI</div>
-                <div className="text-white/50 text-xs">Online · Phản hồi ngay</div>
+                <div className="text-white/80 text-xs">Online · Phản hồi ngay</div>
               </div>
-              <button onClick={() => setOpen(false)} className="text-white/60 hover:text-white transition-colors p-1">
+              <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white transition-colors p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>

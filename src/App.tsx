@@ -28,7 +28,6 @@ import TutorLayout from "./components/tutor/TutorLayout";
 import TutorDashboard from "./pages/tutor/TutorDashboard";
 import TutorClasses from "./pages/tutor/TutorClasses";
 import TutorWallet from "./pages/tutor/TutorWallet";
-import TutorSchedule from "./pages/tutor/TutorSchedule";
 import TutorStudents from "./pages/tutor/TutorStudents";
 import TutorFindStudents from "./pages/tutor/TutorFindStudents";
 import TutorReviews from "./pages/tutor/TutorReviews";
@@ -43,7 +42,6 @@ import StudentLayout from "./components/student/StudentLayout";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentClasses from "./pages/student/StudentClasses";
 import StudentClassDetail from "./pages/student/StudentClassDetail";
-import StudentSchedule from "./pages/student/StudentSchedule";
 import StudentTests from "./pages/student/StudentTests";
 import StudentReport from "./pages/student/StudentReport";
 import StudentChat from "./pages/student/StudentChat";
@@ -120,7 +118,8 @@ const App = () => (
                   <Route path="classes" element={<TutorClasses />} />
                   <Route path="classes/:classId" element={<TutorClassDetail />} />
                   <Route path="wallet" element={<TutorWallet />} />
-                  <Route path="schedule" element={<TutorSchedule />} />
+                  {/* Lịch dạy merged into Lớp học — keep the old URL working for any stale links. */}
+                  <Route path="schedule" element={<Navigate to="/tutor/classes" replace />} />
                   <Route path="students" element={<TutorStudents />} />
                   <Route path="find-students" element={<TutorFindStudents />} />
                   <Route path="reviews" element={<TutorReviews />} />
@@ -135,7 +134,7 @@ const App = () => (
                   <Route path="classes" element={<TutorClasses />} />
                   <Route path="classes/:classId" element={<TutorClassDetail />} />
                   <Route path="wallet" element={<TutorWallet />} />
-                  <Route path="schedule" element={<TutorSchedule />} />
+                  <Route path="schedule" element={<Navigate to="/teacher/classes" replace />} />
                   <Route path="students" element={<TutorStudents />} />
                   <Route path="find-students" element={<TutorFindStudents />} />
                   <Route path="reviews" element={<TutorReviews />} />
@@ -149,7 +148,7 @@ const App = () => (
                   <Route index element={<StudentDashboard />} />
                   <Route path="classes" element={<StudentClasses />} />
                   <Route path="classes/:classId" element={<StudentClassDetail />} />
-                  <Route path="schedule" element={<StudentSchedule />} />
+                  <Route path="schedule" element={<StudentClasses />} />
                   <Route path="availability" element={<Navigate to="/student/classes" replace />} />
                   <Route path="tests" element={<StudentTests />} />
                   <Route path="mock-exam" element={<Navigate to="/student/classes" replace />} />
