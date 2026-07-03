@@ -24,6 +24,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useClasses } from "@/hooks/useClasses";
 import { useMySchedule } from "@/hooks/useSchedule";
 import { useTutorAvailability, useUpdateMyAvailability } from "@/hooks/useTutors";
+import { formatSessionDate, formatSessionClock } from "@/lib/sessionTime";
+import SessionStatusBadge from "@/components/schedule/SessionStatusBadge";
+import WeeklyCalendarBoard, { type CalendarBoardSession } from "@/components/schedule/WeeklyCalendarBoard";
 import type { AvailableSlotDto, ClassItem, SessionResponse, WeeklySlotDto } from "@/types/api";
 
 // Map ClassStatus → the escrow/status badge buckets the UI styles below.
@@ -82,13 +85,6 @@ function isOngoing(status: string): boolean {
 // ---------------------------------------------------------------------------
 const allDays = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
 const timeSlots = ["7:00-9:00", "9:00-11:00", "14:00-16:00", "17:00-19:00", "19:00-21:00"];
-const dayMap: Record<string, number> = { "Thứ 2": 1, "Thứ 3": 2, "Thứ 4": 3, "Thứ 5": 4, "Thứ 6": 5, "Thứ 7": 6, "Chủ nhật": 0 };
-
-// "2026-06-05T19:00:00Z" -> "19:00"
-const hhmm = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
 
 const STUDENT_AVATAR_PLACEHOLDER = "/placeholder.svg";
 
@@ -161,25 +157,34 @@ const TutorClasses = () => {
 
   const allSessions: ViewSessionInner[] = useMemo(
     () =>
-      sessions
-        .map((s) => {
-          const cls = classMap.get(s.classId);
-          return {
-            ...s,
-            date: s.startAt.slice(0, 10),
-            time: `${hhmm(s.startAt)}-${hhmm(s.endAt)}`,
-            className: cls?.name ?? "Lớp học",
-            studentName: cls?.studentName ?? "—",
-            studentAvatar: STUDENT_AVATAR_PLACEHOLDER,
-            subject: cls?.subject ?? "",
-          };
-        })
-        .sort((a, b) => a.startAt.localeCompare(b.startAt)),
+      sessions.map((s) => {
+        const cls = classMap.get(s.classId);
+        return {
+          ...s,
+          date: formatSessionDate(s.startAt),
+          time: `${formatSessionClock(s.startAt)}-${formatSessionClock(s.endAt)}`,
+          className: cls?.name ?? "Lớp học",
+          studentName: cls?.studentName ?? "—",
+          studentAvatar: STUDENT_AVATAR_PLACEHOLDER,
+          subject: cls?.subject ?? "",
+        };
+      }),
     [sessions, classMap],
   );
 
-  const upcoming = allSessions.filter((s) => s.status === "scheduled" || s.status === "in_progress");
-  const completedSessions = allSessions.filter((s) => s.status === "completed").reverse();
+  const boardSessions: CalendarBoardSession[] = useMemo(
+    () =>
+      allSessions.map((s) => ({
+        id: s.id,
+        startAt: s.startAt,
+        endAt: s.endAt,
+        status: s.status,
+        title: s.className,
+        subtitle: s.studentName,
+        format: s.format,
+      })),
+    [allSessions],
+  );
 
   const toggleSlot = (day: string, slot: string) => {
     setEditAvail((prev) => {
@@ -212,12 +217,6 @@ const TutorClasses = () => {
     const source = editMode ? editAvail : groupedAvail;
     return source.find((a) => a.day === day)?.slots.includes(slot) || false;
   };
-
-  const getSessionsForDayTime = (day: string, time: string) =>
-    upcoming.filter((s) => {
-      const dayOfWeek = new Date(s.startAt).getDay();
-      return dayMap[day] === dayOfWeek && s.time === time;
-    });
 
   return (
     <div className="p-6 space-y-6">
@@ -297,11 +296,31 @@ const TutorClasses = () => {
         </>
       )}
 
-      {/* Thời khóa biểu & Lịch rảnh (merged in from the former "Lịch dạy" page) */}
+      {/* Thời khóa biểu — the one real, dated weekly calendar for this tutor's actual sessions */}
+      {sessionsLoading ? (
+        <div className="flex items-center justify-center py-8 text-muted-foreground">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải buổi học...
+        </div>
+      ) : (
+        <div>
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+            <CalendarDays className="w-4 h-4 text-primary" /> Thời khóa biểu ({allSessions.length})
+          </h3>
+          <WeeklyCalendarBoard
+            sessions={boardSessions}
+            onSelect={(s) => {
+              const full = allSessions.find((x) => x.id === s.id);
+              if (full) setSelectedSession(full);
+            }}
+          />
+        </div>
+      )}
+
+      {/* Lịch rảnh của tôi — recurring weekly availability, distinct from the dated calendar above */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-primary" /> Thời khóa biểu & Lịch rảnh
+            <Clock className="w-4 h-4 text-primary" /> Lịch rảnh của tôi
           </h3>
           <div className="flex gap-2">
             {editMode ? (
@@ -352,7 +371,6 @@ const TutorClasses = () => {
                   <td className="text-[11px] text-muted-foreground p-2 font-medium">{time}</td>
                   {allDays.map((day) => {
                     const available = isSlotAvailable(day, time);
-                    const daySessions = getSessionsForDayTime(day, time);
                     return (
                       <td key={day} className="p-1 text-center">
                         {editMode ? (
@@ -366,25 +384,6 @@ const TutorClasses = () => {
                             )}
                           >
                             {available ? "✓" : "+"}
-                          </button>
-                        ) : daySessions.length > 0 ? (
-                          <button
-                            onClick={() => setSelectedSession(daySessions[0])}
-                            className="w-full p-1.5 bg-primary/10 border border-primary/20 rounded-lg text-left"
-                          >
-                            <p className="text-[10px] font-medium text-primary truncate">{daySessions[0].className}</p>
-                            <p className="text-[9px] text-muted-foreground truncate">{daySessions[0].studentName}</p>
-                            <span
-                              className={cn(
-                                "text-[8px] px-1 py-0.5 rounded mt-0.5 inline-flex items-center gap-0.5",
-                                daySessions[0].format === "online"
-                                  ? "bg-primary/10 text-primary"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                            >
-                              {daySessions[0].format === "online" ? <Monitor className="w-2 h-2" /> : <MapPin className="w-2 h-2" />}
-                              {daySessions[0].format === "online" ? "ONL" : "OFF"}
-                            </span>
                           </button>
                         ) : available ? (
                           <div className="w-full h-12 rounded-lg bg-success/15 dark:bg-emerald-900/10 border border-success/30/50 dark:border-success/40/50 flex items-center justify-center">
@@ -405,110 +404,8 @@ const TutorClasses = () => {
           <span className="flex items-center gap-1">
             <span className="w-3 h-3 rounded bg-primary/20 border border-primary/30" /> Rảnh
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-primary/10 border border-primary/20" /> Có lớp
-          </span>
-          <span className="flex items-center gap-1">
-            <Monitor className="w-3 h-3 text-primary" /> Online
-          </span>
-          <span className="flex items-center gap-1">
-            <MapPin className="w-3 h-3 text-muted-foreground" /> Offline
-          </span>
         </div>
       </div>
-
-      {sessionsLoading ? (
-        <div className="flex items-center justify-center py-8 text-muted-foreground">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải buổi học...
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Upcoming */}
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" /> Buổi học sắp tới ({upcoming.length})
-            </h3>
-            {upcoming.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Không có buổi nào sắp tới</p>
-            ) : (
-              <div className="space-y-2">
-                {upcoming.map((s) => (
-                  <div key={s.id} className="w-full flex items-center gap-3 p-3 bg-primary/5 rounded-xl border border-primary/10">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <CalendarDays className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-foreground">{s.className}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {s.date} • {s.time}
-                      </p>
-                    </div>
-                    <span
-                      className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5",
-                        s.format === "online" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {s.format === "online" ? <Monitor className="w-2.5 h-2.5" /> : <MapPin className="w-2.5 h-2.5" />}
-                      {s.format === "online" ? "ONL" : "OFF"}
-                    </span>
-                    <button onClick={() => setSelectedSession(s)} className="p-1">
-                      <Eye className="w-4 h-4 text-muted-foreground" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Completed sessions */}
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-success" /> Buổi đã hoàn thành
-            </h3>
-            <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/30">
-                  <tr>
-                    <th className="text-left px-3 py-2 text-xs text-muted-foreground">Lớp học</th>
-                    <th className="text-left px-3 py-2 text-xs text-muted-foreground">Ngày giờ</th>
-                    <th className="text-left px-3 py-2 text-xs text-muted-foreground">Hình thức</th>
-                    <th className="text-left px-3 py-2 text-xs text-muted-foreground">Đánh giá</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {completedSessions.map((s) => (
-                    <tr
-                      key={s.id}
-                      onClick={() => setSelectedSession(s)}
-                      className="border-t border-border hover:bg-muted/20 cursor-pointer"
-                    >
-                      <td className="px-3 py-2">
-                        <p className="text-sm font-medium text-foreground">{s.className}</p>
-                        <p className="text-[11px] text-muted-foreground">{s.content || "N/A"}</p>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {s.date} • {s.startedAt ? hhmm(s.startedAt) : hhmm(s.startAt)}-{s.endedAt ? hhmm(s.endedAt) : hhmm(s.endAt)}
-                      </td>
-                      <td className="px-3 py-2 text-xs">
-                        <span
-                          className={cn(
-                            "text-[10px] px-2 py-1 rounded-lg",
-                            s.format === "online" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-                          )}
-                        >
-                          {s.format === "online" ? "Online" : "Offline"}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{s.rating ? `${s.rating}/5` : "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Session Detail Dialog */}
       <Dialog open={!!selectedSession} onOpenChange={() => setSelectedSession(null)}>
@@ -516,7 +413,10 @@ const TutorClasses = () => {
           {selectedSession && (
             <>
               <DialogHeader>
-                <DialogTitle>{selectedSession.className}</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  {selectedSession.className}
+                  <SessionStatusBadge status={selectedSession.status} />
+                </DialogTitle>
               </DialogHeader>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-sm">

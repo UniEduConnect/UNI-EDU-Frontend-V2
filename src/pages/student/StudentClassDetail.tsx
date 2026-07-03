@@ -18,12 +18,13 @@ import {
   Loader2,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { useClass } from "@/hooks/useClasses";
 import { useClassSessions } from "@/hooks/useSessions";
-import type { SessionResponse, WeeklySlotDto } from "@/types/api";
+import { formatSessionDate, formatSessionClock } from "@/lib/sessionTime";
+import SessionStatusBadge from "@/components/schedule/SessionStatusBadge";
+import type { WeeklySlotDto } from "@/types/api";
 
 const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
@@ -32,11 +33,9 @@ const buildSchedule = (slots: WeeklySlotDto[]): string =>
     .map((s) => `${DAY_LABELS[s.dayOfWeek] ?? `?${s.dayOfWeek}`} ${s.startTime.slice(0, 5)}-${s.endTime.slice(0, 5)}`)
     .join(", ");
 
-const sessionDate = (s: SessionResponse): string => (s.startAt ? s.startAt.slice(0, 10) : "");
-const sessionTime = (s: SessionResponse): string => {
-  const hm = (iso?: string | null) => (iso ? iso.slice(11, 16) : "");
-  return `${hm(s.startAt)}-${hm(s.endAt)}`;
-};
+const sessionDate = (iso?: string | null): string => formatSessionDate(iso);
+const sessionTime = (start?: string | null, end?: string | null): string =>
+  `${formatSessionClock(start)}-${formatSessionClock(end)}`;
 
 const StudentClassDetail = () => {
   const { classId } = useParams();
@@ -255,38 +254,13 @@ const StudentClassDetail = () => {
                       {s.content || `Buổi học ${index + 1}`}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {sessionDate(s)} • {sessionTime(s)}
+                      {sessionDate(s.startAt)} • {sessionTime(s.startAt, s.endAt)}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge
-                    className={cn(
-                      "rounded-full px-2.5 py-1 text-[10px] font-medium",
-                      s.status === "completed" &&
-                        "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300",
-                      s.status === "scheduled" &&
-                        "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-300",
-                      s.status !== "completed" &&
-                        s.status !== "scheduled" &&
-                        "bg-muted text-foreground hover:bg-muted"
-                    )}
-                  >
-                    {s.status === "completed"
-                      ? "Hoàn thành"
-                      : s.status === "scheduled"
-                      ? "Sắp tới"
-                      : s.status === "in_progress"
-                      ? "Đang diễn ra"
-                      : s.status === "pending_confirm"
-                      ? "Chờ xác nhận"
-                      : s.status === "missed"
-                      ? "Vắng"
-                      : s.status === "cancelled"
-                      ? "Đã hủy"
-                      : "Khác"}
-                  </Badge>
+                  <SessionStatusBadge status={s.status} className="rounded-full" />
                 </div>
               </div>
             ))}
@@ -328,7 +302,7 @@ const StudentClassDetail = () => {
                       Bài tập buổi {index + 1}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {sessionDate(s)} • {s.homework || "(Xem file đính kèm)"}
+                      {sessionDate(s.startAt)} • {s.homework || "(Xem file đính kèm)"}
                     </p>
                   </div>
 
@@ -372,7 +346,7 @@ const StudentClassDetail = () => {
                   Bài tập buổi {sessions.indexOf(detailSession) + 1}
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Buổi học: {sessionDate(detailSession)} • {sessionTime(detailSession)}
+                  Buổi học: {sessionDate(detailSession.startAt)} • {sessionTime(detailSession.startAt, detailSession.endAt)}
                 </p>
               </div>
 

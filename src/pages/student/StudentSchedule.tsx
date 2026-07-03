@@ -1,5 +1,4 @@
-import { CalendarDays, Clock, CheckCircle2, X as XIcon, Star, ChevronLeft, ChevronRight, Loader2, AlertTriangle, Save, Edit2, Sparkles } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { CalendarDays, Clock, CheckCircle2, X as XIcon, Star, Loader2, AlertTriangle, Save, Edit2, Sparkles, Monitor, MapPin } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -13,18 +12,12 @@ import { useApproveAbsence, useRejectAbsence } from "@/hooks/useSessions";
 import { useMyStudentAvailability, useUpdateMyStudentAvailability, useCommonSlots, useAiSlots } from "@/hooks/useStudents";
 import { WeeklyTimetable } from "@/components/schedule/WeeklyTimetable";
 import { slotKey, normalizeDay } from "@/lib/scheduleUtils";
+import { formatSessionDate, formatSessionClock, vietnamToday } from "@/lib/sessionTime";
+import SessionStatusBadge from "@/components/schedule/SessionStatusBadge";
+import WeeklyCalendarBoard, { type CalendarBoardSession } from "@/components/schedule/WeeklyCalendarBoard";
 import type { AvailableSlotDto, ClassItem, SessionResponse } from "@/types/api";
 
-const daysOfWeek = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN"];
-const timeSlots = ["08:00", "09:00", "10:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00"];
-
 const STUDENT_TUTOR_AVATAR_PLACEHOLDER = "/placeholder.svg";
-
-// "2026-06-05T19:00:00Z" -> "19:00"
-const hhmm = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
 
 const getWeekRange = (date: Date) => {
   const d = new Date(date);
@@ -94,11 +87,10 @@ const StudentSchedule = () => {
       }
     );
   const [params, setParams] = useSearchParams();
-  const [view, setView] = useState<"calendar" | "list">("calendar");
   const [weekOffset, setWeekOffset] = useState(0);
 
   const currentWeek = useMemo(() => {
-    const now = new Date();
+    const now = vietnamToday();
     now.setDate(now.getDate() + weekOffset * 7);
     return getWeekRange(now);
   }, [weekOffset]);
@@ -127,8 +119,8 @@ const StudentSchedule = () => {
           const cls = classMap.get(s.classId);
           return {
             ...s,
-            date: s.startAt.slice(0, 10),
-            time: `${hhmm(s.startAt)}-${hhmm(s.endAt)}`,
+            date: formatSessionDate(s.startAt),
+            time: `${formatSessionClock(s.startAt)}-${formatSessionClock(s.endAt)}`,
             className: cls?.name ?? "Lớp học",
             tutorName: cls?.tutorName ?? "—",
             tutorAvatar: cls?.tutorAvatar ?? STUDENT_TUTOR_AVATAR_PLACEHOLDER,
@@ -138,6 +130,22 @@ const StudentSchedule = () => {
         .sort((a, b) => a.startAt.localeCompare(b.startAt)),
     [sessions, classMap]
   );
+
+  const boardSessions: CalendarBoardSession[] = useMemo(
+    () =>
+      allSessions.map((s) => ({
+        id: s.id,
+        startAt: s.startAt,
+        endAt: s.endAt,
+        status: s.status,
+        title: s.className,
+        subtitle: s.tutorName,
+        format: s.format,
+      })),
+    [allSessions]
+  );
+
+  const [selectedSession, setSelectedSession] = useState<ViewSession | null>(null);
 
   const weekSessions = useMemo(() => {
     return allSessions.filter(s => {
@@ -176,41 +184,11 @@ const StudentSchedule = () => {
   );
   const closeAbsenceDialog = () => setParams({});
 
-  const upcoming = allSessions.filter(s => s.status === "scheduled" || s.status === "in_progress");
   const completed = allSessions.filter(s => s.status === "completed");
   const missed = allSessions.filter(s => s.status === "missed");
   const totalWeekSessions = weekSessions.filter(s => s.status === "scheduled" || s.status === "in_progress").length;
   const totalWeekHours = weekSessions.length * 2;
   const attendanceRate = completed.length + missed.length > 0 ? Math.round((completed.length / (completed.length + missed.length)) * 100) : 100;
-
-  const getSessionsForDayTime = (day: string, time: string) => {
-    return weekSessions.filter(s => {
-      const dayIndex = new Date(s.startAt).getDay();
-      const dayMap: Record<number, string> = { 1: "Thứ 2", 2: "Thứ 3", 3: "Thứ 4", 4: "Thứ 5", 5: "Thứ 6", 6: "Thứ 7", 0: "CN" };
-      const sessionStart = s.time.split("-")[0];
-      return dayMap[dayIndex] === day && sessionStart === time;
-    });
-  };
-
-  const statusLabel = (status: string) => {
-    switch (status) {
-      case "completed": return "Hoàn thành";
-      case "missed": return "Vắng";
-      case "cancelled": return "Hủy";
-      case "in_progress": return "Đang diễn ra";
-      case "pending_confirm": return "Chờ xác nhận";
-      default: return "Sắp tới";
-    }
-  };
-
-  const statusColor = (status: string) => {
-    switch (status) {
-      case "completed": return "bg-muted text-foreground";
-      case "missed": return "bg-destructive/10 text-destructive";
-      case "cancelled": return "bg-muted text-muted-foreground";
-      default: return "bg-primary/10 text-primary";
-    }
-  };
 
   if (isLoading) {
     return (
@@ -359,12 +337,6 @@ const StudentSchedule = () => {
         )}
       </div>
 
-      {/* View Toggle */}
-      <div className="flex gap-2">
-        <Button variant={view === "calendar" ? "default" : "outline"} size="sm" className="rounded-xl text-xs" onClick={() => setView("calendar")}>Thời khóa biểu</Button>
-        <Button variant={view === "list" ? "default" : "outline"} size="sm" className="rounded-xl text-xs" onClick={() => setView("list")}>Danh sách</Button>
-      </div>
-
       {/* Pending tutor-absence confirmations */}
       {pendingTutorAbsences.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
@@ -412,98 +384,87 @@ const StudentSchedule = () => {
         </div>
       )}
 
-      {view === "calendar" ? (
-        <div className="bg-card border border-border rounded-2xl p-4 overflow-x-auto">
-          <div className="flex items-center justify-between mb-4">
-            <Button variant="ghost" size="sm" onClick={() => setWeekOffset(o => o - 1)}><ChevronLeft className="w-4 h-4" /></Button>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-foreground">{formatWeekLabel(currentWeek.monday, currentWeek.sunday)}</p>
-              {weekOffset !== 0 && <button className="text-xs text-primary hover:underline mt-1" onClick={() => setWeekOffset(0)}>Về tuần hiện tại</button>}
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setWeekOffset(o => o + 1)}><ChevronRight className="w-4 h-4" /></Button>
-          </div>
-          <table className="w-full min-w-[700px]">
-            <thead>
-              <tr>
-                <th className="text-[10px] text-muted-foreground font-medium p-2 text-left w-16">Giờ</th>
-                {daysOfWeek.map(d => <th key={d} className="text-[10px] text-muted-foreground font-medium p-2 text-center">{d}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {timeSlots.map(time => (
-                <tr key={time} className="border-t border-border/50">
-                  <td className="text-[10px] text-muted-foreground p-2 font-mono">{time}</td>
-                  {daysOfWeek.map(day => {
-                    const sessions = getSessionsForDayTime(day, time);
-                    return (
-                      <td key={day} className="p-1 text-center">
-                        {sessions.map(s => (
-                          <div key={s.id} className={cn("p-1.5 rounded-lg text-[10px] font-medium mb-1 border",
-                            s.status === "completed" ? "bg-muted border-border text-foreground" :
-                            s.status === "missed" ? "bg-destructive/5 border-destructive/20 text-destructive" :
-                            "bg-primary/5 border-primary/20 text-foreground"
-                          )}>
-                            <p className="truncate font-semibold">{s.className}</p>
-                            <p className="text-[9px] text-muted-foreground">{s.tutorName}</p>
-                            <p className="text-[9px] text-muted-foreground">{s.format === "online" ? "Online" : "Offline"} • {statusLabel(s.status)}</p>
-                          </div>
-                        ))}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Upcoming */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-3">Sắp tới ({upcoming.length})</h3>
-            <div className="space-y-2">
-              {upcoming.map(s => (
-                <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-4">
-                  <img src={s.tutorAvatar} alt="" className="w-10 h-10 rounded-xl object-cover" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">{s.className}</p>
-                    <p className="text-xs text-muted-foreground">{s.tutorName} • {s.subject}</p>
-                    <p className="text-xs text-muted-foreground">{s.date} • {s.time}</p>
-                  </div>
-                  <Badge variant="outline" className={cn("text-[10px]", statusColor(s.status))}>
-                    {s.format === "online" ? "Online" : "Offline"}
-                  </Badge>
-                </div>
-              ))}
-              {upcoming.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Không có buổi học sắp tới</p>}
-            </div>
-          </div>
+      {/* Thời khóa biểu — the one real, dated weekly calendar for this student's actual sessions */}
+      <div>
+        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+          <CalendarDays className="w-4 h-4 text-primary" /> Thời khóa biểu ({allSessions.length})
+        </h3>
+        <WeeklyCalendarBoard
+          sessions={boardSessions}
+          onSelect={(s) => {
+            const full = allSessions.find((x) => x.id === s.id);
+            if (full) setSelectedSession(full);
+          }}
+        />
+      </div>
 
-          {/* Completed & Missed */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-3">Đã hoàn thành / Vắng</h3>
-            <div className="space-y-2">
-              {[...completed, ...missed].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 15).map(s => (
-                <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-4">
-                  <img src={s.tutorAvatar} alt="" className="w-10 h-10 rounded-xl object-cover" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">{s.className} {s.content ? `- ${s.content}` : ""}</p>
-                    <p className="text-xs text-muted-foreground">{s.tutorName} • {s.date} • {s.time}</p>
+      {/* Session Detail Dialog */}
+      <Dialog open={!!selectedSession} onOpenChange={() => setSelectedSession(null)}>
+        <DialogContent className="max-w-md">
+          {selectedSession && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {selectedSession.className}
+                  <SessionStatusBadge status={selectedSession.status} />
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block">Ngày</span>
+                    <span className="font-medium">{selectedSession.date}</span>
                   </div>
-                  <Badge variant="outline" className={cn("text-[10px]", statusColor(s.status))}>
-                    {statusLabel(s.status)}
-                  </Badge>
-                  {s.rating && (
-                    <div className="flex items-center gap-0.5">
-                      {[...Array(s.rating)].map((_, i) => <Star key={i} className="w-3 h-3 fill-current text-foreground" />)}
-                    </div>
-                  )}
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block">Giờ</span>
+                    <span className="font-medium">{selectedSession.time}</span>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block">Gia sư</span>
+                    <span className="font-medium">{selectedSession.tutorName}</span>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block">Môn học</span>
+                    <span className="font-medium">{selectedSession.subject || "—"}</span>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+                <div className="p-3 bg-muted/50 rounded-xl">
+                  <span className="text-xs text-muted-foreground block">Hình thức</span>
+                  <span className="font-medium flex items-center gap-1">
+                    {selectedSession.format === "online" ? (
+                      <>
+                        <Monitor className="w-3 h-3 text-primary" /> Online
+                      </>
+                    ) : (
+                      <>
+                        <MapPin className="w-3 h-3" /> Offline
+                      </>
+                    )}
+                  </span>
+                </div>
+                {selectedSession.content && (
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block mb-1">Nội dung</span>
+                    <p className="text-sm">{selectedSession.content}</p>
+                  </div>
+                )}
+                {selectedSession.notes && (
+                  <div className="p-3 bg-muted/50 rounded-xl">
+                    <span className="text-xs text-muted-foreground block mb-1">Nhận xét</span>
+                    <p className="text-sm">{selectedSession.notes}</p>
+                  </div>
+                )}
+                {selectedSession.homework && (
+                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">
+                    <span className="text-xs text-muted-foreground block mb-1">BTVN</span>
+                    <p className="text-sm font-medium">{selectedSession.homework}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Auto-opening absence review popup (?absence={sessionId}) */}
       <Dialog open={!!absenceSession} onOpenChange={(open) => { if (!open) closeAbsenceDialog(); }}>

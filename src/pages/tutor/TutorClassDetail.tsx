@@ -10,7 +10,9 @@ import { toast } from "sonner";
 import { useClass } from "@/hooks/useClasses";
 import { useClassSessions, useStartSession, useEndSession, useConfirmSession, useCompleteSession, useCreateSession, useRequestAbsence } from "@/hooks/useSessions";
 import { useClassMaterials, useAddClassMaterial, useDeleteClassMaterial } from "@/hooks/useMaterials";
-import type { SessionResponse, WeeklySlotDto } from "@/types/api";
+import { formatSessionDate, formatSessionClock } from "@/lib/sessionTime";
+import SessionStatusBadge from "@/components/schedule/SessionStatusBadge";
+import type { WeeklySlotDto } from "@/types/api";
 
 const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
@@ -19,11 +21,9 @@ const buildSchedule = (slots: WeeklySlotDto[]): string =>
     .map(s => `${DAY_LABELS[s.dayOfWeek] ?? `?${s.dayOfWeek}`} ${s.startTime.slice(0, 5)}-${s.endTime.slice(0, 5)}`)
     .join(", ");
 
-const sessionDate = (s: SessionResponse): string => (s.startAt ? s.startAt.slice(0, 10) : "");
-const sessionTime = (s: SessionResponse): string => {
-  const hm = (iso?: string | null) => (iso ? iso.slice(11, 16) : "");
-  return `${hm(s.startAt)}-${hm(s.endAt)}`;
-};
+const sessionDate = (iso?: string | null): string => formatSessionDate(iso);
+const sessionTime = (start?: string | null, end?: string | null): string =>
+  `${formatSessionClock(start)}-${formatSessionClock(end)}`;
 
 const TutorClassDetail = () => {
   const { classId } = useParams();
@@ -283,7 +283,7 @@ const TutorClassDetail = () => {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-foreground">{sessionDate(s)} • {sessionTime(s)}</p>
+                        <p className="text-sm font-medium text-foreground">{sessionDate(s.startAt)} • {sessionTime(s.startAt, s.endAt)}</p>
                         {s.format && (
                           <span className={cn("text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5",
                             s.format === "online" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
@@ -365,16 +365,14 @@ const TutorClassDetail = () => {
         <DialogContent className="max-w-md">
           {sessionDetail && (
             <>
-              <DialogHeader><DialogTitle>Buổi {sessions.indexOf(sessionDetail) + 1} - {sessionDate(sessionDetail)}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Buổi {sessions.indexOf(sessionDetail) + 1} - {sessionDate(sessionDetail.startAt)}</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Thời gian</span><span className="font-medium">{sessionTime(sessionDetail)}</span></div>
-                  <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Trạng thái</span><span className="font-medium">
-                    {sessionDetail.status === "completed" ? "Hoàn thành" : sessionDetail.status === "pending_confirm" ? "Chờ PH xác nhận" : sessionDetail.status === "in_progress" ? "Đang diễn ra" : sessionDetail.status === "missed" ? "Vắng" : sessionDetail.status === "cancelled" ? "Đã hủy" : "Đã lên lịch"}
-                  </span></div>
+                  <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Thời gian</span><span className="font-medium">{sessionTime(sessionDetail.startAt, sessionDetail.endAt)}</span></div>
+                  <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Trạng thái</span><span className="font-medium"><SessionStatusBadge status={sessionDetail.status} /></span></div>
                   {sessionDetail.format && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Hình thức</span><span className="font-medium">{sessionDetail.format === "online" ? "Online" : "Offline"}</span></div>}
-                  {sessionDetail.startedAt && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Bắt đầu</span><span className="font-medium">{sessionDetail.startedAt.slice(11, 16)}</span></div>}
-                  {sessionDetail.endedAt && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Kết thúc</span><span className="font-medium">{sessionDetail.endedAt.slice(11, 16)}</span></div>}
+                  {sessionDetail.startedAt && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Bắt đầu</span><span className="font-medium">{formatSessionClock(sessionDetail.startedAt)}</span></div>}
+                  {sessionDetail.endedAt && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block">Kết thúc</span><span className="font-medium">{formatSessionClock(sessionDetail.endedAt)}</span></div>}
                 </div>
                 {sessionDetail.content && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block mb-1">Nội dung</span><p className="text-sm">{sessionDetail.content}</p></div>}
                 {sessionDetail.notes && <div className="p-3 bg-muted/50 rounded-xl"><span className="text-xs text-muted-foreground block mb-1">Nhận xét</span><p className="text-sm">{sessionDetail.notes}</p></div>}
