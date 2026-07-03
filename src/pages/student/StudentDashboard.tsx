@@ -107,7 +107,7 @@ const StudentDashboard = () => {
       bg: "from-emerald-500 to-teal-500",
       iconBg: "bg-emerald-100",
       iconColor: "text-emerald-600",
-      link: "/student/schedule",
+      link: "/student/classes",
     },
     {
       label: "Bài thi đã làm",
@@ -272,7 +272,7 @@ const StudentDashboard = () => {
                 Lịch học sắp tới
               </h3>
               <button
-                onClick={() => navigate("/student/schedule")}
+                onClick={() => navigate("/student/classes")}
                 className="text-xs font-medium text-primary hover:underline"
               >
                 Xem tất cả

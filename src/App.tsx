@@ -42,7 +42,6 @@ import StudentLayout from "./components/student/StudentLayout";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentClasses from "./pages/student/StudentClasses";
 import StudentClassDetail from "./pages/student/StudentClassDetail";
-import StudentSchedule from "./pages/student/StudentSchedule";
 import StudentTests from "./pages/student/StudentTests";
 import StudentReport from "./pages/student/StudentReport";
 import StudentChat from "./pages/student/StudentChat";
@@ -149,7 +148,7 @@ const App = () => (
                   <Route index element={<StudentDashboard />} />
                   <Route path="classes" element={<StudentClasses />} />
                   <Route path="classes/:classId" element={<StudentClassDetail />} />
-                  <Route path="schedule" element={<StudentSchedule />} />
+                  <Route path="schedule" element={<StudentClasses />} />
                   <Route path="availability" element={<Navigate to="/student/classes" replace />} />
                   <Route path="tests" element={<StudentTests />} />
                   <Route path="mock-exam" element={<Navigate to="/student/classes" replace />} />

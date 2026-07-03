@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Clock,
   BookOpen,
-  CalendarDays,
   Video,
   MapPin,
   Wallet,
@@ -23,7 +22,6 @@ import { Badge } from "@/components/ui/badge";
 import { useClass } from "@/hooks/useClasses";
 import { useClassSessions } from "@/hooks/useSessions";
 import { formatSessionDate, formatSessionClock } from "@/lib/sessionTime";
-import SessionStatusBadge from "@/components/schedule/SessionStatusBadge";
 import type { WeeklySlotDto } from "@/types/api";
 
 const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
@@ -226,46 +224,6 @@ const StudentClassDetail = () => {
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Sessions */}
-      <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <CalendarDays className="h-4 w-4 text-primary" />
-          Lịch học chi tiết
-        </h3>
-
-        {sessions.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Chưa có dữ liệu</p>
-        ) : (
-          <div className="space-y-3">
-            {sessions.map((s, index) => (
-              <div
-                key={s.id}
-                className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/20 p-4 md:flex-row md:items-center md:justify-between"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-sm font-bold text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
-                    {index + 1}
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {s.content || `Buổi học ${index + 1}`}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {sessionDate(s.startAt)} • {sessionTime(s.startAt, s.endAt)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <SessionStatusBadge status={s.status} className="rounded-full" />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Homework (only session.homework exists — no structured assignments endpoint yet) */}
