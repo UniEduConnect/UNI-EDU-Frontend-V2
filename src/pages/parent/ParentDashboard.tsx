@@ -23,17 +23,15 @@ import { useMe } from "@/hooks/useUsers";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useClasses } from "@/hooks/useClasses";
 import { useMySchedule } from "@/hooks/useSchedule";
+import { formatSessionClock } from "@/lib/sessionTime";
 
+// Vietnam-local "dd/MM" — pinning the timezone avoids the browser-local-time display bug
+// already fixed elsewhere (see @/lib/sessionTime.ts).
 const formatSessionDate = (iso: string) =>
   new Date(iso).toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
-  });
-
-const formatSessionTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 
 const ParentDashboard = () => {
@@ -79,7 +77,7 @@ const ParentDashboard = () => {
         subject: cls?.subject ?? "",
         tutorName: cls?.tutorName ?? "",
         date: formatSessionDate(s.startAt),
-        time: `${formatSessionTime(s.startAt)} - ${formatSessionTime(s.endAt)}`,
+        time: `${formatSessionClock(s.startAt)} - ${formatSessionClock(s.endAt)}`,
       };
     });
 

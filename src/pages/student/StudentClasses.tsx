@@ -7,8 +7,13 @@ import {
   ChevronRight,
   Search,
   X,
+  X as XIcon,
   Sparkles,
   CalendarDays,
+  AlertTriangle,
+  Save,
+  Edit2,
+  Monitor,
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,11 +21,55 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { useClasses } from "@/hooks/useClasses";
-import { useClassSessions, useRateSession } from "@/hooks/useSessions";
-import type { ClassItem, WeeklySlotDto } from "@/types/api";
+import {
+  useClassSessions,
+  useRateSession,
+  useApproveAbsence,
+  useRejectAbsence,
+} from "@/hooks/useSessions";
+import { useMySchedule } from "@/hooks/useSchedule";
+import {
+  useMyStudentAvailability,
+  useUpdateMyStudentAvailability,
+  useCommonSlots,
+  useAiSlots,
+} from "@/hooks/useStudents";
+import { WeeklyTimetable } from "@/components/schedule/WeeklyTimetable";
+import { slotKey, normalizeDay } from "@/lib/scheduleUtils";
+import { formatSessionDate, formatSessionClock } from "@/lib/sessionTime";
+import SessionStatusBadge from "@/components/schedule/SessionStatusBadge";
+import WeeklyCalendarBoard, {
+  type CalendarBoardSession,
+} from "@/components/schedule/WeeklyCalendarBoard";
+import type {
+  AvailableSlotDto,
+  ClassItem,
+  SessionResponse,
+  WeeklySlotDto,
+} from "@/types/api";
+
+const STUDENT_TUTOR_AVATAR_PLACEHOLDER = "/placeholder.svg";
+
+type ViewSession = SessionResponse & {
+  date: string;
+  time: string;
+  className: string;
+  tutorName: string;
+  tutorAvatar: string;
+  subject: string;
+};
 
 const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
@@ -62,6 +111,146 @@ const StudentClasses = () => {
   const completedSessions = modalSessions.filter(
     (s) => s.status === "completed",
   );
+
+  // --- Thời khóa biểu / lịch rảnh (merged in from the former "Lịch học" page) ---
+  const { sessions, isLoading: sessionsLoading } = useMySchedule();
+  const approveAbsence = useApproveAbsence();
+  const rejectAbsence = useRejectAbsence();
+
+  // Smart timetable: free slots + edit + common-slot suggestion with a tutor.
+  const { slots: myAvail } = useMyStudentAvailability();
+  const updateAvail = useUpdateMyStudentAvailability();
+  const [availEdit, setAvailEdit] = useState(false);
+  const [availDraft, setAvailDraft] = useState<AvailableSlotDto[]>([]);
+  const [suggestTutorId, setSuggestTutorId] = useState("");
+  const [sessionsPerWeek, setSessionsPerWeek] = useState(2);
+  const [selectedSession, setSelectedSession] = useState<ViewSession | null>(
+    null,
+  );
+  const [params, setParams] = useSearchParams();
+
+  const tutorOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    classes.forEach((c) => {
+      if (c.tutorId) m.set(c.tutorId, c.tutorName);
+    });
+    return Array.from(m, ([id, name]) => ({ id, name }));
+  }, [classes]);
+
+  const { slots: commonSlots } = useCommonSlots(suggestTutorId || undefined);
+  const { slots: aiSlots, isLoading: aiSlotsLoading } = useAiSlots(
+    suggestTutorId || undefined,
+    sessionsPerWeek,
+  );
+  // Highlight the AI's chosen sessions on the grid when available; otherwise show the raw overlap.
+  const suggested = useMemo(
+    () =>
+      new Set(
+        (aiSlots.length > 0 ? aiSlots : commonSlots).map((s) =>
+          slotKey(normalizeDay(s.day), s.time),
+        ),
+      ),
+    [aiSlots, commonSlots],
+  );
+
+  const toggleAvailSlot = (day: string, slot: string) =>
+    setAvailDraft((prev) => {
+      const exists = prev.some(
+        (s) => normalizeDay(s.day) === day && s.time === slot,
+      );
+      return exists
+        ? prev.filter((s) => !(normalizeDay(s.day) === day && s.time === slot))
+        : [...prev, { day, time: slot }];
+    });
+
+  const startEditAvail = () => {
+    setAvailDraft(myAvail.map((s) => ({ day: normalizeDay(s.day), time: s.time })));
+    setAvailEdit(true);
+  };
+
+  const saveAvail = () =>
+    updateAvail.mutate(
+      { slots: availDraft },
+      {
+        onSuccess: () => {
+          setAvailEdit(false);
+          toast.success("Đã cập nhật lịch rảnh!");
+        },
+        onError: () => toast.error("Không thể cập nhật lịch rảnh"),
+      },
+    );
+
+  // Per-session class/tutor info is NOT on SessionResponse (only classId); join client-side.
+  const classMap = useMemo(() => {
+    const m = new Map<string, ClassItem>();
+    for (const c of classes) m.set(c.id, c);
+    return m;
+  }, [classes]);
+
+  const allSessions: ViewSession[] = useMemo(
+    () =>
+      sessions
+        .map((s) => {
+          const cls = classMap.get(s.classId);
+          return {
+            ...s,
+            date: formatSessionDate(s.startAt),
+            time: `${formatSessionClock(s.startAt)}-${formatSessionClock(s.endAt)}`,
+            className: cls?.name ?? "Lớp học",
+            tutorName: cls?.tutorName ?? "—",
+            tutorAvatar: cls?.tutorAvatar ?? STUDENT_TUTOR_AVATAR_PLACEHOLDER,
+            subject: cls?.subject ?? "",
+          };
+        })
+        .sort((a, b) => a.startAt.localeCompare(b.startAt)),
+    [sessions, classMap],
+  );
+
+  const boardSessions: CalendarBoardSession[] = useMemo(
+    () =>
+      allSessions.map((s) => ({
+        id: s.id,
+        startAt: s.startAt,
+        endAt: s.endAt,
+        status: s.status,
+        title: s.className,
+        subtitle: s.tutorName,
+        format: s.format,
+      })),
+    [allSessions],
+  );
+
+  const pendingTutorAbsences = useMemo(
+    () =>
+      allSessions.filter(
+        (s) =>
+          s.absenceRequestedBy === "tutor" &&
+          (s.absenceApproved === null || s.absenceApproved === undefined),
+      ),
+    [allSessions],
+  );
+
+  const confirmAbsence = (sessionId: string) => {
+    approveAbsence.mutate(sessionId, {
+      onSuccess: () => toast.success("Đã xác nhận báo vắng"),
+      onError: () => toast.error("Thao tác thất bại"),
+    });
+  };
+
+  const rejectAbsenceFn = (sessionId: string) => {
+    rejectAbsence.mutate(sessionId, {
+      onSuccess: () => toast.success("Đã từ chối cho vắng"),
+      onError: () => toast.error("Thao tác thất bại"),
+    });
+  };
+
+  // Auto-open popup driven by ?absence={sessionId} (notification deep-links).
+  const absenceId = params.get("absence");
+  const absenceSession = useMemo(
+    () => (absenceId ? allSessions.find((s) => s.id === absenceId) ?? null : null),
+    [absenceId, allSessions],
+  );
+  const closeAbsenceDialog = () => setParams({});
 
   const filtered = classes.filter((c) => {
     const matchSearch =
@@ -317,7 +506,16 @@ const StudentClasses = () => {
                   return (
                     <div
                       key={c.id}
-                      className="group rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/student/classes/${c.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          navigate(`/student/classes/${c.id}`);
+                        }
+                      }}
+                      className="group cursor-pointer rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
                       <div className="mb-4 flex items-start gap-4">
                         <img
@@ -393,7 +591,10 @@ const StudentClasses = () => {
                           variant="outline"
                           className="flex-1 rounded-2xl text-xs"
                           size="sm"
-                          onClick={() => setRatingModal({ classId: c.id })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRatingModal({ classId: c.id });
+                          }}
                         >
                           <Star className="mr-1 h-3.5 w-3.5" /> Đánh giá buổi
                         </Button>
@@ -401,7 +602,10 @@ const StudentClasses = () => {
                           variant="outline"
                           className="flex-1 rounded-2xl text-xs"
                           size="sm"
-                          onClick={() => navigate(`/student/classes/${c.id}`)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/student/classes/${c.id}`);
+                          }}
                         >
                           Chi tiết <ChevronRight className="ml-1 h-3.5 w-3.5" />
                         </Button>
@@ -425,7 +629,16 @@ const StudentClasses = () => {
                 {completedClasses.map((c: ClassItem) => (
                   <div
                     key={c.id}
-                    className="rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/student/classes/${c.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        navigate(`/student/classes/${c.id}`);
+                      }
+                    }}
+                    className="cursor-pointer rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     <div className="flex items-center gap-4">
                       <img
@@ -452,7 +665,10 @@ const StudentClasses = () => {
                       variant="outline"
                       className="mt-4 w-full rounded-2xl text-xs"
                       size="sm"
-                      onClick={() => navigate(`/student/classes/${c.id}`)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/student/classes/${c.id}`);
+                      }}
                     >
                       Chi tiết lớp học{" "}
                       <ChevronRight className="ml-1 h-3.5 w-3.5" />
@@ -476,8 +692,392 @@ const StudentClasses = () => {
               </p>
             </div>
           )}
+
+          {/* Pending tutor-absence confirmations */}
+          {pendingTutorAbsences.length > 0 && (
+            <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                <h3 className="text-sm font-semibold text-amber-800">
+                  Gia sư báo vắng cần xác nhận ({pendingTutorAbsences.length})
+                </h3>
+              </div>
+              <div className="space-y-2">
+                {pendingTutorAbsences.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-white/70 p-3 sm:flex-row sm:items-center"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-900">
+                        {s.className}
+                      </p>
+                      <p className="text-xs text-amber-700">
+                        {s.tutorName} • {s.date} • {s.time}
+                      </p>
+                      {s.absenceReason && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Lý do: {s.absenceReason}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        size="sm"
+                        className="rounded-xl bg-amber-600 text-xs text-white hover:bg-amber-700"
+                        disabled={approveAbsence.isPending || rejectAbsence.isPending}
+                        onClick={() => confirmAbsence(s.id)}
+                      >
+                        Xác nhận báo vắng
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-xl border-amber-300 text-xs text-amber-800 hover:bg-amber-100"
+                        disabled={approveAbsence.isPending || rejectAbsence.isPending}
+                        onClick={() => rejectAbsenceFn(s.id)}
+                      >
+                        Từ chối
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Thời khóa biểu — the one real, dated weekly calendar for this student's actual sessions */}
+          {sessionsLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải buổi học...
+            </div>
+          ) : (
+            <div>
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+                <CalendarDays className="h-4 w-4 text-primary" /> Thời khóa biểu (
+                {allSessions.length})
+              </h3>
+              <WeeklyCalendarBoard
+                sessions={boardSessions}
+                onSelect={(s) => {
+                  const full = allSessions.find((x) => x.id === s.id);
+                  if (full) setSelectedSession(full);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Smart timetable: free/busy + edit free slots + suggest common slots with a tutor */}
+          <div className="space-y-4 rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Sparkles className="h-4 w-4 text-primary" /> Lịch rảnh / bận & gợi
+                ý giờ học thông minh
+              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                {!availEdit && tutorOptions.length > 0 && (
+                  <select
+                    value={suggestTutorId}
+                    onChange={(e) => setSuggestTutorId(e.target.value)}
+                    className="rounded-lg border border-border bg-card px-2 py-1.5 text-xs"
+                  >
+                    <option value="">Gợi ý giờ chung với gia sư…</option>
+                    {tutorOptions.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!availEdit && suggestTutorId && (
+                  <select
+                    value={sessionsPerWeek}
+                    onChange={(e) => setSessionsPerWeek(Number(e.target.value))}
+                    className="rounded-lg border border-border bg-card px-2 py-1.5 text-xs"
+                    title="Số buổi học mỗi tuần"
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n} buổi/tuần
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {availEdit ? (
+                  <>
+                    <button
+                      onClick={saveAvail}
+                      disabled={updateAvail.isPending}
+                      className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                    >
+                      <Save className="h-3 w-3" /> Lưu
+                    </button>
+                    <button
+                      onClick={() => setAvailEdit(false)}
+                      className="flex items-center gap-1 rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
+                    >
+                      <XIcon className="h-3 w-3" /> Hủy
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={startEditAvail}
+                    className="flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+                  >
+                    <Edit2 className="h-3 w-3" /> Sửa lịch rảnh
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <WeeklyTimetable
+              availability={availEdit ? availDraft : myAvail}
+              sessions={allSessions}
+              editMode={availEdit}
+              onToggle={toggleAvailSlot}
+              suggested={availEdit ? undefined : suggested}
+            />
+
+            {!availEdit && suggestTutorId && (
+              <div className="rounded-lg bg-muted/40 p-3 text-xs">
+                {commonSlots.length > 0 ? (
+                  <span className="text-foreground">
+                    ★ <span className="font-medium">{commonSlots.length}</span>{" "}
+                    khung giờ phù hợp với{" "}
+                    {tutorOptions.find((t) => t.id === suggestTutorId)?.name}:{" "}
+                    <span className="font-medium text-emerald-700 dark:text-emerald-300">
+                      {commonSlots.map((s) => `${s.day} ${s.time}`).join(" · ")}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Chưa có khung giờ chung. Bạn và gia sư cần khai báo lịch rảnh
+                    trùng nhau (ô xanh lá).
+                  </span>
+                )}
+              </div>
+            )}
+
+            {!availEdit &&
+              suggestTutorId &&
+              (aiSlotsLoading || aiSlots.length > 0) && (
+                <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                    <Sparkles className="h-3.5 w-3.5" /> AI sắp xếp {sessionsPerWeek}{" "}
+                    buổi/tuần tối ưu (lịch rảnh của bạn ∩ gia sư)
+                  </div>
+                  {aiSlotsLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Đang phân
+                      tích…
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {aiSlots.map((s, i) => (
+                        <div
+                          key={`${s.day}-${s.time}-${i}`}
+                          className="flex items-center justify-between gap-2 rounded-lg bg-background/70 px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <span className="text-xs font-medium text-foreground">
+                              {s.day} · {s.time}
+                            </span>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {s.reason}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 text-[11px]"
+                          >
+                            {s.score}đ
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+          </div>
         </>
       )}
+
+      {/* Session Detail Dialog */}
+      <Dialog
+        open={!!selectedSession}
+        onOpenChange={() => setSelectedSession(null)}
+      >
+        <DialogContent className="max-w-md">
+          {selectedSession && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {selectedSession.className}
+                  <SessionStatusBadge status={selectedSession.status} />
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="block text-xs text-muted-foreground">
+                      Ngày
+                    </span>
+                    <span className="font-medium">{selectedSession.date}</span>
+                  </div>
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="block text-xs text-muted-foreground">
+                      Giờ
+                    </span>
+                    <span className="font-medium">{selectedSession.time}</span>
+                  </div>
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="block text-xs text-muted-foreground">
+                      Gia sư
+                    </span>
+                    <span className="font-medium">
+                      {selectedSession.tutorName}
+                    </span>
+                  </div>
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="block text-xs text-muted-foreground">
+                      Môn học
+                    </span>
+                    <span className="font-medium">
+                      {selectedSession.subject || "—"}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-muted/50 p-3">
+                  <span className="block text-xs text-muted-foreground">
+                    Hình thức
+                  </span>
+                  <span className="flex items-center gap-1 font-medium">
+                    {selectedSession.format === "online" ? (
+                      <>
+                        <Monitor className="h-3 w-3 text-primary" /> Online
+                      </>
+                    ) : (
+                      <>
+                        <MapPin className="h-3 w-3" /> Offline
+                      </>
+                    )}
+                  </span>
+                </div>
+                {selectedSession.content && (
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="mb-1 block text-xs text-muted-foreground">
+                      Nội dung
+                    </span>
+                    <p className="text-sm">{selectedSession.content}</p>
+                  </div>
+                )}
+                {selectedSession.notes && (
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <span className="mb-1 block text-xs text-muted-foreground">
+                      Nhận xét
+                    </span>
+                    <p className="text-sm">{selectedSession.notes}</p>
+                  </div>
+                )}
+                {selectedSession.homework && (
+                  <div className="rounded-xl border border-primary/10 bg-primary/5 p-3">
+                    <span className="mb-1 block text-xs text-muted-foreground">
+                      BTVN
+                    </span>
+                    <p className="text-sm font-medium">
+                      {selectedSession.homework}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-opening absence review popup (?absence={sessionId}) */}
+      <Dialog
+        open={!!absenceSession}
+        onOpenChange={(open) => {
+          if (!open) closeAbsenceDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Yêu cầu báo vắng từ gia sư
+            </DialogTitle>
+            <DialogDescription>
+              Gia sư đã gửi yêu cầu báo vắng cho buổi học này. Vui lòng xem chi
+              tiết và phản hồi.
+            </DialogDescription>
+          </DialogHeader>
+          {absenceSession && (
+            <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div>
+                <p className="text-xs text-amber-700">Lớp học</p>
+                <p className="text-sm font-semibold text-amber-900">
+                  {absenceSession.className}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-amber-700">Gia sư</p>
+                <p className="text-sm font-medium text-amber-900">
+                  {absenceSession.tutorName}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-amber-700">Thời gian</p>
+                <p className="text-sm font-medium text-amber-900">
+                  {absenceSession.date} • {absenceSession.time}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-amber-700">Lý do</p>
+                <p className="text-sm text-amber-900">
+                  {absenceSession.absenceReason || "Không có lý do cụ thể"}
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              className="rounded-xl border-amber-300 text-xs text-amber-800 hover:bg-amber-100"
+              disabled={approveAbsence.isPending || rejectAbsence.isPending}
+              onClick={() => {
+                if (!absenceSession) return;
+                rejectAbsence.mutate(absenceSession.id, {
+                  onSuccess: () => {
+                    toast.success("Đã từ chối cho vắng");
+                    closeAbsenceDialog();
+                  },
+                  onError: () => toast.error("Thao tác thất bại"),
+                });
+              }}
+            >
+              Từ chối
+            </Button>
+            <Button
+              className="rounded-xl bg-amber-600 text-xs text-white hover:bg-amber-700"
+              disabled={approveAbsence.isPending || rejectAbsence.isPending}
+              onClick={() => {
+                if (!absenceSession) return;
+                approveAbsence.mutate(absenceSession.id, {
+                  onSuccess: () => {
+                    toast.success("Đã xác nhận báo vắng");
+                    closeAbsenceDialog();
+                  },
+                  onError: () => toast.error("Thao tác thất bại"),
+                });
+              }}
+            >
+              Cho phép vắng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

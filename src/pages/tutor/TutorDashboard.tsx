@@ -97,7 +97,7 @@ const TutorDashboard = () => {
     { label: "Lớp đang dạy", value: activeClasses, sub: `${upcomingSessions} buổi sắp tới`, icon: BookOpen, iconBg: "bg-blue-100", iconColor: "text-blue-600", bg: "from-blue-700 to-blue-900", link: "/tutor/classes" },
     { label: "Thu nhập tháng", value: `${(monthlyEarnings / 1000000).toFixed(1)}tr`, sub: `Khả dụng: ${(walletBalance / 1000000).toFixed(1)}tr`, icon: Wallet, iconBg: "bg-emerald-100", iconColor: "text-emerald-600", bg: "from-emerald-500 to-teal-500", link: "/tutor/wallet" },
     { label: "Đánh giá TB", value: rating.toFixed(1), sub: `${totalReviews} đánh giá`, icon: Star, iconBg: "bg-amber-100", iconColor: "text-amber-600", bg: "from-amber-500 to-orange-500", link: "/tutor/reviews" },
-    { label: "Yêu cầu học thử", value: pendingTrials, sub: "đang chờ", icon: CheckCircle2, iconBg: "bg-rose-100", iconColor: "text-rose-600", bg: "from-rose-500 to-pink-500", link: "/tutor/classes" },
+    { label: "Yêu cầu học thử", value: pendingTrials, sub: "đang chờ", icon: CheckCircle2, iconBg: "bg-rose-100", iconColor: "text-rose-600", bg: "from-rose-500 to-pink-500", link: "/tutor/find-students?tab=trials" },
   ];
 
   return (

@@ -9,6 +9,7 @@ import {
   Search,
   Eye,
   UserPlus,
+  Hourglass,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -175,19 +176,30 @@ export default function StudentFindTutorPosts() {
                 >
                   <Eye className="w-3.5 h-3.5" /> Xem hồ sơ
                 </Button>
-                <Button
-                  size="sm"
-                  className="flex-1 rounded-xl text-xs"
-                  disabled={applyingId === post.id}
-                  onClick={() => handleApply(post.id)}
-                >
-                  {applyingId === post.id ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <UserPlus className="w-3.5 h-3.5" />
-                  )}{" "}
-                  Đăng ký học
-                </Button>
+                {post.hasPendingApplication ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled
+                    className="flex-1 rounded-xl text-xs cursor-default opacity-100 disabled:opacity-100"
+                  >
+                    <Hourglass className="w-3.5 h-3.5" /> Đã đăng ký, đang chờ
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="flex-1 rounded-xl text-xs"
+                    disabled={applyingId === post.id}
+                    onClick={() => handleApply(post.id)}
+                  >
+                    {applyingId === post.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <UserPlus className="w-3.5 h-3.5" />
+                    )}{" "}
+                    Đăng ký học
+                  </Button>
+                )}
               </div>
             </div>
           ))}
