@@ -1090,7 +1090,7 @@ const CreatePostDialog = ({ open, onClose, subjects }: CreatePostDialogProps) =>
   const [gradeLevels, setGradeLevels] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
   const schedule = useWeeklySchedule();
-  const [durationMonths, setDurationMonths] = useState("3");
+  const [durationMonths, setDurationMonths] = useState("1");
   const [note, setNote] = useState("");
 
   const createPost = useCreateTutorPost();
@@ -1100,15 +1100,15 @@ const CreatePostDialog = ({ open, onClose, subjects }: CreatePostDialogProps) =>
     setGradeLevels("");
     setHourlyRate("");
     schedule.reset();
-    setDurationMonths("3");
+    setDurationMonths("1");
     setNote("");
   };
 
   const handleSubmit = () => {
     if (!subjectId) return;
     const duration = Number(durationMonths);
-    if (!duration || duration < 3) {
-      toast.error("Thời lượng dạy tối thiểu là 3 tháng");
+    if (!duration || duration < 1) {
+      toast.error("Thời lượng dạy tối thiểu là 1 tháng");
       return;
     }
     createPost.mutate(
@@ -1205,13 +1205,13 @@ const CreatePostDialog = ({ open, onClose, subjects }: CreatePostDialogProps) =>
             <Label className="text-sm">Thời lượng dạy tối thiểu (tháng)</Label>
             <Input
               type="number"
-              min={3}
+              min={1}
               value={durationMonths}
               onChange={(e) => setDurationMonths(e.target.value)}
-              placeholder="VD: 3"
+              placeholder="VD: 1"
               className="rounded-xl"
             />
-            <p className="text-[11px] text-muted-foreground">Cam kết dạy tối thiểu 3 tháng.</p>
+            <p className="text-[11px] text-muted-foreground">Cam kết dạy tối thiểu 1 tháng.</p>
           </div>
 
           <div className="space-y-1.5">
