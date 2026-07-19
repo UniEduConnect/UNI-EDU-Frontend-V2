@@ -55,7 +55,7 @@ export default function PostTutorRequest() {
   const [reqGrade, setReqGrade] = useState("");
   const schedule = useWeeklySchedule();
   const [reqBudget, setReqBudget] = useState("");
-  const [reqDuration, setReqDuration] = useState("3");
+  const [reqDuration, setReqDuration] = useState("1");
   const [reqNote, setReqNote] = useState("");
 
   const resetRequestForm = () => {
@@ -63,7 +63,7 @@ export default function PostTutorRequest() {
     setReqGrade("");
     schedule.reset();
     setReqBudget("");
-    setReqDuration("3");
+    setReqDuration("1");
     setReqNote("");
   };
 
@@ -73,8 +73,8 @@ export default function PostTutorRequest() {
       return;
     }
     const duration = Number(reqDuration);
-    if (!duration || duration < 3) {
-      toast.error("Thời lượng học tối thiểu là 3 tháng");
+    if (!duration || duration < 1) {
+      toast.error("Thời lượng học tối thiểu là 1 tháng");
       return;
     }
     createRequest.mutate(
@@ -227,13 +227,13 @@ export default function PostTutorRequest() {
               <Label>Thời lượng học (tháng)</Label>
               <Input
                 type="number"
-                min={3}
+                min={1}
                 value={reqDuration}
                 onChange={(e) => setReqDuration(e.target.value)}
-                placeholder="VD: 3"
+                placeholder="VD: 1"
                 className="rounded-2xl"
               />
-              <p className="text-[11px] text-muted-foreground">Cam kết học tối thiểu 3 tháng.</p>
+              <p className="text-[11px] text-muted-foreground">Cam kết học tối thiểu 1 tháng.</p>
             </div>
 
             <div className="space-y-1.5">
