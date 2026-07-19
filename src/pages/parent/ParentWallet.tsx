@@ -105,7 +105,7 @@ const ParentWallet = () => {
     if (selectedMethod === "test") {
       testDepositMutation.mutate(amt, {
         onSuccess: () => {
-          toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví (test)!`);
+          toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví!`);
           setShowDeposit(false);
           setDepositAmt("");
           setSelectedMethod("");
