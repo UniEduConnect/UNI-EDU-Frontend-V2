@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -65,8 +66,16 @@ const paymentMethods = [
   { id: "techcombank", name: "Techcombank", desc: "Ngân hàng Techcombank" },
 ];
 
-// Methods for the deposit dialog (real gateways only).
-const depositMethods = [...paymentMethods];
+// Manual bank transfer (VietQR) — deposit-only, so it must NOT leak into the withdraw dialog
+// which renders `paymentMethods`.
+const bankTransferMethod = {
+  id: "bank",
+  name: "Chuyển khoản ngân hàng",
+  desc: "Quét mã QR VietQR",
+};
+
+// Methods for the deposit dialog — bank transfer first, then the online gateways.
+const depositMethods = [bankTransferMethod, ...paymentMethods];
 
 const CHART_COLORS = [
   "hsl(224, 76%, 48%)",
@@ -76,6 +85,7 @@ const CHART_COLORS = [
 ];
 
 const StudentWallet = () => {
+  const navigate = useNavigate();
   const { data: walletData } = useWallet();
   const { transactions: walletTransactions, isLoading: txLoading } =
     useWalletTransactions();
@@ -160,6 +170,14 @@ const StudentWallet = () => {
     const methodName =
       depositMethods.find((m) => m.id === selectedMethod)?.name ||
       selectedMethod;
+
+    // Bank transfer has no gateway redirect — send the payer to the QR/instructions page.
+    if (selectedMethod === "bank") {
+      setShowDeposit(false);
+      resetDialogState();
+      navigate(`/wallet/bank-transfer?amount=${amt}`);
+      return;
+    }
 
     // Demo path: create + confirm a test deposit, crediting the wallet immediately.
     if (selectedMethod === "test") {
