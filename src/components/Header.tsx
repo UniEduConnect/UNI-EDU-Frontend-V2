@@ -20,7 +20,7 @@ const Header = () => {
   const { isAuthenticated, role } = useAuth();
   const dashboardPath = role ? ROLE_ROUTE[role] : "/";
   const isTutorRole = role === "tutor" || role === "teacher";
-  const headerSearchBtn = "px-4 py-2 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7] transition-all";
+  const headerSearchBtn = "px-4 py-2 text-sm font-medium text-foreground/75 hover:text-white rounded-lg hover:bg-[#1E69E7] transition-all";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -41,7 +41,7 @@ const Header = () => {
   };
 
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-background/80 backdrop-blur-xl border-b border-border/50 shadow-soft" : "bg-background/50 backdrop-blur-md"}`}>
+    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-background/95 backdrop-blur-xl border-b border-border shadow-md" : "bg-background/90 backdrop-blur-xl border-b border-border/60"}`}>
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
         <Link to="/" className="flex items-center" aria-label="Uni Education">
           <UniLogo className="h-9 w-auto" />
@@ -52,7 +52,7 @@ const Header = () => {
             <button
               key={link.id}
               onClick={() => scrollToSection(link.id)}
-              className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7] transition-all"
+              className="px-4 py-2 text-sm font-medium text-foreground/75 hover:text-white rounded-lg hover:bg-[#1E69E7] transition-all"
             >
               {link.label}
             </button>
@@ -77,10 +77,11 @@ const Header = () => {
             </Button>
           ) : (
             <>
-              <Button variant="ghost" asChild className="rounded-full text-sm px-6">
+              {/* Đăng nhập is the primary CTA here — solid + shadow; Đăng ký is the quieter outline. */}
+              <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7] font-semibold text-sm shadow-neon px-6">
                 <Link to="/login">Đăng nhập</Link>
               </Button>
-              <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7] font-semibold text-sm shadow-neon px-6">
+              <Button variant="outline" asChild className="rounded-full border-primary/40 text-primary hover:bg-primary/10 hover:text-primary font-medium text-sm px-6">
                 <Link to="/register">Đăng ký</Link>
               </Button>
             </>
@@ -100,17 +101,17 @@ const Header = () => {
             <button
               key={link.id}
               onClick={() => scrollToSection(link.id)}
-              className="block w-full text-left py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]"
+              className="block w-full text-left py-2.5 px-3 text-sm font-medium text-foreground/75 hover:text-white rounded-lg hover:bg-[#1E69E7]"
             >
               {link.label}
             </button>
           ))}
           {isTutorRole ? (
-            <Link to={`${dashboardPath}/find-students`} className="block w-full text-left py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Tìm học sinh</Link>
+            <Link to={`${dashboardPath}/find-students`} className="block w-full text-left py-2.5 px-3 text-sm font-medium text-foreground/75 hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Tìm học sinh</Link>
           ) : (
-            <Link to="/find-tutor" className="block w-full text-left py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Tìm gia sư</Link>
+            <Link to="/find-tutor" className="block w-full text-left py-2.5 px-3 text-sm font-medium text-foreground/75 hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Tìm gia sư</Link>
           )}
-          <Link to="/exam-online" className="block py-2.5 px-3 text-sm font-medium text-muted-foreground hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Thi thử Online</Link>
+          <Link to="/exam-online" className="block py-2.5 px-3 text-sm font-medium text-foreground/75 hover:text-white rounded-lg hover:bg-[#1E69E7]" onClick={() => setMobileOpen(false)}>Thi thử Online</Link>
           <div className="flex gap-2 pt-2">
             {isAuthenticated ? (
               <Button asChild className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7]">
@@ -118,10 +119,10 @@ const Header = () => {
               </Button>
             ) : (
               <>
-                <Button variant="ghost" asChild className="flex-1 rounded-full">
+                <Button asChild className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7] font-semibold shadow-neon">
                   <Link to="/login" onClick={() => setMobileOpen(false)}>Đăng nhập</Link>
                 </Button>
-                <Button asChild className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-[#1E69E7]">
+                <Button variant="outline" asChild className="flex-1 rounded-full border-primary/40 text-primary hover:bg-primary/10 hover:text-primary">
                   <Link to="/register" onClick={() => setMobileOpen(false)}>Đăng ký</Link>
                 </Button>
               </>

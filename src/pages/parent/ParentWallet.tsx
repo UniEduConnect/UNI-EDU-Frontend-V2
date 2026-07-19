@@ -1,5 +1,6 @@
 import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
+import { useNavigate } from "react-router-dom";
 import {
   Wallet,
   CreditCard,
@@ -39,10 +40,19 @@ const paymentMethods = [
   { id: "techcombank", name: "Techcombank", desc: "Ngân hàng Techcombank" },
 ];
 
-// Deposit dialog list (real payment methods only).
-const depositMethods = [...paymentMethods];
+// Manual bank transfer (VietQR) — deposit-only, so it must NOT leak into the withdraw dialog
+// which renders `paymentMethods`.
+const bankTransferMethod = {
+  id: "bank",
+  name: "Chuyển khoản ngân hàng",
+  desc: "Quét mã QR VietQR",
+};
+
+// Deposit dialog list — bank transfer first, then the online gateways.
+const depositMethods = [bankTransferMethod, ...paymentMethods];
 
 const ParentWallet = () => {
+  const navigate = useNavigate();
   const { data: walletData } = useWallet();
   const { transactions, isLoading: txLoading } = useWalletTransactions();
   // Classes drive the pay-tuition picker. A parent sees their own children's classes
@@ -81,6 +91,15 @@ const ParentWallet = () => {
     const amt = parseInt(depositAmt);
     if (!amt || amt <= 0 || !selectedMethod) return;
     const methodName = depositMethods.find(m => m.id === selectedMethod)?.name || selectedMethod;
+
+    // Bank transfer has no gateway redirect — send the payer to the QR/instructions page.
+    if (selectedMethod === "bank") {
+      setShowDeposit(false);
+      setDepositAmt("");
+      setSelectedMethod("");
+      navigate(`/wallet/bank-transfer?amount=${amt}`);
+      return;
+    }
 
     // Demo path: create + confirm a test deposit, crediting the wallet immediately.
     if (selectedMethod === "test") {

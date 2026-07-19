@@ -44,6 +44,9 @@ export default function WalletDepositReturn() {
   }, []);
 
   const outcome = useMemo(() => {
+    // Manual bank transfer: the confirm step already credited the wallet before redirecting here.
+    if (params.get("bank") === "success") return "success" as const;
+
     // Momo v2 returns resultCode (0 = success). VNPay returns vnp_ResponseCode ("00" = success).
     const momo = params.get("resultCode");
     const vnp = params.get("vnp_ResponseCode");
@@ -66,7 +69,9 @@ export default function WalletDepositReturn() {
     (params.get("vnp_Amount") ? String(Number(params.get("vnp_Amount")) / 100) : null); // vnpay: subunits
   const amount = amountRaw ? Number(amountRaw) : null;
 
-  const successDesc = confirming
+  const successDesc = params.get("bank") === "success"
+    ? "Số dư ví đã được cộng vào tài khoản của bạn."
+    : confirming
     ? "Đang xác nhận giao dịch với cổng thanh toán…"
     : vnpStatus === "credited" || vnpStatus === "already"
       ? "Số dư ví đã được cộng vào tài khoản của bạn."

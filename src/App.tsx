@@ -37,6 +37,7 @@ import TutorClassDetail from "./pages/tutor/TutorClassDetail";
 import OnlineMeeting from "./pages/tutor/OnlineMeeting";
 import TutorPublicProfile from "./pages/TutorPublicProfile";
 import WalletDepositReturn from "./pages/WalletDepositReturn";
+import WalletBankTransfer from "./pages/WalletBankTransfer";
 import TeacherLayout from "./components/teacher/TeacherLayout";
 import StudentLayout from "./components/student/StudentLayout";
 import StudentDashboard from "./pages/student/StudentDashboard";
@@ -98,6 +99,7 @@ const App = () => (
                 <Route path="/exam-online" element={<ExamOnline />} />
                 <Route path="/demo/:role" element={<DemoPage />} />
                 <Route path="/tutor-profile" element={<TutorPublicProfile />} />
+                <Route path="/wallet/bank-transfer" element={<WalletBankTransfer />} />
                 <Route path="/wallet/deposit-return" element={<WalletDepositReturn />} />
                 <Route element={<ProtectedRoute role="admin" />}>
                 <Route path="/admin" element={<AdminLayout />}>
