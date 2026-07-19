@@ -184,7 +184,7 @@ const StudentWallet = () => {
       testDepositMutation.mutate(amt, {
         onSuccess: () => {
           toast.success(
-            `Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví (test)!`,
+            `Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví!`,
           );
           setShowDeposit(false);
           resetDialogState();
