@@ -5,7 +5,7 @@ import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdr
 import { useClasses } from "@/hooks/useClasses";
 import { useMyRefunds, useRequestRefund } from "@/hooks/useRefunds";
 import { useMyBankAccount } from "@/hooks/useTutors";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -38,8 +38,17 @@ const paymentMethods = [
   { id: "bidv", name: "BIDV", icon: Landmark, desc: "****9012" },
 ];
 
-// Deposit dialog list (real payment methods only).
-const depositMethods = [...paymentMethods];
+// Manual bank transfer (VietQR) — deposit-only, so it must NOT leak into the withdraw dialog
+// which renders `paymentMethods`.
+const bankTransferMethod = {
+  id: "bank",
+  name: "Chuyển khoản ngân hàng",
+  icon: Landmark,
+  desc: "Quét mã QR VietQR",
+};
+
+// Deposit dialog list — bank transfer first, then the online gateways.
+const depositMethods = [bankTransferMethod, ...paymentMethods];
 
 const refundReasons = [
   "Lớp học bị hủy do học sinh không tham gia",
@@ -50,6 +59,7 @@ const refundReasons = [
 ];
 
 const TutorWallet = () => {
+  const navigate = useNavigate();
   const { data: walletData } = useWallet();
   const { transactions, isLoading: txLoading } = useWalletTransactions();
   // ClassItem has no escrow fields — show session-based progress only.
@@ -125,6 +135,12 @@ const TutorWallet = () => {
     if (!selectedMethod) return;
     const methodName = selectedMethodName();
     const reset = () => { setDialogType(null); setAmount(""); setSelectedMethod(""); };
+    // Bank transfer has no gateway redirect — send the payer to the QR/instructions page.
+    if (selectedMethod === "bank") {
+      reset();
+      navigate(`/wallet/bank-transfer?amount=${amt}`);
+      return;
+    }
     if (selectedMethod === "test") {
       // Demo path: create + confirm a test deposit, crediting the wallet immediately.
       testDepositMutation.mutate(amt, {
