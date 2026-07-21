@@ -36,8 +36,10 @@ export function useDeposit() {
 export function useTestDeposit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (amount: number) => {
-      const created = await walletService.depositTest({ amount });
+    // `note` carries the bank-transfer memo (e.g. "UNIEDU NAP A1B2C3") into the transaction
+    // description so it shows as the transaction content.
+    mutationFn: async ({ amount, note }: { amount: number; note?: string }) => {
+      const created = await walletService.depositTest({ amount, note });
       return walletService.confirmDepositTest(created.transactionId);
     },
     onSuccess: () => invalidateWallet(qc),

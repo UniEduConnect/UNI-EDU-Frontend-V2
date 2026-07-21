@@ -702,6 +702,7 @@ export interface DepositResponse {
 // wallet directly so the balance can be exercised without Momo/VNPay sandbox config.
 export interface DepositTestRequest {
   amount: number;
+  note?: string;
 }
 export interface TestDepositConfirmResponse {
   transactionId: string;

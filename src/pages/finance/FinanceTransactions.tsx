@@ -40,6 +40,20 @@ const typeLabels: Record<string, string> = {
 const INFLOW_TYPES = ["deposit", "escrow_in", "platform_fee"];
 const OUTFLOW_TYPES = ["withdrawal", "refund", "escrow_release"];
 
+// Friendly Vietnamese label for a raw role code (tutor/teacher are both the "gia sư" side).
+const roleLabels: Record<string, string> = {
+  admin: "Quản trị viên",
+  tutor: "Gia sư",
+  teacher: "Gia sư",
+  student: "Học sinh",
+  parent: "Phụ huynh",
+  office: "Văn phòng",
+  finance: "Kế toán",
+  exam_manager: "Quản lý đề thi",
+};
+const roleLabel = (role?: string | null) =>
+  role ? roleLabels[role.toLowerCase()] ?? role : "—";
+
 const statusConfig: Record<
   string,
   { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
@@ -280,7 +294,7 @@ const FinanceTransactions = () => {
 
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>Người dùng: {t.user}</span>
-                      <span>Vai trò: {t.userRole}</span>
+                      <span>Vai trò: {roleLabel(t.userRole)}</span>
                       <span>Ngày: {t.date}</span>
                     </div>
                   </div>
@@ -293,7 +307,7 @@ const FinanceTransactions = () => {
                       )}
                     >
                       {isIncome ? "+" : "-"}
-                      {t.amount.toLocaleString("vi-VN")}đ
+                      {Math.abs(t.amount).toLocaleString("vi-VN")}đ
                     </p>
 
                     <Badge variant={sCfg.variant}>{sCfg.label}</Badge>
@@ -382,7 +396,7 @@ const FinanceTransactions = () => {
                   detail.type === "exam-fee"
                     ? "+"
                     : "-"}
-                  {detail.amount.toLocaleString("vi-VN")}đ
+                  {Math.abs(detail.amount).toLocaleString("vi-VN")}đ
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">{detail.description}</p>
               </div>
@@ -409,7 +423,7 @@ const FinanceTransactions = () => {
 
                 <div>
                   <Label className="text-xs text-muted-foreground">Vai trò</Label>
-                  <p className="text-sm font-medium text-foreground">{detail.userRole}</p>
+                  <p className="text-sm font-medium text-foreground">{roleLabel(detail.userRole)}</p>
                 </div>
 
                 <div>

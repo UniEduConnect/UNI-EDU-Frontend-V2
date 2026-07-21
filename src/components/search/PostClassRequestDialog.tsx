@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -185,11 +186,11 @@ export function PostClassRequestDialog({ open, onOpenChange }: PostClassRequestD
           <div className="space-y-1.5">
             <Label className="text-sm">Học phí mong muốn / buổi (VND)</Label>
             <Input
-              type="number"
-              min={0}
-              value={budget}
-              onChange={(e) => setBudget(e.target.value)}
-              placeholder="VD: 150000"
+              type="text"
+              inputMode="numeric"
+              value={formatVndInput(budget)}
+              onChange={(e) => setBudget(onlyDigits(e.target.value))}
+              placeholder="VD: 150.000"
               className="rounded-xl"
             />
           </div>

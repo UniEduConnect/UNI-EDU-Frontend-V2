@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -203,7 +204,7 @@ const ExamManagerExams = () => {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Thời gian (phút)</Label><Input type="number" value={form.duration} onChange={e => setForm(p => ({ ...p, duration: e.target.value }))} className="rounded-xl mt-1" /></div>
-            <div><Label>Phí thi (đ)</Label><Input type="number" value={form.fee} onChange={e => setForm(p => ({ ...p, fee: e.target.value }))} className="rounded-xl mt-1" /></div>
+            <div><Label>Phí thi (đ)</Label><Input type="text" inputMode="numeric" value={formatVndInput(form.fee)} onChange={e => setForm(p => ({ ...p, fee: onlyDigits(e.target.value) }))} className="rounded-xl mt-1" /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Trạng thái</Label>

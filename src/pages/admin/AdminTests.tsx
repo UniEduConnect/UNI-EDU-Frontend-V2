@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -301,7 +302,7 @@ const AdminTests = () => {
             <div><Label>Mô tả</Label><Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="rounded-xl mt-1.5" placeholder="Mô tả ngắn về bài test" /></div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Thời lượng (phút)</Label><Input type="number" value={form.duration} onChange={e => setForm(f => ({ ...f, duration: Number(e.target.value) }))} className="rounded-xl mt-1.5" /></div>
-              <div><Label>Học phí (đ)</Label><Input type="number" value={form.fee} onChange={e => setForm(f => ({ ...f, fee: Number(e.target.value) }))} className="rounded-xl mt-1.5" /></div>
+              <div><Label>Học phí (đ)</Label><Input type="text" inputMode="numeric" value={formatVndInput(form.fee)} onChange={e => setForm(f => ({ ...f, fee: Number(onlyDigits(e.target.value)) }))} className="rounded-xl mt-1.5" /></div>
               <div><Label>Độ khó</Label>
                 <Select value={form.difficulty} onValueChange={v => setForm(f => ({ ...f, difficulty: v }))}>
                   <SelectTrigger className="rounded-xl mt-1.5"><SelectValue /></SelectTrigger>
