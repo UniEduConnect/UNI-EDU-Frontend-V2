@@ -3,6 +3,7 @@ import type { SystemSettings } from "@/types/api";
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatVndInput } from "@/lib/money";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -101,7 +102,7 @@ const AdminSettings = () => {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Phí thi thử (VNĐ)</Label>
-                  <Input type="number" min={0} value={50000} className="rounded-xl h-11" readOnly />
+                  <Input type="text" inputMode="numeric" value={formatVndInput(50000)} className="rounded-xl h-11" readOnly />
                   <p className="text-xs text-muted-foreground">Phí mặc định cho mỗi lượt thi thử</p>
                 </div>
               </div>

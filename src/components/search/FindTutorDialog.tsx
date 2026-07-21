@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -131,22 +132,22 @@ const FindTutorDialog = ({ collapsed = false, trigger }: FindTutorDialogProps) =
               <Label htmlFor="ft-min-price">Học phí tối thiểu</Label>
               <Input
                 id="ft-min-price"
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
                 placeholder="0"
-                value={minPrice}
-                onChange={(e) => setMinPrice(e.target.value)}
+                value={formatVndInput(minPrice)}
+                onChange={(e) => setMinPrice(onlyDigits(e.target.value))}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ft-max-price">Học phí tối đa</Label>
               <Input
                 id="ft-max-price"
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
                 placeholder="VND"
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
+                value={formatVndInput(maxPrice)}
+                onChange={(e) => setMaxPrice(onlyDigits(e.target.value))}
               />
             </div>
           </div>

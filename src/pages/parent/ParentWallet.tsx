@@ -1,6 +1,8 @@
 import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
 import { useNavigate } from "react-router-dom";
+import { makeTransferNote } from "@/lib/bankTransfer";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import {
   Wallet,
   CreditCard,
@@ -103,7 +105,7 @@ const ParentWallet = () => {
 
     // Demo path: create + confirm a test deposit, crediting the wallet immediately.
     if (selectedMethod === "test") {
-      testDepositMutation.mutate(amt, {
+      testDepositMutation.mutate({ amount: amt }, {
         onSuccess: () => {
           toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví!`);
           setShowDeposit(false);
@@ -139,7 +141,7 @@ const ParentWallet = () => {
     }
     const methodName = paymentMethods.find(m => m.id === selectedMethod)?.name || selectedMethod;
     withdrawMutation.mutate(
-      { amount: amt, method: selectedMethod, bankAccount: "", bankName: methodName, note: "" },
+      { amount: amt, method: selectedMethod, bankAccount: "", bankName: methodName, note: makeTransferNote("withdraw") },
       {
         onSuccess: () => {
           toast.success(`Đã gửi yêu cầu rút ${amt.toLocaleString("vi-VN")}đ qua ${methodName}`);
@@ -456,9 +458,10 @@ const ParentWallet = () => {
             <div>
               <label className="text-xs font-medium text-foreground">Số tiền</label>
               <Input
-                type="number"
-                value={depositAmt}
-                onChange={e => setDepositAmt(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVndInput(depositAmt)}
+                onChange={e => setDepositAmt(onlyDigits(e.target.value))}
                 placeholder="Nhập số tiền"
                 className="mt-1 rounded-xl"
               />
@@ -542,9 +545,10 @@ const ParentWallet = () => {
             <div>
               <label className="text-xs font-medium text-foreground">Số tiền</label>
               <Input
-                type="number"
-                value={withdrawAmt}
-                onChange={e => setWithdrawAmt(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVndInput(withdrawAmt)}
+                onChange={e => setWithdrawAmt(onlyDigits(e.target.value))}
                 placeholder="Nhập số tiền"
                 className="mt-1 rounded-xl"
               />

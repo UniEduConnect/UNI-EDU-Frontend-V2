@@ -47,6 +47,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import { AiTestDialog } from "@/components/AiTestDialog";
 import WeeklySchedulePicker, { useWeeklySchedule } from "@/components/schedule/WeeklySchedulePicker";
 import { useOpenClassRequests, useAcceptClassRequest } from "@/hooks/useClassRequests";
@@ -1184,11 +1185,11 @@ const CreatePostDialog = ({ open, onClose, subjects }: CreatePostDialogProps) =>
           <div className="space-y-1.5">
             <Label className="text-sm">Học phí mỗi giờ (VND)</Label>
             <Input
-              type="number"
-              min={0}
-              value={hourlyRate}
-              onChange={(e) => setHourlyRate(e.target.value)}
-              placeholder="VD: 150000"
+              type="text"
+              inputMode="numeric"
+              value={formatVndInput(hourlyRate)}
+              onChange={(e) => setHourlyRate(onlyDigits(e.target.value))}
+              placeholder="VD: 150.000"
               className="rounded-xl"
             />
           </div>

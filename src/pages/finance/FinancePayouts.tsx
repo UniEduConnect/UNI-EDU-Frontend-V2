@@ -38,6 +38,15 @@ const statusConfig: Record<
   rejected: { label: "Từ chối", variant: "destructive" },
 };
 
+// Friendly Vietnamese label for a raw payout method ("bank" is the only one supported now).
+const methodLabels: Record<string, string> = {
+  bank: "Ngân hàng",
+  momo: "Ví MoMo",
+  vnpay: "VNPay",
+};
+const methodLabel = (method?: string | null) =>
+  method ? methodLabels[method.toLowerCase()] ?? method : "—";
+
 const FinancePayouts = () => {
   // Live withdrawals from /api/Finance/withdrawals — sole source of truth.
   const { withdrawals, isLoading } = useWithdrawals();
@@ -269,7 +278,7 @@ const FinancePayouts = () => {
                   </div>
                   <div className="rounded-xl border border-border bg-card p-3">
                     <span className="block text-[10px] text-muted-foreground">Hình thức</span>
-                    <span className="text-sm font-medium text-foreground">{w.method}</span>
+                    <span className="text-sm font-medium text-foreground">{methodLabel(w.method)}</span>
                   </div>
                   <div className="rounded-xl border border-border bg-card p-3">
                     <span className="block text-[10px] text-muted-foreground">Đã rút lũy kế</span>
@@ -278,6 +287,13 @@ const FinancePayouts = () => {
                     </span>
                   </div>
                 </div>
+
+                {w.note && (
+                  <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                    <span className="block text-[10px] text-muted-foreground">Nội dung chuyển tiền</span>
+                    <span className="font-mono text-sm font-semibold text-foreground">{w.note}</span>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -527,7 +543,7 @@ const FinancePayouts = () => {
 
                 <div className="rounded-xl bg-muted/40 p-3">
                   <Label className="text-[10px] text-muted-foreground">Hình thức</Label>
-                  <p className="text-sm font-medium text-foreground">{detail.method}</p>
+                  <p className="text-sm font-medium text-foreground">{methodLabel(detail.method)}</p>
                 </div>
 
                 <div className="rounded-xl bg-muted/40 p-3">
@@ -537,6 +553,13 @@ const FinancePayouts = () => {
                   </p>
                 </div>
               </div>
+
+              {detail.note && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                  <Label className="text-[10px] text-muted-foreground">Nội dung chuyển tiền</Label>
+                  <p className="font-mono text-sm font-semibold text-foreground">{detail.note}</p>
+                </div>
+              )}
 
               {detail.reviewNote && (
                 <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 p-3">

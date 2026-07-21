@@ -2,6 +2,7 @@ import { ShieldCheck, Star, BookOpen, Trophy, Video, Edit2, Save, MapPin, Phone,
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -477,7 +478,7 @@ const TutorProfile = () => {
       <div className="bg-card border border-border rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-foreground mb-3">Giá dạy</h3>
         {editing ? (
-          <div className="flex items-center gap-2"><input type="number" value={form.hourlyRate} onChange={e => setForm(p => ({ ...p, hourlyRate: parseInt(e.target.value) || 0 }))} className="w-40 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" /><span className="text-sm text-muted-foreground">đ/giờ</span></div>
+          <div className="flex items-center gap-2"><input type="text" inputMode="numeric" value={formatVndInput(form.hourlyRate)} onChange={e => setForm(p => ({ ...p, hourlyRate: Number(onlyDigits(e.target.value)) }))} className="w-40 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" /><span className="text-sm text-muted-foreground">đ/giờ</span></div>
         ) : <p className="text-2xl font-bold text-primary">{profile.hourlyRate.toLocaleString("vi-VN")}đ <span className="text-sm font-normal text-muted-foreground">/ giờ</span></p>}
       </div>
 
