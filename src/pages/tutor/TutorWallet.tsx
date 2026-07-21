@@ -145,7 +145,7 @@ const TutorWallet = () => {
     }
     if (selectedMethod === "test") {
       // Demo path: create + confirm a test deposit, crediting the wallet immediately.
-      testDepositMutation.mutate(amt, {
+      testDepositMutation.mutate({ amount: amt }, {
         onSuccess: () => { toast.success(`Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví!`); reset(); },
         onError: (e) => toast.error(e instanceof Error ? e.message : "Nạp tiền test thất bại."),
       });

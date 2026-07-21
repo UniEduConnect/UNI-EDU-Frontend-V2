@@ -48,7 +48,7 @@ export default function WalletBankTransfer() {
 
   const handleConfirm = () => {
     if (!isValidAmount) return;
-    testDeposit.mutate(amount, {
+    testDeposit.mutate({ amount, note }, {
       onSuccess: () =>
         navigate(`/wallet/deposit-return?bank=success&amount=${Math.trunc(amount)}`, { replace: true }),
       onError: (e) =>

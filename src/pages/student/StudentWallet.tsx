@@ -183,7 +183,7 @@ const StudentWallet = () => {
 
     // Demo path: create + confirm a test deposit, crediting the wallet immediately.
     if (selectedMethod === "test") {
-      testDepositMutation.mutate(amt, {
+      testDepositMutation.mutate({ amount: amt }, {
         onSuccess: () => {
           toast.success(
             `Đã nạp ${amt.toLocaleString("vi-VN")}đ vào ví!`,
