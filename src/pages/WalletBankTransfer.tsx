@@ -33,7 +33,7 @@ export default function WalletBankTransfer() {
   const isValidAmount = Number.isFinite(amount) && amount > 0;
 
   // Generated once per visit so the note stays stable while the payer is transferring.
-  const [note] = useState(() => params.get("note") || makeTransferNote());
+  const [note] = useState(() => params.get("note") || makeTransferNote("deposit"));
   const qrUrl = useMemo(() => buildVietQrUrl(amount, note), [amount, note]);
 
   const copy = async (value: string, key: string) => {

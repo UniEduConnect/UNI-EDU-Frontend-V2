@@ -279,6 +279,13 @@ const FinancePayouts = () => {
                   </div>
                 </div>
 
+                {w.note && (
+                  <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                    <span className="block text-[10px] text-muted-foreground">Nội dung chuyển tiền</span>
+                    <span className="font-mono text-sm font-semibold text-foreground">{w.note}</span>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
@@ -537,6 +544,13 @@ const FinancePayouts = () => {
                   </p>
                 </div>
               </div>
+
+              {detail.note && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                  <Label className="text-[10px] text-muted-foreground">Nội dung chuyển tiền</Label>
+                  <p className="font-mono text-sm font-semibold text-foreground">{detail.note}</p>
+                </div>
+              )}
 
               {detail.reviewNote && (
                 <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 p-3">

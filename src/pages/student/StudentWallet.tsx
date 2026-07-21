@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { makeTransferNote } from "@/lib/bankTransfer";
 import {
   Dialog,
   DialogContent,
@@ -237,7 +238,7 @@ const StudentWallet = () => {
         method: selectedMethod,
         bankAccount: "",
         bankName: methodName,
-        note: "",
+        note: makeTransferNote("withdraw"),
       },
       {
         onSuccess: () => {

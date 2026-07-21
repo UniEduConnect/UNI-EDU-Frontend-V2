@@ -6,6 +6,7 @@ import { useClasses } from "@/hooks/useClasses";
 import { useMyRefunds, useRequestRefund } from "@/hooks/useRefunds";
 import { useMyBankAccount } from "@/hooks/useTutors";
 import { Link, useNavigate } from "react-router-dom";
+import { makeTransferNote } from "@/lib/bankTransfer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -106,7 +107,7 @@ const TutorWallet = () => {
     const amt = parseInt(amount);
     if (!amt || amt <= 0 || !bankAccount) return;
     withdrawMutation.mutate(
-      { amount: amt, method: "bank", bankAccount: bankAccount.bankAccount, bankName: bankAccount.bankName, note: "" },
+      { amount: amt, method: "bank", bankAccount: bankAccount.bankAccount, bankName: bankAccount.bankName, note: makeTransferNote("withdraw") },
       {
         onSuccess: () => {
           toast.success(`Yêu cầu rút ${amt.toLocaleString("vi-VN")}đ về ${bankAccount.bankName} đã được gửi`);

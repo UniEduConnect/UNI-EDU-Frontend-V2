@@ -1,6 +1,7 @@
 import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
 import { useNavigate } from "react-router-dom";
+import { makeTransferNote } from "@/lib/bankTransfer";
 import {
   Wallet,
   CreditCard,
@@ -139,7 +140,7 @@ const ParentWallet = () => {
     }
     const methodName = paymentMethods.find(m => m.id === selectedMethod)?.name || selectedMethod;
     withdrawMutation.mutate(
-      { amount: amt, method: selectedMethod, bankAccount: "", bankName: methodName, note: "" },
+      { amount: amt, method: selectedMethod, bankAccount: "", bankName: methodName, note: makeTransferNote("withdraw") },
       {
         onSuccess: () => {
           toast.success(`Đã gửi yêu cầu rút ${amt.toLocaleString("vi-VN")}đ qua ${methodName}`);
