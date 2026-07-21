@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -205,7 +206,7 @@ const OfficeClasses = () => {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Học phí (VNĐ/tháng)</Label><Input type="number" value={newClass.fee} onChange={e => setNewClass(p => ({ ...p, fee: e.target.value }))} placeholder="2000000" className="rounded-xl mt-1" /></div>
+                <div><Label>Học phí (VNĐ/tháng)</Label><Input type="text" inputMode="numeric" value={formatVndInput(newClass.fee)} onChange={e => setNewClass(p => ({ ...p, fee: onlyDigits(e.target.value) }))} placeholder="2.000.000" className="rounded-xl mt-1" /></div>
                 <div><Label>Tổng buổi</Label><Input type="number" value={newClass.totalSessions} onChange={e => setNewClass(p => ({ ...p, totalSessions: e.target.value }))} placeholder="24" className="rounded-xl mt-1" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">

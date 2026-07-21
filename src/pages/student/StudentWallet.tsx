@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { makeTransferNote } from "@/lib/bankTransfer";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import {
   Dialog,
   DialogContent,
@@ -644,9 +645,10 @@ const StudentWallet = () => {
                 Số tiền
               </label>
               <Input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVndInput(amount)}
+                onChange={(e) => setAmount(onlyDigits(e.target.value))}
                 className="mt-2 rounded-xl h-11"
                 placeholder="Nhập số tiền"
               />
@@ -814,9 +816,10 @@ const StudentWallet = () => {
                 Số tiền
               </label>
               <Input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVndInput(amount)}
+                onChange={(e) => setAmount(onlyDigits(e.target.value))}
                 className="mt-2 rounded-xl h-11"
                 placeholder="Nhập số tiền"
               />

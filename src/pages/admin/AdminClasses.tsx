@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -341,7 +342,7 @@ const AdminClasses = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Học phí (VNĐ)</Label><Input type="number" value={form.fee} onChange={e => setForm(f => ({ ...f, fee: Number(e.target.value) }))} className="rounded-xl mt-1.5" /></div>
+              <div><Label>Học phí (VNĐ)</Label><Input type="text" inputMode="numeric" value={formatVndInput(form.fee)} onChange={e => setForm(f => ({ ...f, fee: Number(onlyDigits(e.target.value)) }))} className="rounded-xl mt-1.5" /></div>
             </div>
             <Button className="w-full rounded-xl" onClick={handleSave}>{editId ? "Cập nhật" : "Tạo lớp"}</Button>
           </div>

@@ -7,6 +7,7 @@ import { useMyRefunds, useRequestRefund } from "@/hooks/useRefunds";
 import { useMyBankAccount } from "@/hooks/useTutors";
 import { Link, useNavigate } from "react-router-dom";
 import { makeTransferNote } from "@/lib/bankTransfer";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -353,7 +354,7 @@ const TutorWallet = () => {
             )}
             <div>
               <label className="text-xs font-medium text-foreground">Số tiền</label>
-              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" placeholder="Nhập số tiền" />
+              <input type="text" inputMode="numeric" value={formatVndInput(amount)} onChange={e => setAmount(onlyDigits(e.target.value))} className="w-full mt-1 px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm" placeholder="Nhập số tiền" />
               <div className="flex gap-2 mt-2">
                 {[100000, 200000, 500000, 1000000].map(v => (
                   <button key={v} onClick={() => setAmount(String(v))} className="px-2 py-1 bg-muted text-muted-foreground rounded-lg text-xs hover:bg-primary/10 hover:text-primary">{(v / 1000).toFixed(0)}k</button>

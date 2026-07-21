@@ -25,6 +25,7 @@ import {
 import WeeklySchedulePicker, { useWeeklySchedule } from "@/components/schedule/WeeklySchedulePicker";
 import { useCreateClassRequest, useMyClassRequests } from "@/hooks/useClassRequests";
 import { useSubjects } from "@/hooks/useSubjects";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import type { ClassRequestResponse } from "@/types/api";
 
 function requestStatusMeta(status: string) {
@@ -214,11 +215,11 @@ export default function PostTutorRequest() {
             <div className="space-y-1.5">
               <Label>Ngân sách (VND / buổi)</Label>
               <Input
-                type="number"
-                min={0}
-                value={reqBudget}
-                onChange={(e) => setReqBudget(e.target.value)}
-                placeholder="VD: 200000"
+                type="text"
+                inputMode="numeric"
+                value={formatVndInput(reqBudget)}
+                onChange={(e) => setReqBudget(onlyDigits(e.target.value))}
+                placeholder="VD: 200.000"
                 className="rounded-2xl"
               />
             </div>

@@ -2,6 +2,7 @@ import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdr
 import { useClasses } from "@/hooks/useClasses";
 import { useNavigate } from "react-router-dom";
 import { makeTransferNote } from "@/lib/bankTransfer";
+import { formatVndInput, onlyDigits } from "@/lib/money";
 import {
   Wallet,
   CreditCard,
@@ -457,9 +458,10 @@ const ParentWallet = () => {
             <div>
               <label className="text-xs font-medium text-foreground">Số tiền</label>
               <Input
-                type="number"
-                value={depositAmt}
-                onChange={e => setDepositAmt(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVndInput(depositAmt)}
+                onChange={e => setDepositAmt(onlyDigits(e.target.value))}
                 placeholder="Nhập số tiền"
                 className="mt-1 rounded-xl"
               />
@@ -543,9 +545,10 @@ const ParentWallet = () => {
             <div>
               <label className="text-xs font-medium text-foreground">Số tiền</label>
               <Input
-                type="number"
-                value={withdrawAmt}
-                onChange={e => setWithdrawAmt(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVndInput(withdrawAmt)}
+                onChange={e => setWithdrawAmt(onlyDigits(e.target.value))}
                 placeholder="Nhập số tiền"
                 className="mt-1 rounded-xl"
               />
