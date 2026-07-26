@@ -22,3 +22,8 @@ export const getMyClassRequests = () =>
 // Tutor accepts a request (requires a passing tutor-test submission id).
 export const acceptClassRequest = (id: string, payload: AcceptClassRequestRequest) =>
   apiClient.post(`/ClassRequests/${id}/accept`, payload) as unknown as Promise<unknown>;
+
+// Read-only pre-check: can the tutor accept this request (open, no clash, student can pay)?
+// Rejects with the server's message if not — the UI gates the AI test on this resolving.
+export const checkAcceptClassRequest = (id: string) =>
+  apiClient.get(`/ClassRequests/${id}/accept-check`) as unknown as Promise<unknown>;
