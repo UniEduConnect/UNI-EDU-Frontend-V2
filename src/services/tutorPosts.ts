@@ -34,3 +34,8 @@ export const getTutorPostApplications = () =>
 // Tutor accepts an application after passing an AI test (>=80%).
 export const acceptTutorPostApplication = (appId: string, payload: AcceptApplicationRequest) =>
   apiClient.post(`/TutorPosts/applications/${appId}/accept`, payload) as unknown as Promise<unknown>;
+
+// Read-only pre-check: can the tutor accept this application (pending, owned, no clash, student can
+// pay)? Rejects with the server's message if not — the UI gates the AI test on this resolving.
+export const checkAcceptTutorPostApplication = (appId: string) =>
+  apiClient.get(`/TutorPosts/applications/${appId}/accept-check`) as unknown as Promise<unknown>;

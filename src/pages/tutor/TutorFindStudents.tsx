@@ -50,13 +50,18 @@ import { cn } from "@/lib/utils";
 import { formatVndInput, onlyDigits } from "@/lib/money";
 import { AiTestDialog } from "@/components/AiTestDialog";
 import WeeklySchedulePicker, { useWeeklySchedule } from "@/components/schedule/WeeklySchedulePicker";
-import { useOpenClassRequests, useAcceptClassRequest } from "@/hooks/useClassRequests";
+import {
+  useOpenClassRequests,
+  useAcceptClassRequest,
+  useCheckAcceptClassRequest,
+} from "@/hooks/useClassRequests";
 import {
   useCreateTutorPost,
   useMyTutorPosts,
   useCloseTutorPost,
   useTutorPostApplications,
   useAcceptTutorPostApplication,
+  useCheckAcceptTutorPostApplication,
 } from "@/hooks/useTutorPosts";
 import { useTrials, useAcceptTrial, useRejectTrial } from "@/hooks/useTrials";
 import { useExams, useExam, useSubmitExam, useMySubmissions } from "@/hooks/useExams";
@@ -126,6 +131,15 @@ const TutorFindStudents = () => {
 
   // ---- Accept dialog state ----------------------------------------------
   const [activeRequest, setActiveRequest] = useState<ClassRequestResponse | null>(null);
+
+  // Read-only "can this class be accepted?" pre-check — runs BEFORE the AI test dialog opens, so a
+  // tutor isn't made to take a test for a class they can't accept (schedule clash / underfunded wallet).
+  const checkAcceptClass = useCheckAcceptClassRequest();
+  const openAcceptIfAllowed = (r: ClassRequestResponse) =>
+    checkAcceptClass.mutate(r.id, {
+      onSuccess: () => setActiveRequest(r),
+      onError: (e) => toast.error(e instanceof Error ? e.message : "Không thể nhận lớp"),
+    });
 
   // ---- Detail dialog state ----------------------------------------------
   const [detailRequest, setDetailRequest] = useState<ClassRequestResponse | null>(null);
@@ -371,7 +385,12 @@ const TutorFindStudents = () => {
                     >
                       <Eye className="w-3.5 h-3.5" /> Xem chi tiết
                     </Button>
-                    <Button size="sm" className="flex-1 rounded-xl text-xs" onClick={() => setActiveRequest(r)}>
+                    <Button
+                      size="sm"
+                      className="flex-1 rounded-xl text-xs"
+                      disabled={checkAcceptClass.isPending}
+                      onClick={() => openAcceptIfAllowed(r)}
+                    >
                       Nhận lớp
                     </Button>
                   </div>
@@ -386,7 +405,7 @@ const TutorFindStudents = () => {
             onClose={() => setDetailRequest(null)}
             onAccept={(r) => {
               setDetailRequest(null);
-              setActiveRequest(r);
+              openAcceptIfAllowed(r);
             }}
           />
 
@@ -1002,7 +1021,15 @@ const AcceptDialog = ({ request, onClose }: AcceptDialogProps) => {
 const TutorPostApplications = () => {
   const { applications, isLoading } = useTutorPostApplications();
   const acceptApp = useAcceptTutorPostApplication();
+  const check = useCheckAcceptTutorPostApplication();
   const [active, setActive] = useState<TutorPostApplicationResponse | null>(null);
+
+  // Read-only pre-check before the AI test opens — same gate as the class-request flow.
+  const openAcceptIfAllowed = (a: TutorPostApplicationResponse) =>
+    check.mutate(a.id, {
+      onSuccess: () => setActive(a),
+      onError: (e) => toast.error(e instanceof Error ? e.message : "Không thể nhận lớp"),
+    });
 
   const pending = useMemo(
     () => applications.filter((a) => a.status === "pending"),
@@ -1058,7 +1085,12 @@ const TutorPostApplications = () => {
                 </div>
               </div>
             </div>
-            <Button size="sm" className="rounded-xl shrink-0" onClick={() => setActive(a)}>
+            <Button
+              size="sm"
+              className="rounded-xl shrink-0"
+              disabled={check.isPending}
+              onClick={() => openAcceptIfAllowed(a)}
+            >
               <Sparkles className="w-4 h-4 mr-1.5" /> Làm test & nhận
             </Button>
           </div>

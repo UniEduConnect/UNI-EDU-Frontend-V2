@@ -54,6 +54,13 @@ export function useTutorPostApplications() {
   return { ...result, applications: result.data ?? [] };
 }
 
+/** Read-only pre-check before opening the AI test — rejects if the application can't be accepted. */
+export function useCheckAcceptTutorPostApplication() {
+  return useMutation({
+    mutationFn: (appId: string) => svc.checkAcceptTutorPostApplication(appId),
+  });
+}
+
 /** Tutor accepts an application after passing an AI test. */
 export function useAcceptTutorPostApplication() {
   const qc = useQueryClient();
