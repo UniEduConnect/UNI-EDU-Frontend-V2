@@ -25,6 +25,13 @@ export function useCreateClassRequest() {
   });
 }
 
+/** Read-only pre-check before opening the AI test — rejects if the class can't be accepted. */
+export function useCheckAcceptClassRequest() {
+  return useMutation({
+    mutationFn: (id: string) => svc.checkAcceptClassRequest(id),
+  });
+}
+
 export function useAcceptClassRequest() {
   const qc = useQueryClient();
   return useMutation({
