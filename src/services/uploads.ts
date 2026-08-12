@@ -13,3 +13,16 @@ export async function uploadImage(file: File): Promise<string> {
   })) as unknown as { url: string };
   return res.url;
 }
+
+/**
+ * POST /api/uploads/receipt — multipart upload of a single transaction receipt, returns its public URL.
+ */
+export async function uploadReceipt(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = (await apiClient.post("/uploads/receipt", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  })) as unknown as { url: string };
+  return res.url;
+}
+

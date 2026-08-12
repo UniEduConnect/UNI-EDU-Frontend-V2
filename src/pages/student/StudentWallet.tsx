@@ -579,9 +579,18 @@ const StudentWallet = () => {
                   <p className="text-sm sm:text-[15px] font-medium text-foreground truncate">
                     {t.description}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {t.date} • {typeLabels[t.type]}
-                    {t.paymentMethod ? ` • ${t.paymentMethod}` : ""}
+                  <p className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span>{t.date} • {typeLabels[t.type]}{t.paymentMethod ? ` • ${t.paymentMethod}` : ""}</span>
+                    {t.receiptUrl && (
+                      <a
+                        href={t.receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline inline-flex items-center gap-0.5"
+                      >
+                        <Receipt className="w-3.5 h-3.5" /> Xem ảnh giao dịch
+                      </a>
+                    )}
                   </p>
                 </div>
 

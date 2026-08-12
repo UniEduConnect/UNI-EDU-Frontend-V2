@@ -1,4 +1,4 @@
-import { Wallet, ArrowDownLeft, ArrowUpRight, ShieldCheck, DollarSign, Plus, CreditCard, AlertTriangle, Info, Landmark, Smartphone, Building2, Loader2 } from "lucide-react";
+import { Wallet, ArrowDownLeft, ArrowUpRight, ShieldCheck, DollarSign, Plus, CreditCard, AlertTriangle, Info, Landmark, Smartphone, Building2, Loader2, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useWallet, useWalletTransactions, useDeposit, useTestDeposit, useWithdraw } from "@/hooks/useWallet";
@@ -316,7 +316,19 @@ const TutorWallet = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground">{w.description}</p>
-                    <p className="text-[11px] text-muted-foreground">{w.date} • {typeLabels[w.type] ?? w.type}{w.paymentMethod ? ` • ${w.paymentMethod}` : ""}</p>
+                    <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span>{w.date} • {typeLabels[w.type] ?? w.type}{w.paymentMethod ? ` • ${w.paymentMethod}` : ""}</span>
+                      {w.receiptUrl && (
+                        <a
+                          href={w.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline inline-flex items-center gap-0.5"
+                        >
+                          <Receipt className="w-3 h-3" /> Xem ảnh giao dịch
+                        </a>
+                      )}
+                    </p>
                   </div>
                   <p className={cn("text-sm font-semibold", w.amount > 0 ? "text-success" : "text-foreground")}>
                     {w.amount > 0 ? "+" : ""}{w.amount.toLocaleString("vi-VN")}đ

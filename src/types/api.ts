@@ -685,6 +685,7 @@ export interface WalletTransactionItem {
   relatedId?: string | null;
   childId?: string | null;
   paymentMethod?: string | null;
+  receiptUrl?: string | null;
 }
 
 export interface DepositRequest {

@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, Copy, Loader2, QrCode, ChevronLeft, Info } from "lucide-react";
+import { Check, Copy, Loader2, QrCode, ChevronLeft, Info, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { ROLE_ROUTE } from "@/lib/roleRoutes";
 import { useTestDeposit } from "@/hooks/useWallet";
+import { useUploadReceipt } from "@/hooks/useUploads";
 import { BANK_TRANSFER, buildVietQrUrl, makeTransferNote } from "@/lib/bankTransfer";
+import { cn } from "@/lib/utils";
 
 /**
  * Manual bank-transfer top-up: shows the amount + a VietQR code pre-filled with that amount
@@ -25,7 +27,9 @@ export default function WalletBankTransfer() {
   const navigate = useNavigate();
   const { role } = useAuth();
   const testDeposit = useTestDeposit();
+  const uploadReceipt = useUploadReceipt();
   const [copied, setCopied] = useState<string | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string>("");
 
   const walletPath = (role ? ROLE_ROUTE[role] : "") + "/wallet";
 
@@ -46,9 +50,30 @@ export default function WalletBankTransfer() {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting same file later
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Vui lòng chọn một tệp ảnh.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ảnh phải nhỏ hơn 5MB.");
+      return;
+    }
+    uploadReceipt.mutate(file, {
+      onSuccess: (url) => {
+        setReceiptUrl(url);
+        toast.success("Đã tải ảnh giao dịch lên.");
+      },
+      onError: () => toast.error("Tải ảnh giao dịch lên thất bại. Vui lòng thử lại."),
+    });
+  };
+
   const handleConfirm = () => {
     if (!isValidAmount) return;
-    testDeposit.mutate({ amount, note }, {
+    testDeposit.mutate({ amount, note, receiptUrl }, {
       onSuccess: () =>
         navigate(`/wallet/deposit-return?bank=success&amount=${Math.trunc(amount)}`, { replace: true }),
       onError: (e) =>
@@ -147,6 +172,55 @@ export default function WalletBankTransfer() {
               <span className="font-semibold">nội dung chuyển khoản</span> để hệ thống đối soát
               được giao dịch của bạn.
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-foreground">
+              Minh chứng thanh toán (Tải ảnh giao dịch thành công)
+            </label>
+            {receiptUrl ? (
+              <div className="relative rounded-2xl border border-border bg-muted/20 p-2 flex items-center justify-between gap-3">
+                <img
+                  src={receiptUrl}
+                  alt="Minh chứng giao dịch"
+                  className="h-16 w-16 rounded-xl object-cover border border-border bg-white"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-foreground truncate">Ảnh giao dịch thành công</p>
+                  <p className="text-[10px] text-muted-foreground">Đã tải lên hệ thống</p>
+                </div>
+                <button
+                  onClick={() => setReceiptUrl("")}
+                  className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                  title="Xóa ảnh"
+                  type="button"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <label className={cn(
+                "flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border hover:border-primary/50 bg-muted/10 hover:bg-muted/25 px-4 py-6 cursor-pointer text-center transition-all",
+                uploadReceipt.isPending && "opacity-60 pointer-events-none"
+              )}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={uploadReceipt.isPending}
+                />
+                {uploadReceipt.isPending ? (
+                  <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                ) : (
+                  <Upload className="h-6 w-6 text-muted-foreground" />
+                )}
+                <span className="text-xs font-medium text-foreground">
+                  {uploadReceipt.isPending ? "Đang tải ảnh lên..." : "Kéo thả hoặc click để tải ảnh"}
+                </span>
+                <span className="text-[10px] text-muted-foreground">Chấp nhận JPG, PNG, WebP hoặc GIF (Tối đa 5MB)</span>
+              </label>
+            )}
           </div>
 
           <Button
