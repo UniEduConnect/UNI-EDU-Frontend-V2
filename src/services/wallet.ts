@@ -30,9 +30,10 @@ export async function depositTest(payload: DepositTestRequest): Promise<DepositR
 }
 
 // DEV/DEMO ONLY: settles a "test" transaction and credits the wallet (replaces the real IPN).
-export async function confirmDepositTest(transactionId: string): Promise<TestDepositConfirmResponse> {
+export async function confirmDepositTest(transactionId: string, receiptUrl?: string): Promise<TestDepositConfirmResponse> {
   return apiClient.post(
     `/Wallet/deposit-test/${transactionId}/confirm`,
+    { receiptUrl }
   ) as unknown as Promise<TestDepositConfirmResponse>;
 }
 

@@ -403,6 +403,16 @@ const ParentWallet = () => {
                       <Badge variant="outline" className="text-[10px]">
                         {typeLabels[t.type] || t.type}
                       </Badge>
+                      {t.receiptUrl && (
+                        <a
+                          href={t.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline inline-flex items-center gap-0.5"
+                        >
+                          <Receipt className="h-3 w-3" /> Xem ảnh giao dịch
+                        </a>
+                      )}
                     </div>
                   </div>
 
