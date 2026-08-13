@@ -1,4 +1,5 @@
 import { useFinanceTransactions } from "@/hooks/useFinance";
+import * as XLSX from "xlsx";
 import { TransactionReceiptUploader } from "@/components/shared/TransactionReceiptUploader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -121,7 +122,30 @@ const FinanceTransactions = () => {
   }, [typeFilter, statusFilter]);
 
   const exportTransactions = (format: string) => {
-    toast({ title: `Đã xuất danh sách giao dịch (${format})` });
+    if (format === "Excel") {
+      const data = filtered.map(t => ({
+        "Mã giao dịch": t.id.toUpperCase(),
+        "Loại": typeLabels[t.type] ?? t.type,
+        "Người dùng": t.user,
+        "Email": t.email || "",
+        "Vai trò": roleLabel(t.userRole),
+        "Ngày giao dịch": t.date,
+        "Trạng thái": statusConfig[t.status]?.label ?? t.status,
+        "Số tiền (VND)": t.amount,
+        "Mô tả": t.description,
+        "Link ảnh": t.receiptUrl || ""
+      }));
+      
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Giao dịch");
+      
+      XLSX.writeFile(workbook, `Giao_Dich_${new Date().toISOString().split("T")[0]}.xlsx`);
+      
+      toast({ title: "Đã xuất danh sách giao dịch ra Excel" });
+    } else {
+      toast({ title: `Đã xuất danh sách giao dịch (${format})` });
+    }
   };
 
   return (
