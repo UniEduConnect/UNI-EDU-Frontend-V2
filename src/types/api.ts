@@ -899,6 +899,7 @@ export interface AdminTransactionListQuery {
   Type?: string;
   Status?: string;
   Page?: number;
+  PageSize?: number;
 }
 export interface WithdrawalListQuery {
   Status?: string;

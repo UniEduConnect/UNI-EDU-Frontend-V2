@@ -13,7 +13,7 @@ export function useFinanceTransactions(query: AdminTransactionListQuery = {}) {
     queryKey: ["finance-transactions", query],
     queryFn: () => financeService.getTransactions(query),
   });
-  return { ...result, transactions: result.data?.items ?? [] };
+  return { ...result, transactions: result.data?.items ?? [], total: result.data?.total ?? 0 };
 }
 
 export function useWithdrawals(query: WithdrawalListQuery = {}) {
