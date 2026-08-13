@@ -17,6 +17,8 @@ import {
   ArrowUpRight as ArrowUpRightIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ClassItem, Wallet } from "@/types/api";
+import { TransactionReceiptUploader } from "@/components/shared/TransactionReceiptUploader";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -410,9 +412,11 @@ const ParentWallet = () => {
                           rel="noopener noreferrer"
                           className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline inline-flex items-center gap-0.5"
                         >
-                          <Receipt className="h-3 w-3" /> Xem ảnh giao dịch
+                          <Receipt className="h-3 w-3" /> Xem ảnh
                         </a>
                       )}
+                      <span className="text-muted-foreground/30 hidden sm:inline">•</span>
+                      <TransactionReceiptUploader transactionId={t.id} hasReceipt={!!t.receiptUrl} />
                     </div>
                   </div>
 

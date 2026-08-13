@@ -8,6 +8,7 @@ import { useMyBankAccount } from "@/hooks/useTutors";
 import { Link, useNavigate } from "react-router-dom";
 import { makeTransferNote } from "@/lib/bankTransfer";
 import { formatVndInput, onlyDigits } from "@/lib/money";
+import { TransactionReceiptUploader } from "@/components/shared/TransactionReceiptUploader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -316,7 +317,7 @@ const TutorWallet = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground">{w.description}</p>
-                    <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span>{w.date} • {typeLabels[w.type] ?? w.type}{w.paymentMethod ? ` • ${w.paymentMethod}` : ""}</span>
                       {w.receiptUrl && (
                         <a
@@ -325,10 +326,12 @@ const TutorWallet = () => {
                           rel="noopener noreferrer"
                           className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline inline-flex items-center gap-0.5"
                         >
-                          <Receipt className="w-3 h-3" /> Xem ảnh giao dịch
+                          <Receipt className="w-3 h-3" /> Xem ảnh
                         </a>
                       )}
-                    </p>
+                      <span className="text-muted-foreground/30 hidden sm:inline">•</span>
+                      <TransactionReceiptUploader transactionId={w.id} hasReceipt={!!w.receiptUrl} />
+                    </div>
                   </div>
                   <p className={cn("text-sm font-semibold", w.amount > 0 ? "text-success" : "text-foreground")}>
                     {w.amount > 0 ? "+" : ""}{w.amount.toLocaleString("vi-VN")}đ

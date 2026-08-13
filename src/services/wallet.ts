@@ -8,6 +8,7 @@ import type {
   TestDepositConfirmResponse,
   Wallet,
   WalletTransactionItem,
+  UpdateReceiptRequest,
 } from "@/types/api";
 
 export async function getWallet(): Promise<Wallet> {
@@ -35,6 +36,10 @@ export async function confirmDepositTest(transactionId: string, receiptUrl?: str
     `/Wallet/deposit-test/${transactionId}/confirm`,
     { receiptUrl }
   ) as unknown as Promise<TestDepositConfirmResponse>;
+}
+
+export async function updateTransactionReceipt(id: string, payload: UpdateReceiptRequest): Promise<unknown> {
+  return apiClient.put(`/Wallet/transactions/${id}/receipt`, payload) as unknown as Promise<unknown>;
 }
 
 export async function withdraw(payload: CreateWithdrawalRequest): Promise<unknown> {
