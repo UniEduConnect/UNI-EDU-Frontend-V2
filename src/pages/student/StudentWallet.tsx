@@ -7,6 +7,7 @@ import {
 } from "@/hooks/useWallet";
 import { useClasses } from "@/hooks/useClasses";
 import type { DepositResponse, ClassItem } from "@/types/api";
+import { TransactionReceiptUploader } from "@/components/shared/TransactionReceiptUploader";
 import {
   Wallet,
   ArrowDownLeft,
@@ -579,7 +580,7 @@ const StudentWallet = () => {
                   <p className="text-sm sm:text-[15px] font-medium text-foreground truncate">
                     {t.description}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span>{t.date} • {typeLabels[t.type]}{t.paymentMethod ? ` • ${t.paymentMethod}` : ""}</span>
                     {t.receiptUrl && (
                       <a
@@ -588,10 +589,12 @@ const StudentWallet = () => {
                         rel="noopener noreferrer"
                         className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline inline-flex items-center gap-0.5"
                       >
-                        <Receipt className="w-3.5 h-3.5" /> Xem ảnh giao dịch
+                        <Receipt className="w-3.5 h-3.5" /> Xem ảnh
                       </a>
                     )}
-                  </p>
+                    <span className="text-muted-foreground/30 hidden sm:inline">•</span>
+                    <TransactionReceiptUploader transactionId={t.id} hasReceipt={!!t.receiptUrl} />
+                  </div>
                 </div>
 
                 <div className="text-right shrink-0">

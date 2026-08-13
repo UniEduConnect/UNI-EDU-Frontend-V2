@@ -710,6 +710,9 @@ export interface TestDepositConfirmResponse {
   status: string;
   balance: number;
 }
+export interface UpdateReceiptRequest {
+  receiptUrl: string;
+}
 export interface CreateWithdrawalRequest {
   amount: number;
   method: string;
@@ -864,12 +867,14 @@ export interface AdminTransactionResponse {
   id: string;
   userId: string;
   user: string;
+  email: string;
   userRole: string;
   type: string;
   amount: number;
   status: string;
   description: string;
   date: string;
+  receiptUrl?: string;
 }
 export interface WithdrawalAdminResponse {
   id: string;

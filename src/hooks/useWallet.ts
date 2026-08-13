@@ -21,6 +21,7 @@ export function useWalletTransactions(page = 1) {
 function invalidateWallet(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["wallet"] });
   qc.invalidateQueries({ queryKey: ["wallet-transactions"] });
+  qc.invalidateQueries({ queryKey: ["finance-transactions"] });
 }
 
 export function useDeposit() {
@@ -50,6 +51,15 @@ export function useWithdraw() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateWithdrawalRequest) => walletService.withdraw(payload),
+    onSuccess: () => invalidateWallet(qc),
+  });
+}
+
+export function useUpdateTransactionReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, receiptUrl }: { id: string; receiptUrl: string }) =>
+      walletService.updateTransactionReceipt(id, { receiptUrl }),
     onSuccess: () => invalidateWallet(qc),
   });
 }

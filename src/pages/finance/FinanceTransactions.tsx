@@ -1,4 +1,6 @@
 import { useFinanceTransactions } from "@/hooks/useFinance";
+import * as XLSX from "xlsx";
+import { TransactionReceiptUploader } from "@/components/shared/TransactionReceiptUploader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +17,7 @@ import {
   DollarSign,
   Calendar,
   Loader2,
+  Receipt,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -119,7 +122,30 @@ const FinanceTransactions = () => {
   }, [typeFilter, statusFilter]);
 
   const exportTransactions = (format: string) => {
-    toast({ title: `Đã xuất danh sách giao dịch (${format})` });
+    if (format === "Excel") {
+      const data = filtered.map(t => ({
+        "Mã giao dịch": t.id.toUpperCase(),
+        "Loại": typeLabels[t.type] ?? t.type,
+        "Người dùng": t.user,
+        "Email": t.email || "",
+        "Vai trò": roleLabel(t.userRole),
+        "Ngày giao dịch": t.date,
+        "Trạng thái": statusConfig[t.status]?.label ?? t.status,
+        "Số tiền (VND)": t.amount,
+        "Mô tả": t.description,
+        "Link ảnh": t.receiptUrl || ""
+      }));
+      
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Giao dịch");
+      
+      XLSX.writeFile(workbook, `Giao_Dich_${new Date().toISOString().split("T")[0]}.xlsx`);
+      
+      toast({ title: "Đã xuất danh sách giao dịch ra Excel" });
+    } else {
+      toast({ title: `Đã xuất danh sách giao dịch (${format})` });
+    }
   };
 
   return (
@@ -297,6 +323,24 @@ const FinanceTransactions = () => {
                       <span>Vai trò: {roleLabel(t.userRole)}</span>
                       <span>Ngày: {t.date}</span>
                     </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      {t.receiptUrl && (
+                        <a
+                          href={t.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline inline-flex items-center gap-0.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Receipt className="w-3 h-3" /> Xem ảnh
+                        </a>
+                      )}
+                      {t.receiptUrl && <span className="text-muted-foreground/30 hidden sm:inline">•</span>}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <TransactionReceiptUploader transactionId={t.id} hasReceipt={!!t.receiptUrl} />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
@@ -409,6 +453,26 @@ const FinanceTransactions = () => {
                   </p>
                 </div>
 
+                <div className="col-span-2 mt-2">
+                  <Label className="text-xs text-muted-foreground block mb-2">Ảnh giao dịch / Biên lai</Label>
+                  <div className="flex items-center gap-3">
+                    {detail.receiptUrl ? (
+                      <a
+                        href={detail.receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-blue-600 hover:underline inline-flex items-center gap-1"
+                      >
+                        <Receipt className="w-4 h-4" /> Xem ảnh giao dịch
+                      </a>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Chưa có ảnh đính kèm</span>
+                    )}
+                    <span className="text-muted-foreground/30">•</span>
+                    <TransactionReceiptUploader transactionId={detail.id} hasReceipt={!!detail.receiptUrl} />
+                  </div>
+                </div>
+
                 <div>
                   <Label className="text-xs text-muted-foreground">Loại</Label>
                   <div className="mt-1">
@@ -419,6 +483,11 @@ const FinanceTransactions = () => {
                 <div>
                   <Label className="text-xs text-muted-foreground">Người dùng</Label>
                   <p className="text-sm font-medium text-foreground">{detail.user}</p>
+                </div>
+
+                <div>
+                  <Label className="text-xs text-muted-foreground">Email</Label>
+                  <p className="text-sm font-medium text-foreground">{detail.email || "—"}</p>
                 </div>
 
                 <div>
