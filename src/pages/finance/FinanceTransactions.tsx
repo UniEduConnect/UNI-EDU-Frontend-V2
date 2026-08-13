@@ -1,5 +1,6 @@
 import { useFinanceTransactions } from "@/hooks/useFinance";
 import * as XLSX from "xlsx";
+import * as financeService from "@/services/finance";
 import { TransactionReceiptUploader } from "@/components/shared/TransactionReceiptUploader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,7 +83,7 @@ const FinanceTransactions = () => {
   // Live transactions from GET /api/Finance/transactions.
   // Type/Status/Page are server-side query params; search + date are filtered
   // client-side over the fetched page.
-  const { transactions, isLoading, isError } = useFinanceTransactions({
+  const { transactions, total, isLoading, isError } = useFinanceTransactions({
     Type: typeFilter === "all" ? undefined : typeFilter,
     Status: statusFilter === "all" ? undefined : statusFilter,
     Page: page,
@@ -110,39 +111,67 @@ const FinanceTransactions = () => {
   const pendingCount = transactions.filter(t => t.status === "pending").length;
 
   const detail = transactions.find(t => t.id === detailId);
-  // Server already paginates by Page; render the (client-filtered) fetched page as-is.
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = page;
   const pagedTransactions = filtered;
-  // No total-count is returned by the endpoint, so allow paging forward while the
-  // current server page is full and offer the previous page.
-  const hasNextPage = transactions.length >= pageSize;
+  const hasNextPage = currentPage < totalPages;
 
   useEffect(() => {
     setPage(1);
   }, [typeFilter, statusFilter]);
 
-  const exportTransactions = (format: string) => {
+  const exportTransactions = async (format: string) => {
     if (format === "Excel") {
-      const data = filtered.map(t => ({
-        "Mã giao dịch": t.id.toUpperCase(),
-        "Loại": typeLabels[t.type] ?? t.type,
-        "Người dùng": t.user,
-        "Email": t.email || "",
-        "Vai trò": roleLabel(t.userRole),
-        "Ngày giao dịch": t.date,
-        "Trạng thái": statusConfig[t.status]?.label ?? t.status,
-        "Số tiền (VND)": t.amount,
-        "Mô tả": t.description,
-        "Link ảnh": t.receiptUrl || ""
-      }));
-      
-      const worksheet = XLSX.utils.json_to_sheet(data);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Giao dịch");
-      
-      XLSX.writeFile(workbook, `Giao_Dich_${new Date().toISOString().split("T")[0]}.xlsx`);
-      
-      toast({ title: "Đã xuất danh sách giao dịch ra Excel" });
+      try {
+        toast({ title: "Đang chuẩn bị dữ liệu xuất Excel..." });
+        
+        const res = await financeService.getTransactions({
+          Type: typeFilter === "all" ? undefined : typeFilter,
+          Status: statusFilter === "all" ? undefined : statusFilter,
+          Page: 1,
+          PageSize: 999999,
+        });
+        
+        const allFiltered = res.items.filter(t => {
+          const matchSearch =
+            t.description.toLowerCase().includes(search.toLowerCase()) ||
+            t.user.toLowerCase().includes(search.toLowerCase());
+          const matchDate = !dateFilter || t.date.includes(dateFilter);
+          return matchSearch && matchDate;
+        });
+
+        const data = allFiltered.map(t => ({
+          "Mã giao dịch": t.id.toUpperCase(),
+          "Loại": typeLabels[t.type] ?? t.type,
+          "Người dùng": t.user,
+          "Email": t.email || "",
+          "Vai trò": roleLabel(t.userRole),
+          "Ngày giao dịch": t.date,
+          "Trạng thái": statusConfig[t.status]?.label ?? t.status,
+          "Số tiền (VND)": t.amount,
+          "Mô tả": t.description,
+          "Link ảnh": t.receiptUrl || ""
+        }));
+        
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Giao dịch");
+        
+        const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+        const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `Giao_Dich_${new Date().toISOString().split("T")[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        toast({ title: `Đã xuất ${allFiltered.length} giao dịch ra Excel` });
+      } catch (err) {
+        toast({ title: "Lỗi xuất file Excel", variant: "destructive" });
+      }
     } else {
       toast({ title: `Đã xuất danh sách giao dịch (${format})` });
     }
@@ -238,7 +267,7 @@ const FinanceTransactions = () => {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
               <ArrowLeftRight className="h-4 w-4 text-primary" />
-              Danh sách giao dịch ({filtered.length})
+              Danh sách giao dịch ({total})
             </h3>
           </div>
 
@@ -380,7 +409,7 @@ const FinanceTransactions = () => {
           )}
         </div>
 
-        {!isLoading && (currentPage > 1 || hasNextPage) && (
+        {!isLoading && (totalPages > 1) && (
           <div className="pt-5">
             <Pagination>
               <PaginationContent>
@@ -391,12 +420,13 @@ const FinanceTransactions = () => {
                       e.preventDefault();
                       setPage(p => Math.max(1, p - 1));
                     }}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
                   />
                 </PaginationItem>
 
                 <PaginationItem>
                   <PaginationLink href="#" isActive>
-                    {currentPage}
+                    {currentPage} / {totalPages}
                   </PaginationLink>
                 </PaginationItem>
 
@@ -407,6 +437,7 @@ const FinanceTransactions = () => {
                       e.preventDefault();
                       if (hasNextPage) setPage(p => p + 1);
                     }}
+                    className={!hasNextPage ? "pointer-events-none opacity-50" : ""}
                   />
                 </PaginationItem>
               </PaginationContent>
