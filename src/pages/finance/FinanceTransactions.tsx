@@ -1,4 +1,5 @@
 import { useFinanceTransactions } from "@/hooks/useFinance";
+import { TransactionReceiptUploader } from "@/components/shared/TransactionReceiptUploader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import {
   DollarSign,
   Calendar,
   Loader2,
+  Receipt,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -297,6 +299,24 @@ const FinanceTransactions = () => {
                       <span>Vai trò: {roleLabel(t.userRole)}</span>
                       <span>Ngày: {t.date}</span>
                     </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      {t.receiptUrl && (
+                        <a
+                          href={t.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline inline-flex items-center gap-0.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Receipt className="w-3 h-3" /> Xem ảnh
+                        </a>
+                      )}
+                      {t.receiptUrl && <span className="text-muted-foreground/30 hidden sm:inline">•</span>}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <TransactionReceiptUploader transactionId={t.id} hasReceipt={!!t.receiptUrl} />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
@@ -407,6 +427,26 @@ const FinanceTransactions = () => {
                   <p className="font-mono text-sm font-medium text-foreground">
                     {detail.id.toUpperCase()}
                   </p>
+                </div>
+
+                <div className="col-span-2 mt-2">
+                  <Label className="text-xs text-muted-foreground block mb-2">Ảnh giao dịch / Biên lai</Label>
+                  <div className="flex items-center gap-3">
+                    {detail.receiptUrl ? (
+                      <a
+                        href={detail.receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-blue-600 hover:underline inline-flex items-center gap-1"
+                      >
+                        <Receipt className="w-4 h-4" /> Xem ảnh giao dịch
+                      </a>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Chưa có ảnh đính kèm</span>
+                    )}
+                    <span className="text-muted-foreground/30">•</span>
+                    <TransactionReceiptUploader transactionId={detail.id} hasReceipt={!!detail.receiptUrl} />
+                  </div>
                 </div>
 
                 <div>
