@@ -864,6 +864,7 @@ export interface AdminTransactionResponse {
   id: string;
   userId: string;
   user: string;
+  email: string;
   userRole: string;
   type: string;
   amount: number;

@@ -422,6 +422,11 @@ const FinanceTransactions = () => {
                 </div>
 
                 <div>
+                  <Label className="text-xs text-muted-foreground">Email</Label>
+                  <p className="text-sm font-medium text-foreground">{detail.email || "—"}</p>
+                </div>
+
+                <div>
                   <Label className="text-xs text-muted-foreground">Vai trò</Label>
                   <p className="text-sm font-medium text-foreground">{roleLabel(detail.userRole)}</p>
                 </div>
